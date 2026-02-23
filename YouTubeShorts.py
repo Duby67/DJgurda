@@ -6,6 +6,7 @@ from typing import Optional, Dict, Any
 import yt_dlp
 
 from base_handler import BaseHandler
+from tokens import YOUTUBE_COOKIES
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,13 @@ class YouTubeShortsHandler(BaseHandler):
                 'quiet': True,
                 'no_warnings': True,
             }
+            
+            # Добавляем cookies, если файл существует
+            if YOUTUBE_COOKIES and Path(YOUTUBE_COOKIES).exists():
+                ydl_opts['cookiefile'] = YOUTUBE_COOKIES
+                logger.info(f"Используем файл cookies: {YOUTUBE_COOKIES}")
+            else:
+                logger.warning("Файл cookies не найден. YouTube может требовать авторизацию.")
 
             loop = asyncio.get_event_loop()
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
