@@ -20,7 +20,7 @@ from YouTubeShorts import (
     get_url_pattern as youtube_pattern,
     extract_url as youtube_extract,
 )
-
+from tokens import ADMIN_ID
 from tokens import BOT_TOKEN
 from logger import setup_logging
 
@@ -185,13 +185,28 @@ async def handle_yandex_music_link(update: Update, context: ContextTypes.DEFAULT
                 remove_music_file(file_info['file_path'])
             if file_info['cover_path']:
                 remove_cover_file(file_info['cover_path'])
-                
+
+async def send_startup_notification(app: Application):
+    """Отправляет уведомление администратору о запуске бота."""
+    try:
+        await app.bot.send_message(
+            chat_id=ADMIN_ID,
+            text="✅ Бот успешно запущен и готов к работе!"
+        )
+        logger.info("Уведомление о запуске отправлено администратору")
+    except Exception as e:
+        logger.error(f"Не удалось отправить уведомление о запуске: {e}")                
 
 def main():
     """Запуск бота."""
     try:
-        # Создаём приложение
-        app = Application.builder().token(BOT_TOKEN).build()
+        # Создаём приложение с post_init
+        app = (
+            Application.builder()
+            .token(BOT_TOKEN)
+            .post_init(send_startup_notification)
+            .build()
+        )
 
         # Добавляем обработчики
         app.add_handler(CommandHandler("start", start))

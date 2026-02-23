@@ -51,6 +51,7 @@ jobs:
             cd /home/${{ secrets.SSH_USER }}/bot
 
             # Создаём .env из секретов
+            echo "ADMIN_ID=${{ secrets.ADMIN_ID }}" > .env
             echo "BOT_TOKEN=${{ secrets.BOT_TOKEN }}" > .env
             echo "YANDEX_MUSIC_TOKEN=${{ secrets.YANDEX_MUSIC_TOKEN }}" >> .env
             # Добавьте другие переменные по необходимости
