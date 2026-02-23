@@ -10,9 +10,7 @@ from base_handler import BaseHandler
 logger = logging.getLogger(__name__)
 
 class InstagramReelsHandler(BaseHandler):
-    PATTERN = re.compile(
-        r'https?://(?:www\.)?instagram\.com/(?:reel|p|tv)/[a-zA-Z0-9_-]+'
-    )
+    PATTERN = re.compile(r'https?://(?:www\.)?instagram\.com/(?:reel|p|tv)/[a-zA-Z0-9_-]+(?:\?[^\s]*)?')
     TEMP_DIR = Path("temp_files/InstagramReels")
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
