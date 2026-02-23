@@ -1,0 +1,19 @@
+# Виртуальное окружение
+venv/
+env/
+.env
+.env_host
+
+# Кеш Python
+__pycache__/
+*.pyc
+
+# Файлы IDE
+.vscode/
+.idea/
+
+# Логи
+*.log
+
+# Временная папка
+temp_files/
