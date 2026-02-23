@@ -59,11 +59,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if file_info:
             # Успешная загрузка
             try:
-                # Формируем подпись (без названия трека/видео)
+                # Формируем подпись
                 caption_lines = []
                 if user_context:
                     safe_context = html.escape(user_context)
                     caption_lines.append(safe_context)
+                if handler.source_name != "Яндекс.Музыка":
+                    if file_info['type'] == 'video':
+                        safe_title = html.escape(file_info['title'])
+                        safe_uploader = html.escape(file_info['uploader'])
+                        caption_lines.append(f"🎬 {safe_title} — {safe_uploader}")
 
                 caption_lines.append("")
                 caption_lines.append(f"От ↣ {user_link}")
@@ -95,8 +100,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             with open(file_info['thumbnail_path'], 'rb') as thumb_file:
                                 await chat.send_audio(
                                     audio=audio_file,
-                                    title=file_info['title'],          # для аудио нужно указывать title/performer,
-                                    performer=file_info['performer'],  # но в подписи они не дублируются
+                                    title=file_info['title'],
+                                    performer=file_info['performer'],
                                     thumbnail=thumb_file,
                                     caption=caption,
                                     parse_mode=ParseMode.HTML
