@@ -1,6 +1,5 @@
 name: Deploy Telegram Bot to Server
 
-# Запускать workflow при пуше в ветку main
 on:
   push:
     branches:
@@ -15,11 +14,9 @@ jobs:
       packages: write
 
     steps:
-      # Шаг 1: Клонируем код репозитория
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Шаг 2: Логинимся в GitHub Container Registry
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -27,51 +24,40 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Шаг 3: Собираем Docker-образ и пушим его в реестр
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ghcr.io/${{ toLower(github.repository) }}:latest
+            ghcr.io/${{ toLower(github.repository) }}:${{ github.sha }}
           platforms: linux/amd64
 
-      # Шаг 4: Деплой на сервер через SSH (порт 228)
       - name: Deploy to server via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}   # должно быть "DJgurda" в секретах
+          username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 228                            # <-- изменённый порт
+          port: 228
           script: |
-            # Переходим в домашнюю папку пользователя
             cd /home/${{ secrets.SSH_USER }}/bot
 
-            # Создаём файл .env из секретов GitHub
             echo "BOT_TOKEN=${{ secrets.BOT_TOKEN }}" > .env
             echo "API_KEY=${{ secrets.API_KEY }}" >> .env
-            # Добавьте другие переменные по необходимости
 
-            # Логинимся в GitHub Container Registry (если репозиторий приватный, нужен PAT)
-            # Для публичного репозитория эту строку можно закомментировать или удалить
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 
-            # Останавливаем и удаляем старый контейнер
             docker stop telegram-bot || true
             docker rm telegram-bot || true
 
-            # Скачиваем свежий образ
-            docker pull ghcr.io/${{ github.repository }}:latest
+            docker pull ghcr.io/${{ toLower(github.repository) }}:latest
 
-            # Запускаем новый контейнер
             docker run -d \
               --name telegram-bot \
               --restart always \
               --env-file .env \
-              ghcr.io/${{ github.repository }}:latest
+              ghcr.io/${{ toLower(github.repository) }}:latest
 
-            # Очищаем старые образы
             docker system prune -f
