@@ -139,6 +139,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 caption=caption,
                                 parse_mode=ParseMode.HTML
                             )
+                elif file_info['type'] == 'photo':
+                    with open(file_info['file_path'], 'rb') as photo_file:
+                        await chat.send_photo(
+                            photo=photo_file,
+                            caption=caption,
+                            parse_mode=ParseMode.HTML
+                        )
+                        
                 logger.info(f"Блок {idx} успешно отправлен")
             except Exception as e:
                 logger.exception(f"Ошибка при отправке контента для {url}")
