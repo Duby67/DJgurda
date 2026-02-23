@@ -12,6 +12,12 @@ class BaseHandler(ABC):
         """Регулярное выражение для поиска ссылок данного типа."""
         pass
 
+    @property
+    @abstractmethod
+    def source_name(self) -> str:
+        """Название источника."""
+        pass
+
     @abstractmethod
     async def process(self, url: str, context: str) -> Optional[Dict[str, Any]]:
         """

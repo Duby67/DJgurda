@@ -18,6 +18,10 @@ class YouTubeShortsHandler(BaseHandler):
     def pattern(self) -> re.Pattern:
         return self.PATTERN
 
+    @property
+    def source_name(self) -> str:
+        return "YouTube Shorts"
+
     async def process(self, url: str, context: str) -> Optional[Dict[str, Any]]:
         try:
             # Извлекаем ID видео
@@ -51,7 +55,7 @@ class YouTubeShortsHandler(BaseHandler):
                     logger.warning(f"Видео слишком большое ({file_size} байт). Удаляем.")
                     file_path.unlink()
                     return None
-
+                
                 # Поиск миниатюры
                 possible_thumb = file_path.with_suffix('.jpg')
                 if possible_thumb.exists():
@@ -61,6 +65,7 @@ class YouTubeShortsHandler(BaseHandler):
 
                 return {
                     'type': 'video',
+                    'source_name': self.source_name,
                     'file_path': file_path,
                     'thumbnail_path': thumb_path,
                     'title': info.get('title', 'Unknown'),

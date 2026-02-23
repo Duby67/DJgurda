@@ -19,10 +19,11 @@ from processing import split_into_blocks, get_user_link
 from tokens import ADMIN_ID, BOT_TOKEN
 from logger import setup_logging
 
+
 setup_logging()
 logger = logging.getLogger(__name__)
 
-# Регистрируем все обработчики (должны быть экземплярами BaseHandler)
+# Регистрируем все обработчики
 handlers: List[BaseHandler] = [
     YouTubeShortsHandler(),
     YandexMusicHandler(),
@@ -38,103 +39,96 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     blocks = split_into_blocks(text, handlers)
     if not blocks:
-        return  # нет ссылок
+        return
 
     user_link = get_user_link(update.effective_user)
     chat = update.effective_chat
 
-    successful = []
-    errors = []
+    # Удаляем исходное сообщение
+    try:
+        await update.message.delete()
+        logger.info("Исходное сообщение удалено")
+    except Exception as e:
+        logger.warning(f"Не удалось удалить сообщение: {e}")
 
+    # Обрабатываем каждый блок отдельно
     for idx, (url, user_context, handler) in enumerate(blocks, start=1):
         # Загружаем контент
         file_info = await handler.process(url, user_context)
-        if not file_info:
-            errors.append(f"❌ Блок {idx}: не удалось загрузить ({url})")
-            continue
 
-        try:
-            # Формируем подпись
-            caption_lines = []
-            if user_context:
-                safe_context = html.escape(user_context)
-                caption_lines.append(safe_context)
+        if file_info:
+            # Успешная загрузка
+            try:
+                # Формируем подпись (без названия трека/видео)
+                caption_lines = []
+                if user_context:
+                    safe_context = html.escape(user_context)
+                    caption_lines.append(safe_context)
 
-            if file_info['type'] == 'video':
-                safe_title = html.escape(file_info['title'])
-                safe_uploader = html.escape(file_info['uploader'])
-                caption_lines.append(f"🎬 {safe_title} — {safe_uploader}")
-            elif file_info['type'] == 'audio':
-                safe_title = html.escape(file_info['title'])
-                safe_artist = html.escape(file_info['performer'])
-                caption_lines.append(f"🎵 {safe_title} — {safe_artist}")
+                caption_lines.append("")
+                caption_lines.append(f"От ↣ {user_link}")
+                caption_lines.append(f"<a href='{url}'>{handler.source_name}</a>")
+                caption = "\n".join(caption_lines)
 
-            caption_lines.append("")
-            caption_lines.append(f"От ↣ {user_link}")
-            caption_lines.append(f"<a href='{url}'>Оригинал</a>")
-            caption = "\n".join(caption_lines)
-
-            # Отправка в зависимости от типа
-            if file_info['type'] == 'video':
-                with open(file_info['file_path'], 'rb') as video_file:
-                    if file_info.get('thumbnail_path') and file_info['thumbnail_path'].exists():
-                        with open(file_info['thumbnail_path'], 'rb') as thumb_file:
+                # Отправка в зависимости от типа
+                if file_info['type'] == 'video':
+                    with open(file_info['file_path'], 'rb') as video_file:
+                        if file_info.get('thumbnail_path') and file_info['thumbnail_path'].exists():
+                            with open(file_info['thumbnail_path'], 'rb') as thumb_file:
+                                await chat.send_video(
+                                    video=video_file,
+                                    caption=caption,
+                                    parse_mode=ParseMode.HTML,
+                                    thumbnail=thumb_file,
+                                    supports_streaming=True
+                                )
+                        else:
                             await chat.send_video(
                                 video=video_file,
                                 caption=caption,
                                 parse_mode=ParseMode.HTML,
-                                thumbnail=thumb_file,
                                 supports_streaming=True
                             )
-                    else:
-                        await chat.send_video(
-                            video=video_file,
-                            caption=caption,
-                            parse_mode=ParseMode.HTML,
-                            supports_streaming=True
-                        )
-            elif file_info['type'] == 'audio':
-                with open(file_info['file_path'], 'rb') as audio_file:
-                    if file_info.get('thumbnail_path') and file_info['thumbnail_path'].exists():
-                        with open(file_info['thumbnail_path'], 'rb') as thumb_file:
+                elif file_info['type'] == 'audio':
+                    with open(file_info['file_path'], 'rb') as audio_file:
+                        if file_info.get('thumbnail_path') and file_info['thumbnail_path'].exists():
+                            with open(file_info['thumbnail_path'], 'rb') as thumb_file:
+                                await chat.send_audio(
+                                    audio=audio_file,
+                                    title=file_info['title'],          # для аудио нужно указывать title/performer,
+                                    performer=file_info['performer'],  # но в подписи они не дублируются
+                                    thumbnail=thumb_file,
+                                    caption=caption,
+                                    parse_mode=ParseMode.HTML
+                                )
+                        else:
                             await chat.send_audio(
                                 audio=audio_file,
                                 title=file_info['title'],
                                 performer=file_info['performer'],
-                                thumbnail=thumb_file,
                                 caption=caption,
                                 parse_mode=ParseMode.HTML
                             )
-                    else:
-                        await chat.send_audio(
-                            audio=audio_file,
-                            title=file_info['title'],
-                            performer=file_info['performer'],
-                            caption=caption,
-                            parse_mode=ParseMode.HTML
-                        )
-            successful.append(idx)
-        except Exception as e:
-            logger.exception(f"Ошибка при отправке контента для {url}")
-            errors.append(f"❌ Блок {idx}: ошибка отправки")
-        finally:
-            # Удаляем временные файлы
-            handler.cleanup(file_info)
-
-    # Удаляем исходное сообщение, если хоть один блок обработан успешно
-    if successful:
-        try:
-            await update.message.delete()
-        except Exception as e:
-            logger.warning(f"Не удалось удалить сообщение: {e}")
-
-    # Отправляем отчёт об ошибках
-    if errors:
-        error_text = "\n".join(errors)
-        if successful:
-            await chat.send_message(f"⚠️ При загрузке произошли ошибки:\n{error_text}")
+                logger.info(f"Блок {idx} успешно отправлен")
+            except Exception as e:
+                logger.exception(f"Ошибка при отправке контента для {url}")
+                # Если ошибка при отправке, шлём текст с ошибкой
+                error_text = (f"❌ Не удалось отправить контент.\n\n"
+                              f"{user_context}\n\n"
+                              f"От ↣ {user_link}\n"
+                              f"<a href='{url}'>{handler.source_name}</a>")
+                await chat.send_message(text=error_text, parse_mode=ParseMode.HTML)
+            finally:
+                # Удаляем временные файлы
+                handler.cleanup(file_info)
         else:
-            await update.message.reply_text(f"❌ Не удалось загрузить ни одного элемента.\n{error_text}")
+            # Ошибка загрузки контента
+            error_text = (f"❌ Не удалось загрузить контент.\n\n"
+                          f"{user_context}\n\n"
+                          f"От ↣ {user_link}\n"
+                          f"<a href='{url}'>{handler.source_name}</a>")
+            await chat.send_message(text=error_text, parse_mode=ParseMode.HTML)
+            logger.info(f"Блок {idx}: ошибка загрузки, отправлено уведомление")
 
 async def send_startup_notification(app: Application):
     """Уведомление администратору о запуске."""
