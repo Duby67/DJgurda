@@ -50,7 +50,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Форматируем список источников
     sources_text = "\n".join(f"• {source}" for source in sources)
     help_text = (
-        "Кидай контент и я дам тебе сочный контент\n"
+        "Кидай ссылку и я дам тебе сочный контент\n"
         "Я хаваю:\n"
         f"{sources_text}"
     )
