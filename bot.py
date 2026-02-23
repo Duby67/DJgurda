@@ -162,8 +162,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     app = Application.builder().token(BOT_TOKEN).post_init(send_startup_notification).build()
-    app.add_handler(CommandHandler("start@DJgurda", start))
-    app.add_handler(CommandHandler("help@DJgurda", help_command))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command))
     # Обрабатываем все текстовые сообщения, кроме команд
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     logger.info("Бот успешно запущен и готов к работе!")
