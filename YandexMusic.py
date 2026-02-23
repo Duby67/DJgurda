@@ -24,6 +24,10 @@ class YandexMusicHandler(BaseHandler):
     def pattern(self) -> re.Pattern:
         return self.PATTERN
 
+    @property
+    def source_name(self) -> str:
+        return "Яндекс.Музыка"
+
     async def _download_file(self, url: str, dest_path: Path) -> bool:
         """Скачивает файл по URL."""
         try:
@@ -57,11 +61,10 @@ class YandexMusicHandler(BaseHandler):
             if not track_match:
                 logger.error("Не удалось извлечь ID трека")
                 return None
-
             track_id = track_match.group(1)
 
-            loop = asyncio.get_event_loop()
             # Инициализация клиента в отдельном потоке
+            loop = asyncio.get_event_loop()
             client = await loop.run_in_executor(None, lambda: Client(self.token).init())
 
             # Получаем трек
@@ -69,7 +72,6 @@ class YandexMusicHandler(BaseHandler):
             if not tracks:
                 logger.error(f"Трек {track_id} не найден")
                 return None
-
             track = tracks[0]
 
             # Информация для скачивания
@@ -103,6 +105,7 @@ class YandexMusicHandler(BaseHandler):
             logger.info(f"Файл сохранен: {file_path}")
             return {
                 'type': 'audio',
+                'source_name': self.source_name,
                 'file_path': file_path,
                 'thumbnail_path': cover_path,
                 'title': title,
