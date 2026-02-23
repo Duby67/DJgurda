@@ -1,9 +1,12 @@
 import logging
 import html
+from typing import List, Tuple
+
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
+from base_handler import BaseHandler
 from YandexMusic import YandexMusicHandler
 from YouTubeShorts import YouTubeShortsHandler
 from tokens import ADMIN_ID, BOT_TOKEN
@@ -12,16 +15,17 @@ from logger import setup_logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
-# Регистрируем все обработчики
-handlers = [
+# Регистрируем все обработчики (должны быть экземплярами BaseHandler)
+handlers: List[BaseHandler] = [
     YouTubeShortsHandler(),
     YandexMusicHandler(),
 ]
 
-def split_into_blocks(text: str, handlers):
+def split_into_blocks(text: str, handlers: List[BaseHandler]) -> List[Tuple[str, str, BaseHandler]]:
     """
     Разбивает текст на блоки (url, контекст, обработчик).
     Ищет все ссылки, соответствующие любому из паттернов, и группирует их с окружающим текстом.
+    Возвращает список кортежей (url, user_context, handler).
     """
     matches = []
     for handler in handlers:

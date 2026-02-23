@@ -5,20 +5,23 @@ import aiofiles
 from yandex_music import Client
 import logging
 import asyncio
+from typing import Optional, Dict, Any
+
+from base_handler import BaseHandler
+from tokens import YANDEX_MUSIC_TOKEN
 
 logger = logging.getLogger(__name__)
 
-class YandexMusicHandler:
+class YandexMusicHandler(BaseHandler):
     PATTERN = re.compile(r'https?://music\.yandex\.(?:ru|by|kz|ua)/\S+')
     TEMP_DIR = Path("temp_files/YandexMusik")
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
     def __init__(self):
-        from tokens import YANDEX_MUSIC_TOKEN
         self.token = YANDEX_MUSIC_TOKEN
 
     @property
-    def pattern(self):
+    def pattern(self) -> re.Pattern:
         return self.PATTERN
 
     async def _download_file(self, url: str, dest_path: Path) -> bool:
@@ -36,7 +39,7 @@ class YandexMusicHandler:
             logger.exception(f"Ошибка при скачивании {url}: {e}")
             return False
 
-    async def _get_cover_file(self, cover_uri: str) -> Path | None:
+    async def _get_cover_file(self, cover_uri: str) -> Optional[Path]:
         """Скачивает обложку трека."""
         if not cover_uri:
             return None
@@ -47,7 +50,7 @@ class YandexMusicHandler:
             return cover_path
         return None
 
-    async def process(self, url: str, context: str) -> dict | None:
+    async def process(self, url: str, context: str) -> Optional[Dict[str, Any]]:
         try:
             # Извлекаем ID трека
             track_match = re.search(r'/track/(\d+)', url)
@@ -111,7 +114,7 @@ class YandexMusicHandler:
             logger.exception(f"Ошибка при скачивании трека: {e}")
             return None
 
-    def cleanup(self, file_info: dict):
+    def cleanup(self, file_info: Dict[str, Any]) -> None:
         """Удаляет временные файлы."""
         if file_info.get('file_path'):
             try:
