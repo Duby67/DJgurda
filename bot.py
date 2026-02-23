@@ -9,12 +9,14 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 
 
 from base_handler import BaseHandler
+
+from TikTok import TikTokHandler
 from YandexMusic import YandexMusicHandler
 from YouTubeShorts import YouTubeShortsHandler
+from InstagramReels import InstagramReelsHandler
 
 
 from processing import split_into_blocks, get_user_link
-
 
 from tokens import ADMIN_ID, BOT_TOKEN
 from logger import setup_logging
@@ -25,8 +27,10 @@ logger = logging.getLogger(__name__)
 
 # Регистрируем все обработчики
 handlers: List[BaseHandler] = [
-    YouTubeShortsHandler(),
+    TikTokHandler(),
     YandexMusicHandler(),
+    YouTubeShortsHandler(),
+    InstagramReelsHandler(),
 ]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -68,6 +72,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if file_info['type'] == 'video':
                         safe_title = html.escape(file_info['title'])
                         safe_uploader = html.escape(file_info['uploader'])
+                        caption_lines.append("")
                         caption_lines.append(f"🎬 {safe_title} — {safe_uploader}")
 
                 caption_lines.append("")

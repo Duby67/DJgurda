@@ -6,8 +6,11 @@ from base_handler import BaseHandler
 def split_into_blocks(text: str, handlers: List[BaseHandler]) -> List[Tuple[str, str, BaseHandler]]:
     """
     Разбивает текст на блоки (url, контекст, обработчик).
-    Каждая ссылка получает контекст - текст от предыдущей ссылки (или начала) до текущей ссылки.
-    Текст после последней ссылки добавляется к контексту последней ссылки.
+    Контекст для каждой ссылки — это текст, относящийся именно к ней:
+      - Для первой ссылки: текст от начала до её позиции.
+      - Для промежуточных ссылок: текст между предыдущей и текущей ссылкой.
+      - Для последней ссылки: текст после неё до конца сообщения.
+    Все пробелы и переносы сохраняются (без лишней обрезки).
     """
     matches = []
     for handler in handlers:
@@ -23,15 +26,21 @@ def split_into_blocks(text: str, handlers: List[BaseHandler]) -> List[Tuple[str,
     blocks = []
     prev_end = 0
     for i, (start, end, url, handler) in enumerate(matches):
-        # Контекст - текст от предыдущего конца до начала текущей ссылки
-        context = text[prev_end:start].strip()
-        
-        # Если это последняя ссылка, добавляем текст после неё
+        if i == 0:
+            # Первая ссылка: контекст от начала до неё
+            context = text[:start]
+        else:
+            # Промежуточная ссылка: контекст между предыдущей ссылкой и текущей
+            context = text[prev_end:start]
+
         if i == len(matches) - 1:
-            after = text[end:].strip()
-            if after:
-                context = (context + " " + after).strip() if context else after
-        
+            # Последняя ссылка: добавляем текст после неё (если он есть)
+            after = text[end:]
+            context = context + after  # контекст для последней = текст до + текст после
+        else:
+            # Для не последних ссылок текст после них не включается
+            pass
+
         blocks.append((url, context, handler))
         prev_end = end
 
