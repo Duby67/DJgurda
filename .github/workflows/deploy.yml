@@ -8,80 +8,70 @@ on:
 
 jobs:
   build-and-deploy:
-    # Запускаем на стандартной виртуальной машине Ubuntu от GitHub
     runs-on: ubuntu-latest
     
-    # Разрешения для пуша образа в GitHub Packages (ghcr.io)
     permissions:
       contents: read
       packages: write
 
     steps:
-      # Шаг 1: Клонируем код репозитория [citation:1]
+      # Шаг 1: Клонируем код репозитория
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Шаг 2: Логинимся в GitHub Container Registry (ghcr.io) [citation:1][citation:6]
+      # Шаг 2: Логинимся в GitHub Container Registry
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          # Используем владельца репозитория как имя пользователя
           username: ${{ github.repository_owner }}
-          # Используем автоматически созданный токен GITHUB_TOKEN для аутентификации
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Шаг 3: Собираем Docker-образ и пушим его в реестр [citation:1][citation:6]
+      # Шаг 3: Собираем Docker-образ и пушим его в реестр
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          # Теги для образа: latest и уникальный тег с хешем коммита
           tags: |
             ghcr.io/${{ github.repository }}:latest
             ghcr.io/${{ github.repository }}:${{ github.sha }}
-          # Важно: для работы на сервере обычно нужна платформа linux/amd64
           platforms: linux/amd64
 
-      # Шаг 4: Деплой на сервер через SSH [citation:4][citation:8]
+      # Шаг 4: Деплой на сервер через SSH (порт 228)
       - name: Deploy to server via SSH
-        # Используем готовое действие для упрощения SSH-команд
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
+          username: ${{ secrets.SSH_USER }}   # должно быть "DJgurda" в секретах
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          # Скрипт, который выполнится на сервере
+          port: 228                            # <-- изменённый порт
           script: |
-            # Переходим в папку проекта (создай ее заранее, например, /home/deployer/bot)
+            # Переходим в домашнюю папку пользователя
             cd /home/${{ secrets.SSH_USER }}/bot
 
-            # Критически важный шаг: создаем файл .env из GitHub Secrets [citation:7][citation:8]
-            # Команда > перезаписывает файл, >> добавляет строку.
+            # Создаём файл .env из секретов GitHub
             echo "BOT_TOKEN=${{ secrets.BOT_TOKEN }}" > .env
             echo "API_KEY=${{ secrets.API_KEY }}" >> .env
-            # Добавь сюда все свои секреты из GitHub
+            # Добавьте другие переменные по необходимости
 
-            # Логинимся в GitHub Container Registry на сервере (пароль - тот же GITHUB_TOKEN, но его нужно передать)
-            # Внимание: secrets.GITHUB_TOKEN не передается на сервер автоматически. Его нужно тоже добавить в Secrets как GHCR_PAT или использовать другой метод.
-            # Для простоты, если репозиторий публичный, логин не обязателен. Если приватный, создай отдельный Personal Access Token (PAT) с правами на чтение packages и добавь его в секреты как GHCR_PAT.
+            # Логинимся в GitHub Container Registry (если репозиторий приватный, нужен PAT)
+            # Для публичного репозитория эту строку можно закомментировать или удалить
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 
-            # Останавливаем и удаляем старый контейнер (игнорируем ошибки, если его нет)
+            # Останавливаем и удаляем старый контейнер
             docker stop telegram-bot || true
             docker rm telegram-bot || true
 
-            # Скачиваем свежий образ с тегом latest
+            # Скачиваем свежий образ
             docker pull ghcr.io/${{ github.repository }}:latest
 
-            # Запускаем новый контейнер с именем telegram-bot
-            # Флаг --env-file передает наш свежесозданный .env файл внутрь контейнера
+            # Запускаем новый контейнер
             docker run -d \
               --name telegram-bot \
               --restart always \
               --env-file .env \
               ghcr.io/${{ github.repository }}:latest
 
-            # Очищаем старые неиспользуемые образы (опционально)
+            # Очищаем старые образы
             docker system prune -f
