@@ -18,7 +18,8 @@ from YouTubeShorts import (
     remove_video_file,
     remove_thumbnail_file,
     get_url_pattern as youtube_pattern,
-    extract_url as youtube_extract,
+    extract_urls as youtube_extract,
+    parse_urls_with_context as parse_urls
 )
 from tokens import ADMIN_ID
 from tokens import BOT_TOKEN
@@ -46,70 +47,81 @@ async def handle_youtube_shorts_link(update: Update, context: ContextTypes.DEFAU
     if not update.message or not update.message.text:
         return
 
+    # Получаем сообщение пользователя и паттерн ссылок
     text = update.message.text
-    url = youtube_extract(text)
-    if not url:
-        return
-
-    # Удаляем исходное сообщение с ссылкой
-    try:
-        await update.message.delete()
-        logger.info("Исходное сообщение с YouTube Shorts удалено")
-    except Exception as e:
-        logger.warning(f"Не удалось удалить сообщение: {e}")
-
-    # Отправляем статусное сообщение
+    url_pairs = parse_urls(text)
+    if not url_pairs:
+        return 
+    
+    user_link = get_user_link(update.effective_user)
     chat = update.effective_chat
-    status_msg = await chat.send_message("📥 Загружаю видео...")
+    
+    
+    successful = []
+    errors = []
 
-    video_info = None
-    try:
+    for idx, (url, user_text) in enumerate(url_pairs, start=1):
         video_info = await download_video(url)
         if not video_info:
-            await status_msg.edit_text("❌ Не удалось загрузить видео. Проверьте ссылку или попробуйте позже.")
-            return
-        
-        # Экранируем название видео
-        safe_title = html.escape(video_info['title'])
-        
-        # Формируем подпись: теперь с названием
-        user_link = get_user_link(update.effective_user)
-        caption = (f"🎬 {safe_title}\n\n"
-                   f"От ↣ {user_link}\n"
-                   f"<a href='{url}'>Смотреть в YouTube Shorts</a>")
-        
-        # Отправляем видео
-        with open(video_info['file_path'], 'rb') as video_file:
-            if video_info['thumbnail_path'] and video_info['thumbnail_path'].exists():
-                with open(video_info['thumbnail_path'], 'rb') as thumb_file:
+            errors.append(f"❌ Видео {idx}: не удалось загрузить")
+            continue
+
+        try:
+            # Формируем подпись
+            safe_title = html.escape(video_info['title'])
+            safe_user_text = html.escape(user_text) if user_text else None
+
+            caption_lines = [f"🎬 {safe_title}"]
+            if safe_user_text:
+                caption_lines.append(safe_user_text)
+            caption_lines.append("")
+            caption_lines.append(f"От ↣ {user_link}")
+            caption_lines.append(f"<a href='{url}'>Смотреть в YouTube Shorts</a>")
+            caption = "\n".join(caption_lines)
+
+            # Отправка видео
+            with open(video_info['file_path'], 'rb') as video_file:
+                if video_info['thumbnail_path'] and video_info['thumbnail_path'].exists():
+                    with open(video_info['thumbnail_path'], 'rb') as thumb_file:
+                        await chat.send_video(
+                            video=video_file,
+                            caption=caption,
+                            parse_mode=ParseMode.HTML,
+                            thumbnail=thumb_file,
+                            supports_streaming=True
+                        )
+                else:
                     await chat.send_video(
                         video=video_file,
                         caption=caption,
                         parse_mode=ParseMode.HTML,
-                        thumbnail=thumb_file,
                         supports_streaming=True
                     )
-            else:
-                await chat.send_video(
-                    video=video_file,
-                    caption=caption,
-                    parse_mode=ParseMode.HTML,
-                    supports_streaming=True
-                )
-
-        # Удаляем статусное сообщение
-        await status_msg.delete()
-
-    except Exception as e:
-        logger.exception("Ошибка при обработке ссылки YouTube Shorts")
-        await status_msg.edit_text("❌ Произошла внутренняя ошибка. Попробуйте позже.")
-    finally:
-        # Очищаем временные файлы
-        if video_info:
-            if video_info['file_path']:
+            successful.append(idx)
+        except Exception as e:
+            logger.exception(f"Ошибка при отправке {url}")
+            errors.append(f"❌ Видео {idx}: внутренняя ошибка")
+        finally:
+            # Очистка временных файлов
+            if video_info.get('file_path'):
                 remove_video_file(video_info['file_path'])
-            if video_info['thumbnail_path']:
+            if video_info.get('thumbnail_path'):
                 remove_thumbnail_file(video_info['thumbnail_path'])
+
+    # Удаляем исходное сообщение, если хоть одно видео отправилось
+    if successful:
+        try:
+            await update.message.delete()
+        except Exception as e:
+            logger.warning(f"Не удалось удалить сообщение: {e}")
+
+    # Сообщаем об ошибках, если они были
+    if errors:
+        error_text = "\n".join(errors)
+        if successful:
+            await chat.send_message(f"⚠️ При загрузке произошли ошибки:\n{error_text}")
+        else:
+            await update.message.reply_text(f"❌ Не удалось загрузить ни одного видео.\n{error_text}")
 
 
 async def handle_yandex_music_link(update: Update, context: ContextTypes.DEFAULT_TYPE):

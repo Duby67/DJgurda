@@ -20,15 +20,35 @@ def get_url_pattern():
     return YOUTUBE_SHORTS_URL_PATTERN
 
 
-def extract_url(text: str) -> str | None:
-    """Извлекает первую ссылку на YouTube Shorts из текста."""
-    match = YOUTUBE_SHORTS_URL_PATTERN.search(text)
-    if match:
-        url = match.group()
-        logger.info(f"Обнаружена ссылка на YouTube Shorts: {url}")
-        return url
+def extract_urls(text: str) -> str | None:
+    """Извлекает ссылки на YouTube Shorts из текста."""
+    urls = YOUTUBE_SHORTS_URL_PATTERN.findall(text)
+    if urls:
+        logger.info(f"Обнаружены ссылки на YouTube Shorts: {urls}")
+        return urls
+    logger.info("Ссылки на YouTube Shorts не найдены")
     return None
 
+def parse_urls_with_context(text: str) -> list[tuple[str, str]]:
+    """
+    Разбивает текст по ссылкам на YouTube Shorts.
+    Возвращает список кортежей (url, контекст_пользователя).
+    """
+    urls = extract_urls(text)
+    if not urls:
+        return []
+
+    parts = YOUTUBE_SHORTS_URL_PATTERN.split(text)
+    result = []
+    for i, url in enumerate(urls):
+        before = parts[i].strip()
+        if i == len(urls) - 1:
+            after = parts[i + 1].strip()
+            user_text = (before + " " + after).strip()
+        else:
+            user_text = before
+        result.append((url, user_text))
+    return result
 
 async def download_video(url: str) -> dict | None:
     """
@@ -107,3 +127,4 @@ def remove_thumbnail_file(thumb_path: Path) -> None:
     """Удаляет временный файл миниатюры."""
     if thumb_path:
         remove_video_file(thumb_path)  # та же функция подходит
+        
