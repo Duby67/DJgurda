@@ -33,8 +33,28 @@ handlers: List[BaseHandler] = [
     InstagramReelsHandler(),
 ]
 
+async def send_startup_notification(app: Application):
+    """Уведомление администратору о запуске."""
+    try:
+        await app.bot.send_message(chat_id=ADMIN_ID, text="✅ Бот успешно запущен и готов к работе!")
+        logger.info("Уведомление о запуске отправлено администратору")
+    except Exception as e:
+        logger.error(f"Не удалось отправить уведомление о запуске: {e}")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Чики-Брики! Отправь ссылку и я все сделаю красиво.")
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /help"""
+    sources = [handler.source_name for handler in handlers]
+    # Форматируем список источников
+    sources_text = "\n".join(f"• {source}" for source in sources)
+    help_text = (
+        "Кидай контент и я дам тебе сочный контент\n"
+        "Я хаваю:\n"
+        f"{sources_text}"
+    )
+    await update.message.reply_text(help_text)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
@@ -140,17 +160,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await chat.send_message(text=error_text, parse_mode=ParseMode.HTML)
             logger.info(f"Блок {idx}: ошибка загрузки, отправлено уведомление")
 
-async def send_startup_notification(app: Application):
-    """Уведомление администратору о запуске."""
-    try:
-        await app.bot.send_message(chat_id=ADMIN_ID, text="✅ Бот успешно запущен и готов к работе!")
-        logger.info("Уведомление о запуске отправлено администратору")
-    except Exception as e:
-        logger.error(f"Не удалось отправить уведомление о запуске: {e}")
-
 def main():
     app = Application.builder().token(BOT_TOKEN).post_init(send_startup_notification).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command))
     # Обрабатываем все текстовые сообщения, кроме команд
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     logger.info("Бот успешно запущен и готов к работе!")
