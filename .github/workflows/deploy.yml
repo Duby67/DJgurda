@@ -52,7 +52,7 @@ jobs:
 
             # Создаём .env из секретов
             echo "BOT_TOKEN=${{ secrets.BOT_TOKEN }}" > .env
-            echo "API_KEY=${{ secrets.API_KEY }}" >> .env
+            echo "YANDEX_MUSIC_TOKEN=${{ secrets.YANDEX_MUSIC_TOKEN }}" >> .env
             # Добавьте другие переменные по необходимости
 
             # Логинимся в GitHub Container Registry
