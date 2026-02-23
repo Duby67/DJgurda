@@ -17,11 +17,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Приводим имена владельца и репозитория к нижнему регистру (требование Docker)
+      - name: Set lowercase repository names
+        run: |
+          echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+          echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.repository_owner }}
+          username: ${{ env.OWNER_LC }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
@@ -30,34 +36,42 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ toLower(github.repository) }}:latest
-            ghcr.io/${{ toLower(github.repository) }}:${{ github.sha }}
+            ghcr.io/${{ env.REPO_LC }}:latest
+            ghcr.io/${{ env.REPO_LC }}:${{ github.sha }}
           platforms: linux/amd64
 
-      - name: Deploy to server via SSH
+      - name: Deploy to server via SSH (port 228)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
+          username: ${{ secrets.SSH_USER }}   # должно быть "DJgurda" в секретах
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 228
           script: |
             cd /home/${{ secrets.SSH_USER }}/bot
 
+            # Создаём .env из секретов
             echo "BOT_TOKEN=${{ secrets.BOT_TOKEN }}" > .env
             echo "API_KEY=${{ secrets.API_KEY }}" >> .env
+            # Добавьте другие переменные по необходимости
 
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+            # Логинимся в GitHub Container Registry
+            # Для приватного репозитория используйте Personal Access Token вместо GITHUB_TOKEN
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ env.OWNER_LC }} --password-stdin
 
+            # Останавливаем и удаляем старый контейнер
             docker stop telegram-bot || true
             docker rm telegram-bot || true
 
-            docker pull ghcr.io/${{ toLower(github.repository) }}:latest
+            # Скачиваем новый образ
+            docker pull ghcr.io/${{ env.REPO_LC }}:latest
 
+            # Запускаем контейнер
             docker run -d \
               --name telegram-bot \
               --restart always \
               --env-file .env \
-              ghcr.io/${{ toLower(github.repository) }}:latest
+              ghcr.io/${{ env.REPO_LC }}:latest
 
+            # Очистка
             docker system prune -f
