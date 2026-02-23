@@ -1,4 +1,6 @@
 import logging
+import html
+
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -67,9 +69,14 @@ async def handle_youtube_shorts_link(update: Update, context: ContextTypes.DEFAU
             await status_msg.edit_text("❌ Не удалось загрузить видео. Проверьте ссылку или попробуйте позже.")
             return
         
-        # Формируем подпись
+        # Экранируем название видео
+        safe_title = html.escape(video_info['title'])
+        
+        # Формируем подпись: теперь с названием
         user_link = get_user_link(update.effective_user)
-        caption = f"От ↣ {user_link}\n<a href='{url}'>Смотреть в YouTube Shorts</a>"
+        caption = (f"🎬 {safe_title}\n\n"
+                   f"От ↣ {user_link}\n"
+                   f"<a href='{url}'>Смотреть в YouTube Shorts</a>")
         
         # Отправляем видео
         with open(video_info['file_path'], 'rb') as video_file:
@@ -132,11 +139,16 @@ async def handle_yandex_music_link(update: Update, context: ContextTypes.DEFAULT
             await status_msg.edit_text("❌ Не удалось загрузить трек. Проверьте ссылку или попробуйте позже.")
             return
         
+        # Экранируем название и исполнителя
+        safe_title = html.escape(file_info['title'])
+        safe_artist = html.escape(file_info['artist'])
+        
         # Формируем подпись
         user_link = get_user_link(update.effective_user)
+        caption = (f"От ↣ {user_link}\n"
+                   f"<a href='{url}'>Слушать в Яндекс.Музыка</a>")
         title = file_info['title']
         performer = file_info['artist']
-        caption = f"От ↣ {user_link}\n<a href='{url}'>Слушать в Яндекс.Музыка</a>"
         
         # Отправляем аудио с обложкой
         with open(file_info['file_path'], 'rb') as audio_file:
@@ -195,7 +207,7 @@ def main():
         logger.info("Бот успешно запущен и готов к работе!")
         
         # Запускаем бота
-        app.run_polling()
+        app.run_polling(drop_pending_updates=True)
         
     except Exception as e:
         logger.error(f"Ошибка при запуске бота: {e}")
