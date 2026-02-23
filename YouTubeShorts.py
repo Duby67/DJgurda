@@ -2,20 +2,23 @@ import re
 import asyncio
 import logging
 from pathlib import Path
+from typing import Optional, Dict, Any
 import yt_dlp
+
+from base_handler import BaseHandler
 
 logger = logging.getLogger(__name__)
 
-class YouTubeShortsHandler:
+class YouTubeShortsHandler(BaseHandler):
     PATTERN = re.compile(r'https?://(?:www\.)?(?:youtube\.com/shorts/|youtu\.be/)[a-zA-Z0-9_-]+')
     TEMP_DIR = Path("temp_files/YouTubeShorts")
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
     @property
-    def pattern(self):
+    def pattern(self) -> re.Pattern:
         return self.PATTERN
 
-    async def process(self, url: str, context: str) -> dict | None:
+    async def process(self, url: str, context: str) -> Optional[Dict[str, Any]]:
         try:
             # Извлекаем ID видео
             video_id_match = re.search(r'/(?:shorts/|)([a-zA-Z0-9_-]+)', url)
@@ -69,7 +72,7 @@ class YouTubeShortsHandler:
             logger.exception(f"Ошибка при скачивании видео: {e}")
             return None
 
-    def cleanup(self, file_info: dict):
+    def cleanup(self, file_info: Dict[str, Any]) -> None:
         """Удаляет временные файлы."""
         if file_info.get('file_path'):
             try:
