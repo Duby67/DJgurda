@@ -6,8 +6,8 @@ from base_handler import BaseHandler
 def split_into_blocks(text: str, handlers: List[BaseHandler]) -> List[Tuple[str, str, BaseHandler]]:
     """
     Разбивает текст на блоки (url, контекст, обработчик).
-    Ищет все ссылки, соответствующие любому из паттернов, и группирует их с окружающим текстом.
-    Возвращает список кортежей (url, user_context, handler).
+    Каждая ссылка получает контекст - текст от предыдущей ссылки (или начала) до текущей ссылки.
+    Текст после последней ссылки добавляется к контексту последней ссылки.
     """
     matches = []
     for handler in handlers:
@@ -23,19 +23,19 @@ def split_into_blocks(text: str, handlers: List[BaseHandler]) -> List[Tuple[str,
     blocks = []
     prev_end = 0
     for i, (start, end, url, handler) in enumerate(matches):
-        before = text[prev_end:start].strip()
-        if i < len(matches) - 1:
-            next_start = matches[i+1][0]
-            after = text[end:next_start].strip()
-        else:
+        # Контекст - текст от предыдущего конца до начала текущей ссылки
+        context = text[prev_end:start].strip()
+        
+        # Если это последняя ссылка, добавляем текст после неё
+        if i == len(matches) - 1:
             after = text[end:].strip()
-        # Объединяем текст до и после ссылки
-        user_context = (before + " " + after).strip()
-        blocks.append((url, user_context, handler))
+            if after:
+                context = (context + " " + after).strip() if context else after
+        
+        blocks.append((url, context, handler))
         prev_end = end
 
     return blocks
-
 
 def get_user_link(user) -> str:
     """
