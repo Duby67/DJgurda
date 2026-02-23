@@ -10,7 +10,7 @@ from base_handler import BaseHandler
 logger = logging.getLogger(__name__)
 
 class TikTokHandler(BaseHandler):
-    PATTERN = re.compile(r'https?://(?:www\.|vm\.)?tiktok\.com/(?:@[\w.-]+/video/\d+|[\d]+|[a-zA-Z0-9_-]+)(?:\?[^\s]*)?')
+    PATTERN = re.compile(r'https?://(?:www\.|vm\.)?tiktok\.com/\S+')
     TEMP_DIR = Path("temp_files/TikTok")
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
