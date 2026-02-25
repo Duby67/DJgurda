@@ -1,0 +1,14 @@
+.git
+.github
+.env
+__pycache__
+*.pyc
+.idea
+venv
+tests/
+docs/
+README.md
+.gitignore
+.dockerignore
+src/data/temp_files/*
+!src/data/temp_files/.gitkeep
