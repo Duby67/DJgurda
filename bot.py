@@ -1,10 +1,9 @@
+import asyncio
+import signal
 import logging
 import html
-import signal
-import asyncio
-
 from datetime import datetime
-from typing import List, Tuple
+from typing import List
 
 
 from telegram import Update
@@ -13,7 +12,6 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 
 
 from base_handler import BaseHandler
-
 from TikTok import TikTokHandler
 from YandexMusic import YandexMusicHandler
 from YouTubeShorts import YouTubeShortsHandler
@@ -21,7 +19,6 @@ from InstagramReels import InstagramReelsHandler
 
 
 from processing import split_into_blocks, get_user_link
-
 from tokens import ADMIN_ID, BOT_TOKEN
 from logger import setup_logging
 
@@ -50,7 +47,6 @@ async def shutdown(app: Application, sig: signal.Signals):
 
 async def post_init(app: Application):
     """Действия после инициализации бота."""
-    # Сохраняем время запуска в bot_data
     app.bot_data['start_time'] = datetime.now()
     try:
         await app.bot.send_message(chat_id=ADMIN_ID, text="✅ Бот успешно запущен и готов к работе!")
@@ -195,23 +191,46 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await chat.send_message(text=error_text, parse_mode=ParseMode.HTML)
             logger.info(f"Блок {idx}: ошибка загрузки, отправлено уведомление")
 
-def main():
+async def run_bot():
+    """Асинхронная функция запуска бота."""
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("status", status_command))
-    
-    # Обрабатываем все текстовые сообщения, кроме команд
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    logger.info("Бот успешно запущен и готов к работе!")
-    app.run_polling(drop_pending_updates=True)
-    
-    # Регистрация обработчиков сигналов для graceful shutdown
+
+    logger.info("Бот инициализирован, запуск...")
+
+    # Инициализация и старт
+    await app.initialize()
+    await app.start()
+
+    # Регистрация обработчиков сигналов
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(
             sig, lambda s=sig: asyncio.create_task(shutdown(app, s))
         )
+
+    # Запуск polling
+    await app.updater.start_polling(drop_pending_updates=True)
+    logger.info("Бот начал опрос обновлений")
+
+    # Ожидаем завершения (бесконечное ожидание)
+    try:
+        while True:
+            await asyncio.sleep(1)
+    except asyncio.CancelledError:
+        pass
+    finally:
+        # Останавливаем приложение, если ещё не остановлено
+        await app.stop()
+        await app.shutdown()
+        logger.info("Бот остановлен.")
+
+def main():
+    """Точка входа."""
+    asyncio.run(run_bot())
 
 if __name__ == "__main__":
     main()
