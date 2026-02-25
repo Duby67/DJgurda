@@ -44,11 +44,13 @@ class YouTubeShortsHandler(BaseHandler):
                 'writethumbnail': True,
                 'quiet': True,
                 'no_warnings': True,
-                'cookiefile': YOUTUBE_COOKIES,
+                #'cookiefile': YOUTUBE_COOKIES,
+                'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
                 'postprocessors': [{
                     'key': 'FFmpegVideoConvertor',
                     'preferedformat': 'mp4',
-                }]
+                }],
+                'merge_output_format': 'mp4'
             }
             
             loop = asyncio.get_event_loop()
