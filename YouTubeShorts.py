@@ -1,5 +1,6 @@
 import re
 import asyncio
+import random
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -26,6 +27,10 @@ class YouTubeShortsHandler(BaseHandler):
     async def process(self, url: str, context: str) -> Optional[Dict[str, Any]]:
         try:
             # Извлекаем ID видео
+            delay = random.uniform(1, 3) # Случайная задержка
+            logger.info(f"Ожидание {delay:.2f} секунд перед скачиванием {url}")
+            await asyncio.sleep(delay)
+            
             video_id_match = re.search(r'/(?:shorts/|)([a-zA-Z0-9_-]+)', url)
             video_id = video_id_match.group(1) if video_id_match else "unknown"
             file_path = self.TEMP_DIR / f"{video_id}.mp4"
@@ -37,15 +42,10 @@ class YouTubeShortsHandler(BaseHandler):
                 'writethumbnail': True,
                 'quiet': True,
                 'no_warnings': True,
+                'cookiefile': YOUTUBE_COOKIES,
+                'extractor_args': {'youtube': {'client': ['mweb']}}
             }
             
-            # Добавляем cookies, если файл существует
-            if YOUTUBE_COOKIES and Path(YOUTUBE_COOKIES).exists():
-                ydl_opts['cookiefile'] = YOUTUBE_COOKIES
-                logger.info(f"Используем файл cookies: {YOUTUBE_COOKIES}")
-            else:
-                logger.warning("Файл cookies не найден. YouTube может требовать авторизацию.")
-
             loop = asyncio.get_event_loop()
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = await loop.run_in_executor(None, lambda: ydl.extract_info(url, download=True))
