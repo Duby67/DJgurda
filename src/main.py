@@ -35,6 +35,7 @@ handlers: List[BaseHandler] = [
     InstagramReelsHandler(),
 ]
 
+
 async def shutdown(app: Application, sig: signal.Signals):
     """Действия перед остановкой бота."""
     logger.info(f"Получен сигнал {sig.name}, завершение работы...")
@@ -46,7 +47,8 @@ async def shutdown(app: Application, sig: signal.Signals):
     await app.stop()
     await app.shutdown()
 
-async def post_init(app: Application):
+
+async def init_complite(app: Application):
     """Действия после инициализации бота."""
     logger.info("post_init вызван")
     app.bot_data['start_time'] = datetime.now()
@@ -56,8 +58,10 @@ async def post_init(app: Application):
     except Exception as e:
         logger.error(f"Не удалось отправить уведомление о запуске: {e}")
 
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Чики-Брики! Отправь ссылку и я все сделаю красиво.")
+
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /help"""
@@ -71,6 +75,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(help_text)
     
+
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отправляет время последнего запуска бота."""
     start_time = context.application.bot_data.get('start_time')
@@ -80,6 +85,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     else:
         await update.message.reply_text("Время запуска неизвестно.")
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
@@ -175,14 +181,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info(f"Блок {idx} успешно отправлен")
             except Exception as e:
                 logger.exception(f"Ошибка при отправке контента для {url}")
-                # Если ошибка при отправке, шлём текст с ошибкой
                 error_text = (f"❌ Не удалось отправить контент.\n\n"
                               f"{user_context}\n\n"
                               f"От ↣ {user_link}\n"
-                              f"<a href='{url}'>{handler.source_name}</a>")
+                              #f"<a href='{url}'>{handler.source_name}</a>")
+                              f"{url}")
                 await chat.send_message(text=error_text, parse_mode=ParseMode.HTML)
             finally:
-                # Удаляем временные файлы
                 handler.cleanup(file_info)
         else:
             # Ошибка загрузки контента
@@ -195,16 +200,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def run_bot():
     """Асинхронная функция запуска бота."""
-    app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
+    logger.info("Сборка бота...")
+    
+    app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    logger.info("Бот инициализирован, запуск...")
+    logger.info("Бот собран, запуск...")
 
     # Инициализация и старт
     await app.initialize()
+    await init_complite(app)
     await app.start()
 
     # Регистрация обработчиков сигналов
