@@ -47,6 +47,7 @@ async def shutdown(app: Application, sig: signal.Signals):
 
 async def post_init(app: Application):
     """Действия после инициализации бота."""
+    logger.info("post_init вызван")
     app.bot_data['start_time'] = datetime.now()
     try:
         await app.bot.send_message(chat_id=ADMIN_ID, text="✅ Бот успешно запущен и готов к работе!")
