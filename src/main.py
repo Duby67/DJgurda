@@ -1,9 +1,10 @@
-import asyncio
-import signal
-import logging
 import html
-from datetime import datetime
+import signal
+import asyncio
+import logging
+
 from typing import List
+from datetime import datetime
 
 
 from telegram import Update
@@ -11,16 +12,16 @@ from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 
-from base_handler import BaseHandler
-from TikTok import TikTokHandler
-from YandexMusic import YandexMusicHandler
-from YouTubeShorts import YouTubeShortsHandler
-from InstagramReels import InstagramReelsHandler
+from src.bot.handlers.base import BaseHandler
+from src.services.TikTok import TikTokHandler
+from src.services.YouTube import YouTubeShortsHandler
+from src.services.YandexMusic import YandexMusicHandler
+from src.services.Instagram import InstagramReelsHandler
 
 
-from processing import split_into_blocks, get_user_link
-from tokens import ADMIN_ID, BOT_TOKEN
-from logger import setup_logging
+from src.bot.processing import split_into_blocks, get_user_link
+from src.utils.logger import setup_logging
+from src.config import ADMIN_ID, BOT_TOKEN
 
 
 setup_logging()

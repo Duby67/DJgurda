@@ -16,4 +16,4 @@ __pycache__/
 *.log
 
 # Временная папка
-temp_files/
+src/data/temp_files/
