@@ -40,20 +40,15 @@ class YouTubeShortsHandler(BaseHandler):
 
             ydl_opts = {
                 'outtmpl': str(file_path),
-                # Сначала пробуем лучший MP4
-                'format': 'best[ext=mp4]/best',
+                'format': 'best',
                 'writethumbnail': True,
                 'quiet': True,
                 'no_warnings': True,
                 'cookiefile': YOUTUBE_COOKIES,
-                'extractor_args': {'youtube': {'client': ['mweb']}},
-                # Если скачанный файл не MP4 — конвертируем в MP4
                 'postprocessors': [{
                     'key': 'FFmpegVideoConvertor',
                     'preferedformat': 'mp4',
-                }],
-                # Для случаев, когда видео и аудио скачиваются отдельно — смержить в MP4
-                'merge_output_format': 'mp4',
+                }]
             }
             
             loop = asyncio.get_event_loop()
