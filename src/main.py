@@ -4,8 +4,8 @@ import asyncio
 import logging
 
 from typing import List
-from datetime import datetime
-
+from datetime import datetime, timezone
+import zoneinfo
 
 from telegram import Update
 from telegram.constants import ParseMode
@@ -51,7 +51,11 @@ async def shutdown(app: Application, sig: signal.Signals):
 async def init_complite(app: Application):
     """Действия после инициализации бота."""
     logger.info("post_init вызван")
-    app.bot_data['start_time'] = datetime.now()
+    
+    utc_time = datetime.now(timezone.utc)
+    moscow_tz = zoneinfo.ZoneInfo("Europe/Moscow")
+    app.bot_data['start_time'] = utc_time.astimezone(moscow_tz)
+    
     try:
         await app.bot.send_message(chat_id=ADMIN_ID, text="✅ Бот успешно запущен и готов к работе!")
         logger.info("Уведомление о запуске отправлено администратору")
@@ -181,7 +185,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info(f"Блок {idx} успешно отправлен")
             except Exception as e:
                 logger.exception(f"Ошибка при отправке контента для {url}")
-                error_text = (f"❌ Не удалось отправить контент.\n\n"
+                error_text = (f"❌ Не удалось отправить контент.\n"
                               f"{user_context}\n\n"
                               f"От ↣ {user_link}\n"
                               #f"<a href='{url}'>{handler.source_name}</a>")
@@ -194,7 +198,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             error_text = (f"❌ Не удалось загрузить контент.\n\n"
                           f"{user_context}\n\n"
                           f"От ↣ {user_link}\n"
-                          f"<a href='{url}'>{handler.source_name}</a>")
+                          #f"<a href='{url}'>{handler.source_name}</a>")
+                          f"{url}")
             await chat.send_message(text=error_text, parse_mode=ParseMode.HTML)
             logger.info(f"Блок {idx}: ошибка загрузки, отправлено уведомление")
 
