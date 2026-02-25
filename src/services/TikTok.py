@@ -1,19 +1,21 @@
 import re
+import yt_dlp
 import asyncio
 import logging
 import requests
 from bs4 import BeautifulSoup
 from pathlib import Path
 from typing import Optional, Dict, Any
-import yt_dlp
 
-from base_handler import BaseHandler
+from src.bot.handlers.base import BaseHandler
+
+from src.config import PROJECT_TEMP_DIR
 
 logger = logging.getLogger(__name__)
 
 class TikTokHandler(BaseHandler):
     PATTERN = re.compile(r'https?://(?:www\.|vm\.|vt\.)?tiktok\.com/\S+')
-    TEMP_DIR = Path("temp_files/TikTok")
+    TEMP_DIR = PROJECT_TEMP_DIR/"TikTok"
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
     @property

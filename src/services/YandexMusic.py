@@ -7,14 +7,16 @@ import logging
 import asyncio
 from typing import Optional, Dict, Any
 
-from base_handler import BaseHandler
-from tokens import YANDEX_MUSIC_TOKEN
+from src.bot.handlers.base import BaseHandler
+
+from src.config import YANDEX_MUSIC_TOKEN
+from src.config import PROJECT_TEMP_DIR
 
 logger = logging.getLogger(__name__)
 
 class YandexMusicHandler(BaseHandler):
     PATTERN = re.compile(r'https?://music\.yandex\.(?:ru|by|kz|ua)/\S+')
-    TEMP_DIR = Path("temp_files/YandexMusik")
+    TEMP_DIR = PROJECT_TEMP_DIR/"YandexMusik"
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
     def __init__(self):

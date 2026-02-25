@@ -1,7 +1,6 @@
-import re
 from typing import List, Tuple
 
-from base_handler import BaseHandler
+from src.bot.handlers.base import BaseHandler
 
 def split_into_blocks(text: str, handlers: List[BaseHandler]) -> List[Tuple[str, str, BaseHandler]]:
     """
