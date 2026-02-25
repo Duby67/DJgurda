@@ -1,4 +1,6 @@
 yt-dlp
+asyncio
+datetime
 python-dotenv
 beautifulsoup4
 

@@ -51,10 +51,12 @@ jobs:
             cd /home/${{ secrets.SSH_USER }}/bot
 
             # Создаём .env из секретов
+            # Токены
             echo "ADMIN_ID=${{ secrets.ADMIN_ID }}" > .env
             echo "BOT_TOKEN=${{ secrets.BOT_TOKEN }}" >> .env
             echo "YANDEX_MUSIC_TOKEN=${{ secrets.YANDEX_MUSIC_TOKEN }}" >> .env
-            # Добавьте другие переменные по необходимости
+            # Кукис файлы
+            echo "YOUTUBE_COOKIES=${{ secrets.YOUTUBE_COOKIES }}" >> .env
 
             # Логинимся в GitHub Container Registry
             # Для приватного репозитория используйте Personal Access Token вместо GITHUB_TOKEN

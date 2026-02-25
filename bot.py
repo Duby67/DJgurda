@@ -1,5 +1,9 @@
 import logging
 import html
+import signal
+import asyncio
+
+from datetime import datetime
 from typing import List, Tuple
 
 
@@ -33,15 +37,28 @@ handlers: List[BaseHandler] = [
     InstagramReelsHandler(),
 ]
 
-async def send_startup_notification(app: Application):
-    """Уведомление администратору о запуске."""
+async def shutdown(app: Application, sig: signal.Signals):
+    """Действия перед остановкой бота."""
+    logger.info(f"Получен сигнал {sig.name}, завершение работы...")
+    try:
+        await app.bot.send_message(chat_id=ADMIN_ID, text="⚠️ Бот выключается...")
+    except Exception as e:
+        logger.error(f"Не удалось отправить уведомление о выключении: {e}")
+    # Останавливаем приложение
+    await app.stop()
+    await app.shutdown()
+
+async def post_init(app: Application):
+    """Действия после инициализации бота."""
+    # Сохраняем время запуска в bot_data
+    app.bot_data['start_time'] = datetime.now()
     try:
         await app.bot.send_message(chat_id=ADMIN_ID, text="✅ Бот успешно запущен и готов к работе!")
         logger.info("Уведомление о запуске отправлено администратору")
     except Exception as e:
         logger.error(f"Не удалось отправить уведомление о запуске: {e}")
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Чики-Брики! Отправь ссылку и я все сделаю красиво.")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -55,6 +72,16 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{sources_text}"
     )
     await update.message.reply_text(help_text)
+    
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отправляет время последнего запуска бота."""
+    start_time = context.application.bot_data.get('start_time')
+    if start_time:
+        await update.message.reply_text(
+            f"🕒 Бот запущен с: {start_time.strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+    else:
+        await update.message.reply_text("Время запуска неизвестно.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
@@ -169,13 +196,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"Блок {idx}: ошибка загрузки, отправлено уведомление")
 
 def main():
-    app = Application.builder().token(BOT_TOKEN).post_init(send_startup_notification).build()
-    app.add_handler(CommandHandler("start", start))
+    app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
+    app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("status", status_command))
+    
     # Обрабатываем все текстовые сообщения, кроме команд
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     logger.info("Бот успешно запущен и готов к работе!")
     app.run_polling(drop_pending_updates=True)
+    
+    # Регистрация обработчиков сигналов для graceful shutdown
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(
+            sig, lambda s=sig: asyncio.create_task(shutdown(app, s))
+        )
 
 if __name__ == "__main__":
     main()
