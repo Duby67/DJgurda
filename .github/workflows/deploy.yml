@@ -58,12 +58,12 @@ jobs:
             # Логинимся в GHCR
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ env.OWNER_LC }} --password-stdin
 
+            # Скачиваем новый образ
+            docker pull ghcr.io/${{ env.REPO_LC }}:latest
+
             # Останавливаем и удаляем старый контейнер
             docker stop telegram-bot || true
             docker rm telegram-bot || true
-
-            # Скачиваем новый образ
-            docker pull ghcr.io/${{ env.REPO_LC }}:latest
 
             # Запускаем контейнер
             docker run -d \
