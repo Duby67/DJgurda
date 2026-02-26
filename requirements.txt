@@ -1,8 +1,10 @@
-yt-dlp
+
 asyncio
 datetime
 python-dotenv
 beautifulsoup4
 
-python-telegram-bot==20.6
-yandex-music==2.2.0
+yt-dlp
+yandex-music
+
+aiogram
