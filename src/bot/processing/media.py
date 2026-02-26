@@ -5,7 +5,9 @@ from aiogram.types import Message
 from aiogram.types.input_file import FSInputFile
 
 from src.services.manager import ServiceManager
-from src.bot.utils import split_into_blocks, get_user_link
+from src.bot.processing.message import split_into_blocks, get_user_link
+
+from src.config import MAX_CAPTION
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +22,6 @@ async def handle_media_message(message: Message) -> None:
         return
 
     user_link = get_user_link(message.from_user)
-    # Удаляем исходное сообщение
     try:
         await message.delete()
         logger.info("Исходное сообщение удалено")
@@ -32,7 +33,6 @@ async def handle_media_message(message: Message) -> None:
 
         if file_info:
             try:
-                # Формируем подпись (как у вас)
                 caption_lines = []
                 if user_context:
                     safe_context = html.escape(user_context)
@@ -48,8 +48,9 @@ async def handle_media_message(message: Message) -> None:
                 caption_lines.append(f"От ↣ {user_link}")
                 caption_lines.append(f"<a href='{url}'>{handler.source_name}</a>")
                 caption = "\n".join(caption_lines)
-
-                # Отправка
+                if len(caption) > MAX_CAPTION:
+                    caption = caption[:MAX_CAPTION-3] + "..."
+                    
                 if file_info['type'] == 'video':
                     video = FSInputFile(file_info['file_path'])
                     thumb = FSInputFile(file_info['thumbnail_path']) if file_info.get('thumbnail_path') and file_info['thumbnail_path'].exists() else None

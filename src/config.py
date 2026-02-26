@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+MAX_CAPTION = 1024
+
 BOT_VERSION = os.getenv("BOT_VERSION")
 if not BOT_VERSION:
     raise ValueError("BOT_VERSION не найден в .env!")
@@ -11,7 +13,10 @@ if not BOT_VERSION:
 ADMIN_ID_STR=os.getenv("ADMIN_ID")
 if ADMIN_ID_STR is None:
     raise ValueError("ADMIN_ID не найден в .env файле")
-ADMIN_ID = int(ADMIN_ID_STR)
+try:
+    ADMIN_ID = int(ADMIN_ID_STR)
+except ValueError:
+    raise ValueError("ADMIN_ID должен быть числом")
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
