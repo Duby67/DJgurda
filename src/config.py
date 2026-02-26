@@ -34,7 +34,7 @@ if not YANDEX_MUSIC_TOKEN:
 
 YOUTUBE_COOKIES_PATH  = os.getenv("YOUTUBE_COOKIES_PATH")
 if not YOUTUBE_COOKIES_PATH :
-    raise ValueError("YOUTUBE_COOKIES не найден в .env!")
+    raise ValueError("YOUTUBE_COOKIES_PATH не найден в .env!")
 YOUTUBE_COOKIES = PROJECT_ROOT / YOUTUBE_COOKIES_PATH 
 if not Path(YOUTUBE_COOKIES).exists():
-    raise ValueError("Файл cookies не найден.")
+    raise ValueError("Файл YOUTUBE_COOKIES не найден.")

@@ -54,6 +54,18 @@ jobs:
             ghcr.io/${{ env.REPO_LC }}:latest
             ghcr.io/${{ env.REPO_LC }}:${{ github.sha }}
           platforms: linux/amd64
+          
+      - name: Copy manager.sh to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 228
+          source: "manager.sh"
+          target: "/home/${{ secrets.SSH_USER }}/"
+          overwrite: true
+          strip_components: 0
 
       - name: Deploy to server via SSH (port 228)
         uses: appleboy/ssh-action@v1.0.3
@@ -68,7 +80,7 @@ jobs:
             echo "ADMIN_ID=${{ secrets.ADMIN_ID }}" > .env
             echo "BOT_TOKEN=${{ secrets.BOT_TOKEN }}" >> .env
             echo "YANDEX_MUSIC_TOKEN=${{ secrets.YANDEX_MUSIC_TOKEN }}" >> .env
-            echo "YOUTUBE_COOKIES=${{ secrets.YOUTUBE_COOKIES }}" >> .env
+            echo "YOUTUBE_COOKIES=${{ secrets.YOUTUBE_COOKIES_PATH }}" >> .env
             echo "BOT_VERSION=${{ steps.version.outputs.VERSION }}" >> .env
 
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ env.OWNER_LC }} --password-stdin
