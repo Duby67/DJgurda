@@ -1,4 +1,5 @@
 import re
+import uuid
 import yt_dlp
 import asyncio
 import logging
@@ -23,17 +24,20 @@ class InstagramReelsHandler(BaseHandler):
         return "Instagram Reels"
 
     async def process(self, url: str, context: str) -> Optional[Dict[str, Any]]:
+        file_path = None
+        thumb_path = None
         try:
             shortcode_match = re.search(r'/(reel|p|tv)/([a-zA-Z0-9_-]+)', url)
             if not shortcode_match:
                 logger.error("Не удалось извлечь код Instagram")
                 return None
             shortcode = shortcode_match.group(2)
-            file_path = self.TEMP_DIR / f"{shortcode}.mp4"
-            thumb_path = self.TEMP_DIR / f"{shortcode}.jpg"
+            unique_id = f"{shortcode}_{uuid.uuid4().hex[:8]}"
+            file_path = self.TEMP_DIR / f"{unique_id}.mp4"
+            thumb_path = self.TEMP_DIR / f"{unique_id}.jpg"
 
             ydl_opts = {
-                'outtmpl': str(file_path),
+                'outtmpl': str(file_path.with_suffix('')),
                 'format': 'best[ext=mp4]/best',
                 'writethumbnail': True,
                 'quiet': True,
@@ -47,9 +51,16 @@ class InstagramReelsHandler(BaseHandler):
                     logger.error("Не удалось получить информацию о видео Instagram")
                     return None
 
-                if not file_path.exists():
-                    logger.error(f"Файл не найден: {file_path}")
-                    return None
+                possible_video = file_path.with_suffix('.mp4')
+                if not possible_video.exists():
+                    for f in self.TEMP_DIR.glob(f"{unique_id}.*"):
+                        if f.suffix in ['.mp4', '.mov']:
+                            possible_video = f
+                            break
+                    else:
+                        logger.error(f"Файл не найден: {file_path}")
+                        return None
+                file_path = possible_video
 
                 file_size = file_path.stat().st_size
                 if file_size > 50 * 1024 * 1024:
@@ -75,6 +86,16 @@ class InstagramReelsHandler(BaseHandler):
                 }
         except Exception as e:
             logger.exception(f"Ошибка при скачивании видео Instagram: {e}")
+            if file_path and file_path.exists():
+                try:
+                    file_path.unlink()
+                except Exception as cleanup_err:
+                    logger.error(f"Ошибка удаления {file_path}: {cleanup_err}")
+            if thumb_path and thumb_path.exists():
+                try:
+                    thumb_path.unlink()
+                except Exception as cleanup_err:
+                    logger.error(f"Ошибка удаления {thumb_path}: {cleanup_err}")
             return None
 
     def cleanup(self, file_info: Dict[str, Any]) -> None:
