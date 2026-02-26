@@ -1,4 +1,5 @@
 import re
+import uuid
 import yt_dlp
 import asyncio
 import logging
@@ -27,7 +28,6 @@ class TikTokHandler(BaseHandler):
         return "TikTok"
 
     async def _download_image(self, url: str, dest_path: Path) -> bool:
-        """Скачивает изображение по URL (синхронная часть выносится в поток)."""
         def sync_download():
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -47,7 +47,6 @@ class TikTokHandler(BaseHandler):
         return await asyncio.to_thread(sync_download)
 
     async def _extract_photo_info(self, url: str) -> Optional[Dict]:
-        """Извлекает информацию о фото (синхронный парсинг в потоке)."""
         def sync_extract():
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -60,10 +59,9 @@ class TikTokHandler(BaseHandler):
 
                 soup = BeautifulSoup(resp.text, 'html.parser')
                 og_image = soup.find('meta', property='og:image')
-                if og_image and og_image.get('content'):
-                    img_url = og_image['content']
-                else:
-                    img_tag = soup.find('img', {'class': 'tiktok-media'})
+                img_url = og_image.get('content') if og_image else None
+                if not img_url:
+                    img_tag = soup.find('img', {'class': 'tiktok-media'}) or soup.find('img', {'src': re.compile(r'^https://.*\.(jpg|jpeg|png)')})
                     if img_tag and img_tag.get('src'):
                         img_url = img_tag['src']
                     else:
@@ -90,12 +88,16 @@ class TikTokHandler(BaseHandler):
         return await asyncio.to_thread(sync_extract)
 
     async def process(self, url: str, context: str) -> Optional[Dict[str, Any]]:
-        if '/photo/' in url:
-            # Обработка фото
-            try:
-                video_id_match = re.search(r'/(\d+)[?/]?', url)
-                video_id = video_id_match.group(1) if video_id_match else "photo"
-                file_path = self.TEMP_DIR / f"{video_id}.jpg"
+        file_path = None
+        thumb_path = None
+        try:
+            video_id_match = re.search(r'/(\d+)[?/]?', url)
+            video_id = video_id_match.group(1) if video_id_match else "unknown"
+            unique_id = f"{video_id}_{uuid.uuid4().hex[:8]}"
+
+            if '/photo/' in url:
+                # Обработка фото
+                file_path = self.TEMP_DIR / f"{unique_id}.jpg"
 
                 photo_info = await self._extract_photo_info(url)
                 if not photo_info:
@@ -104,7 +106,6 @@ class TikTokHandler(BaseHandler):
                 if not await self._download_image(photo_info['img_url'], file_path):
                     return None
 
-                # Проверка размера (фото до 10 МБ)
                 file_size = file_path.stat().st_size
                 if file_size > 10 * 1024 * 1024:
                     logger.warning(f"Фото слишком большое ({file_size} байт). Удаляем.")
@@ -121,19 +122,13 @@ class TikTokHandler(BaseHandler):
                     'original_url': url,
                     'context': context,
                 }
-            except Exception as e:
-                logger.exception(f"Ошибка при обработке фото TikTok: {e}")
-                return None
-        else:
-            # Обработка видео
-            try:
-                video_id_match = re.search(r'(\d+)|([a-zA-Z0-9_-]+)$', url)
-                video_id = video_id_match.group(0) if video_id_match else "unknown"
-                file_path = self.TEMP_DIR / f"{video_id}.mp4"
-                thumb_path = self.TEMP_DIR / f"{video_id}.jpg"
+            else:
+                # Обработка видео
+                file_path = self.TEMP_DIR / f"{unique_id}.mp4"
+                thumb_path = self.TEMP_DIR / f"{unique_id}.jpg"
 
                 ydl_opts = {
-                    'outtmpl': str(file_path),
+                    'outtmpl': str(file_path.with_suffix('')),
                     'format': 'best[ext=mp4]/best',
                     'writethumbnail': True,
                     'quiet': True,
@@ -147,9 +142,16 @@ class TikTokHandler(BaseHandler):
                         logger.error("Не удалось получить информацию о видео TikTok")
                         return None
 
-                    if not file_path.exists():
-                        logger.error(f"Файл не найден: {file_path}")
-                        return None
+                    possible_video = file_path.with_suffix('.mp4')
+                    if not possible_video.exists():
+                        for f in self.TEMP_DIR.glob(f"{unique_id}.*"):
+                            if f.suffix in ['.mp4', '.mov']:
+                                possible_video = f
+                                break
+                        else:
+                            logger.error(f"Файл не найден: {file_path}")
+                            return None
+                    file_path = possible_video
 
                     file_size = file_path.stat().st_size
                     if file_size > 50 * 1024 * 1024:
@@ -173,9 +175,19 @@ class TikTokHandler(BaseHandler):
                         'original_url': url,
                         'context': context,
                     }
-            except Exception as e:
-                logger.exception(f"Ошибка при скачивании видео TikTok: {e}")
-                return None
+        except Exception as e:
+            logger.exception(f"Ошибка при скачивании TikTok: {e}")
+            if file_path and file_path.exists():
+                try:
+                    file_path.unlink()
+                except Exception as cleanup_err:
+                    logger.error(f"Ошибка удаления {file_path}: {cleanup_err}")
+            if thumb_path and thumb_path.exists():
+                try:
+                    thumb_path.unlink()
+                except Exception as cleanup_err:
+                    logger.error(f"Ошибка удаления {thumb_path}: {cleanup_err}")
+            return None
 
     def cleanup(self, file_info: Dict[str, Any]) -> None:
         if file_info.get('file_path'):
