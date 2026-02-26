@@ -3,19 +3,19 @@ import yt_dlp
 import asyncio
 import logging
 import requests
-from bs4 import BeautifulSoup
+
 from pathlib import Path
+from bs4 import BeautifulSoup
 from typing import Optional, Dict, Any
 
-from src.bot.handlers.base import BaseHandler
-
+from src.services.base import BaseHandler
 from src.config import PROJECT_TEMP_DIR
 
 logger = logging.getLogger(__name__)
 
 class TikTokHandler(BaseHandler):
     PATTERN = re.compile(r'https?://(?:www\.|vm\.|vt\.)?tiktok\.com/\S+')
-    TEMP_DIR = PROJECT_TEMP_DIR/"TikTok"
+    TEMP_DIR = PROJECT_TEMP_DIR / "TikTok"
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
     @property
@@ -27,73 +27,71 @@ class TikTokHandler(BaseHandler):
         return "TikTok"
 
     async def _download_image(self, url: str, dest_path: Path) -> bool:
-        """Скачивает изображение по URL."""
-        try:
+        """Скачивает изображение по URL (синхронная часть выносится в поток)."""
+        def sync_download():
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }
-            response = requests.get(url, headers=headers, timeout=10)
-            if response.status_code != 200:
-                logger.error(f"Ошибка скачивания изображения {url}: {response.status_code}")
+            try:
+                response = requests.get(url, headers=headers, timeout=10)
+                if response.status_code != 200:
+                    logger.error(f"Ошибка скачивания {url}: {response.status_code}")
+                    return False
+                with open(dest_path, 'wb') as f:
+                    f.write(response.content)
+                return True
+            except Exception as e:
+                logger.exception(f"Ошибка при скачивании изображения: {e}")
                 return False
-            with open(dest_path, 'wb') as f:
-                f.write(response.content)
-            return True
-        except Exception as e:
-            logger.exception(f"Ошибка при скачивании изображения: {e}")
-            return False
+
+        return await asyncio.to_thread(sync_download)
 
     async def _extract_photo_info(self, url: str) -> Optional[Dict]:
-        """Извлекает информацию о фото из HTML страницы TikTok."""
-        try:
+        """Извлекает информацию о фото (синхронный парсинг в потоке)."""
+        def sync_extract():
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }
-            resp = requests.get(url, headers=headers, timeout=10)
-            if resp.status_code != 200:
-                logger.error(f"HTTP {resp.status_code} при загрузке страницы фото")
-                return None
-
-            soup = BeautifulSoup(resp.text, 'html.parser')
-
-            # Пытаемся найти meta og:image
-            og_image = soup.find('meta', property='og:image')
-            if og_image and og_image.get('content'):
-                img_url = og_image['content']
-            else:
-                # Запасной вариант: ищем тег img с данными
-                img_tag = soup.find('img', {'class': 'tiktok-media'})
-                if img_tag and img_tag.get('src'):
-                    img_url = img_tag['src']
-                else:
-                    logger.error("Не удалось найти ссылку на изображение")
+            try:
+                resp = requests.get(url, headers=headers, timeout=10)
+                if resp.status_code != 200:
+                    logger.error(f"HTTP {resp.status_code} при загрузке страницы фото")
                     return None
 
-            # Извлекаем автора и описание
-            title_tag = soup.find('meta', property='og:title')
-            title = title_tag['content'] if title_tag else "TikTok Photo"
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                og_image = soup.find('meta', property='og:image')
+                if og_image and og_image.get('content'):
+                    img_url = og_image['content']
+                else:
+                    img_tag = soup.find('img', {'class': 'tiktok-media'})
+                    if img_tag and img_tag.get('src'):
+                        img_url = img_tag['src']
+                    else:
+                        logger.error("Не удалось найти ссылку на изображение")
+                        return None
 
-            # Имя автора можно попробовать взять из meta или из URL
-            # Например, из og:title часто бывает "username on TikTok"
-            uploader = "Unknown"
-            if ' — ' in title:
-                uploader = title.split(' — ')[0].strip()
-            elif ' on TikTok' in title:
-                uploader = title.split(' on TikTok')[0].strip()
+                title_tag = soup.find('meta', property='og:title')
+                title = title_tag['content'] if title_tag else "TikTok Photo"
+                uploader = "Unknown"
+                if ' — ' in title:
+                    uploader = title.split(' — ')[0].strip()
+                elif ' on TikTok' in title:
+                    uploader = title.split(' on TikTok')[0].strip()
 
-            return {
-                'img_url': img_url,
-                'title': title,
-                'uploader': uploader
-            }
-        except Exception as e:
-            logger.exception(f"Ошибка парсинга фото TikTok: {e}")
-            return None
+                return {
+                    'img_url': img_url,
+                    'title': title,
+                    'uploader': uploader
+                }
+            except Exception as e:
+                logger.exception(f"Ошибка парсинга фото TikTok: {e}")
+                return None
+
+        return await asyncio.to_thread(sync_extract)
 
     async def process(self, url: str, context: str) -> Optional[Dict[str, Any]]:
-        # Определяем, является ли ссылка на фото
         if '/photo/' in url:
-            # Обрабатываем как фото
+            # Обработка фото
             try:
                 video_id_match = re.search(r'/(\d+)[?/]?', url)
                 video_id = video_id_match.group(1) if video_id_match else "photo"
@@ -106,11 +104,18 @@ class TikTokHandler(BaseHandler):
                 if not await self._download_image(photo_info['img_url'], file_path):
                     return None
 
+                # Проверка размера (фото до 10 МБ)
+                file_size = file_path.stat().st_size
+                if file_size > 10 * 1024 * 1024:
+                    logger.warning(f"Фото слишком большое ({file_size} байт). Удаляем.")
+                    file_path.unlink()
+                    return None
+
                 return {
                     'type': 'photo',
                     'source_name': self.source_name,
                     'file_path': file_path,
-                    'thumbnail_path': None,  # не используем отдельно
+                    'thumbnail_path': None,
                     'title': photo_info['title'],
                     'uploader': photo_info['uploader'],
                     'original_url': url,
@@ -120,9 +125,8 @@ class TikTokHandler(BaseHandler):
                 logger.exception(f"Ошибка при обработке фото TikTok: {e}")
                 return None
         else:
-            # Обрабатываем как видео (существующая логика)
+            # Обработка видео
             try:
-                # Генерируем имя файла на основе части ссылки
                 video_id_match = re.search(r'(\d+)|([a-zA-Z0-9_-]+)$', url)
                 video_id = video_id_match.group(0) if video_id_match else "unknown"
                 file_path = self.TEMP_DIR / f"{video_id}.mp4"
@@ -137,9 +141,8 @@ class TikTokHandler(BaseHandler):
                     'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 }
 
-                loop = asyncio.get_event_loop()
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = await loop.run_in_executor(None, lambda: ydl.extract_info(url, download=True))
+                    info = await asyncio.to_thread(ydl.extract_info, url, download=True)
                     if not info:
                         logger.error("Не удалось получить информацию о видео TikTok")
                         return None
@@ -175,7 +178,6 @@ class TikTokHandler(BaseHandler):
                 return None
 
     def cleanup(self, file_info: Dict[str, Any]) -> None:
-        """Удаляет временные файлы."""
         if file_info.get('file_path'):
             try:
                 file_info['file_path'].unlink()
