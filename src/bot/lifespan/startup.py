@@ -16,7 +16,7 @@ async def on_startup(bot: Bot) -> None:
 
     utc_time = datetime.now(timezone.utc)
     moscow_tz = ZoneInfo("Europe/Moscow")
-    bot["start_time"] = utc_time.astimezone(moscow_tz)
+    bot.start_time = utc_time.astimezone(moscow_tz)
     logger.info("Бот запущен")
     try:
         await bot.send_message(chat_id=ADMIN_ID, text="✅ Бот успешно запущен и готов к работе!")

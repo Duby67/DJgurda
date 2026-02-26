@@ -9,7 +9,7 @@ router = Router()
 @router.message(Command("status"))
 async def status_command(message: Message):
     bot = message.bot
-    start_time = bot.get("start_time")
+    start_time = bot.start_time
     if start_time:
         await message.answer(
             f"🤖 Погоняло: Джигурда\n"
