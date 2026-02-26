@@ -84,7 +84,7 @@ jobs:
             echo "ADMIN_ID=${{ secrets.ADMIN_ID }}" > .env
             echo "BOT_TOKEN=${{ secrets.BOT_TOKEN }}" >> .env
             echo "YANDEX_MUSIC_TOKEN=${{ secrets.YANDEX_MUSIC_TOKEN }}" >> .env
-            echo "YOUTUBE_COOKIES_PATH =${{ secrets.YOUTUBE_COOKIES_PATH }}" >> .env
+            echo "YOUTUBE_COOKIES_PATH=${{ secrets.YOUTUBE_COOKIES_PATH }}" >> .env
             echo "BOT_VERSION=${{ steps.version.outputs.VERSION }}" >> .env
 
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ env.OWNER_LC }} --password-stdin
