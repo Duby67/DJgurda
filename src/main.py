@@ -74,14 +74,7 @@ async def help_command(message: types.Message) -> None:
     )
     await message.answer(help_text)
 
-@dp.message(Command("status"))
-async def status_command(message: types.Message) -> None:
-    if start_time:
-        await message.answer(
-            f"🕒 Бот запущен с: {start_time.strftime('%Y-%m-%d %H:%M:%S')}"
-        )
-    else:
-        await message.answer("Отвали!")
+
         
 @dp.message(F.text & ~F.text.startswith("/"))
 async def handle_message(message: types.Message) -> None:
