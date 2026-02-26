@@ -1,251 +1,35 @@
-import html
-import signal
+import shutil
 import asyncio
 import logging
 
-from typing import List
-from datetime import datetime, timezone
-import zoneinfo
+from aiogram import Bot, Dispatcher
+from aiogram.enums import ParseMode
+from aiogram.client.default import DefaultBotProperties
 
-from telegram import Update
-from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-
-
-from src.bot.handlers.base import BaseHandler
-from src.services.TikTok import TikTokHandler
-from src.services.YouTube import YouTubeShortsHandler
-from src.services.YandexMusic import YandexMusicHandler
-from src.services.Instagram import InstagramReelsHandler
+from src.config import BOT_TOKEN
+from src.utils.logger import setup_logging 
+from src.bot.lifespan import on_startup, on_shutdown
+from src.bot.processing.media import router as media_router
 
 
-from src.bot.processing import split_into_blocks, get_user_link
-from src.utils.logger import setup_logging
-from src.config import ADMIN_ID, BOT_TOKEN
 
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
-# Регистрируем все обработчики
-handlers: List[BaseHandler] = [
-    TikTokHandler(),
-    YandexMusicHandler(),
-    YouTubeShortsHandler(),
-    InstagramReelsHandler(),
-]
+if not shutil.which("ffmpeg"):
+    logger.error("FFmpeg не найден. Некоторые функции могут не работать.")
 
+bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+dp = Dispatcher()
 
-async def shutdown(app: Application, sig: signal.Signals):
-    """Действия перед остановкой бота."""
-    logger.info(f"Получен сигнал {sig.name}, завершение работы...")
-    try:
-        await app.bot.send_message(chat_id=ADMIN_ID, text="⚠️ Бот выключается...")
-    except Exception as e:
-        logger.error(f"Не удалось отправить уведомление о выключении: {e}")
-    # Останавливаем приложение
-    await app.stop()
-    await app.shutdown()
+dp.include_router(media_router)
 
+dp.startup.register(on_startup)
+dp.shutdown.register(on_shutdown)
 
-async def init_complite(app: Application):
-    """Действия после инициализации бота."""
-    logger.info("post_init вызван")
-    
-    utc_time = datetime.now(timezone.utc)
-    moscow_tz = zoneinfo.ZoneInfo("Europe/Moscow")
-    app.bot_data['start_time'] = utc_time.astimezone(moscow_tz)
-    
-    try:
-        await app.bot.send_message(chat_id=ADMIN_ID, text="✅ Бот успешно запущен и готов к работе!")
-        logger.info("Уведомление о запуске отправлено администратору")
-    except Exception as e:
-        logger.error(f"Не удалось отправить уведомление о запуске: {e}")
-
-
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Чики-Брики! Отправь ссылку и я все сделаю красиво.")
-
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /help"""
-    sources = [handler.source_name for handler in handlers]
-    # Форматируем список источников
-    sources_text = "\n".join(f"• {source}" for source in sources)
-    help_text = (
-        "Кидай ссылку и я дам тебе сочный контент\n"
-        "Я хаваю:\n"
-        f"{sources_text}"
-    )
-    await update.message.reply_text(help_text)
-    
-
-async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отправляет время последнего запуска бота."""
-    start_time = context.application.bot_data.get('start_time')
-    if start_time:
-        await update.message.reply_text(
-            f"🕒 Бот запущен с: {start_time.strftime('%Y-%m-%d %H:%M:%S')}"
-        )
-    else:
-        await update.message.reply_text("Время запуска неизвестно.")
-
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
-        return
-
-    text = update.message.text
-    blocks = split_into_blocks(text, handlers)
-    if not blocks:
-        return
-
-    user_link = get_user_link(update.effective_user)
-    chat = update.effective_chat
-
-    # Удаляем исходное сообщение
-    try:
-        await update.message.delete()
-        logger.info("Исходное сообщение удалено")
-    except Exception as e:
-        logger.warning(f"Не удалось удалить сообщение: {e}")
-
-    # Обрабатываем каждый блок отдельно
-    for idx, (url, user_context, handler) in enumerate(blocks, start=1):
-        # Загружаем контент
-        file_info = await handler.process(url, user_context)
-
-        if file_info:
-            # Успешная загрузка
-            try:
-                # Формируем подпись
-                caption_lines = []
-                if user_context:
-                    safe_context = html.escape(user_context)
-                    caption_lines.append(safe_context)
-                if handler.source_name != "Яндекс.Музыка":
-                    if file_info['type'] == 'video':
-                        safe_title = html.escape(file_info['title'])
-                        safe_uploader = html.escape(file_info['uploader'])
-                        caption_lines.append("")
-                        caption_lines.append(f"🎬 {safe_title} — {safe_uploader}")
-
-                caption_lines.append("")
-                caption_lines.append(f"От ↣ {user_link}")
-                caption_lines.append(f"<a href='{url}'>{handler.source_name}</a>")
-                caption = "\n".join(caption_lines)
-
-                # Отправка в зависимости от типа
-                if file_info['type'] == 'video':
-                    with open(file_info['file_path'], 'rb') as video_file:
-                        if file_info.get('thumbnail_path') and file_info['thumbnail_path'].exists():
-                            with open(file_info['thumbnail_path'], 'rb') as thumb_file:
-                                await chat.send_video(
-                                    video=video_file,
-                                    caption=caption,
-                                    parse_mode=ParseMode.HTML,
-                                    thumbnail=thumb_file,
-                                    supports_streaming=True
-                                )
-                        else:
-                            await chat.send_video(
-                                video=video_file,
-                                caption=caption,
-                                parse_mode=ParseMode.HTML,
-                                supports_streaming=True
-                            )
-                elif file_info['type'] == 'audio':
-                    with open(file_info['file_path'], 'rb') as audio_file:
-                        if file_info.get('thumbnail_path') and file_info['thumbnail_path'].exists():
-                            with open(file_info['thumbnail_path'], 'rb') as thumb_file:
-                                await chat.send_audio(
-                                    audio=audio_file,
-                                    title=file_info['title'],
-                                    performer=file_info['performer'],
-                                    thumbnail=thumb_file,
-                                    caption=caption,
-                                    parse_mode=ParseMode.HTML
-                                )
-                        else:
-                            await chat.send_audio(
-                                audio=audio_file,
-                                title=file_info['title'],
-                                performer=file_info['performer'],
-                                caption=caption,
-                                parse_mode=ParseMode.HTML
-                            )
-                elif file_info['type'] == 'photo':
-                    with open(file_info['file_path'], 'rb') as photo_file:
-                        await chat.send_photo(
-                            photo=photo_file,
-                            caption=caption,
-                            parse_mode=ParseMode.HTML
-                        )
-                        
-                logger.info(f"Блок {idx} успешно отправлен")
-            except Exception as e:
-                logger.exception(f"Ошибка при отправке контента для {url}")
-                error_text = (f"❌ Не удалось отправить контент.\n"
-                              f"{user_context}\n\n"
-                              f"От ↣ {user_link}\n"
-                              #f"<a href='{url}'>{handler.source_name}</a>")
-                              f"{url}")
-                await chat.send_message(text=error_text, parse_mode=ParseMode.HTML)
-            finally:
-                handler.cleanup(file_info)
-        else:
-            # Ошибка загрузки контента
-            error_text = (f"❌ Не удалось загрузить контент.\n\n"
-                          f"{user_context}\n\n"
-                          f"От ↣ {user_link}\n"
-                          #f"<a href='{url}'>{handler.source_name}</a>")
-                          f"{url}")
-            await chat.send_message(text=error_text, parse_mode=ParseMode.HTML)
-            logger.info(f"Блок {idx}: ошибка загрузки, отправлено уведомление")
-
-async def run_bot():
-    """Асинхронная функция запуска бота."""
-    logger.info("Сборка бота...")
-    
-    app = Application.builder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("status", status_command))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    logger.info("Бот собран, запуск...")
-
-    # Инициализация и старт
-    await app.initialize()
-    await init_complite(app)
-    await app.start()
-
-    # Регистрация обработчиков сигналов
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(
-            sig, lambda s=sig: asyncio.create_task(shutdown(app, s))
-        )
-
-    # Запуск polling
-    await app.updater.start_polling(drop_pending_updates=True)
-    logger.info("Бот начал опрос обновлений")
-
-    # Ожидаем завершения (бесконечное ожидание)
-    try:
-        while True:
-            await asyncio.sleep(1)
-    except asyncio.CancelledError:
-        pass
-    finally:
-        # Останавливаем приложение, если ещё не остановлено
-        await app.stop()
-        await app.shutdown()
-        logger.info("Бот остановлен.")
-
-def main():
-    """Точка входа."""
-    asyncio.run(run_bot())
+async def main():
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

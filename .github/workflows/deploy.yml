@@ -16,11 +16,27 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set lowercase repository names
         run: |
           echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
           echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+
+      - name: Generate version
+        id: version
+        run: |
+          TAG=$(git describe --tags --exact-match 2>/dev/null || true)
+          if [ -n "$TAG" ]; then
+            VERSION="$TAG"
+          else
+            SHORT_HASH=$(git rev-parse --short HEAD)
+            DATE=$(date +'%Y-%m-%d')
+            VERSION="${SHORT_HASH} от ${DATE}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Generated version: ${VERSION}"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -49,28 +65,22 @@ jobs:
           script: |
             cd /home/${{ secrets.SSH_USER }}/bot
 
-            # Создаём .env из секретов
             echo "ADMIN_ID=${{ secrets.ADMIN_ID }}" > .env
             echo "BOT_TOKEN=${{ secrets.BOT_TOKEN }}" >> .env
             echo "YANDEX_MUSIC_TOKEN=${{ secrets.YANDEX_MUSIC_TOKEN }}" >> .env
             echo "YOUTUBE_COOKIES=${{ secrets.YOUTUBE_COOKIES }}" >> .env
+            echo "BOT_VERSION=${{ steps.version.outputs.VERSION }}" >> .env
 
-            # Логинимся в GHCR
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ env.OWNER_LC }} --password-stdin
 
-            # Скачиваем новый образ
             docker pull ghcr.io/${{ env.REPO_LC }}:latest
+            docker stop DJgurda || true
+            docker rm DJgurda || true
 
-            # Останавливаем и удаляем старый контейнер
-            docker stop telegram-bot || true
-            docker rm telegram-bot || true
-
-            # Запускаем контейнер
             docker run -d \
-              --name telegram-bot \
+              --name DJgurda \
               --restart always \
               --env-file .env \
               ghcr.io/${{ env.REPO_LC }}:latest
 
-            # Очистка
             docker system prune -f
