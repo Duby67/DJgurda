@@ -9,12 +9,12 @@ router = Router()
 @router.message(Command("status"))
 async def status_command(message: Message):
     bot = message.bot
-    start_time = getattr(bot, 'start_time', None)
+    start_time = bot.get("start_time")
     if start_time:
         await message.answer(
-            f"🤖 Погоняло: Джигурда",
-            f"📊 Статья: v{BOT_VERSION}",
-            f"🕒 Заход: от {start_time.strftime('%Y-%m-%d %H:%M:%S')}"            
+            f"🤖 Погоняло: Джигурда\n"
+            f"📊 Статья: v{BOT_VERSION}\n"
+            f"🕒 Заход: от {start_time.strftime('%Y-%m-%d %H:%M:%S')}"
         )
     else:
         await message.answer("Время запуска неизвестно.")
