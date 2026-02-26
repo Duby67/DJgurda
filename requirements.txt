@@ -1,10 +1,7 @@
 
-asyncio
-datetime
-python-dotenv
-beautifulsoup4
+yt-dlp==2025.2.19
+python-dotenv==1.0.1
+beautifulsoup4==4.12.3
 
-yt-dlp
-yandex-music
-
-aiogram
+aiogram==3.10.0
+yandex-music==2.2.0
