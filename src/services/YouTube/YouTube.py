@@ -1,4 +1,5 @@
 import re
+import uuid
 import yt_dlp
 import random
 import logging
@@ -34,12 +35,13 @@ class YouTubeShortsHandler(BaseHandler):
             
             video_id_match = re.search(r'/(?:shorts/|)([a-zA-Z0-9_-]+)', url)
             video_id = video_id_match.group(1) if video_id_match else "unknown"
-            file_path = self.TEMP_DIR / f"{video_id}.mp4"
-            thumb_path = self.TEMP_DIR / f"{video_id}.jpg"
+            unique_id = f"{video_id}_{uuid.uuid4().hex[:8]}"
+            file_path = self.TEMP_DIR / f"{unique_id}.mp4"
+            thumb_path = self.TEMP_DIR / f"{unique_id}.jpg"
 
             ydl_opts = {
                 'outtmpl': str(file_path),
-                'format': 'best',
+                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]',
                 'writethumbnail': True,
                 'quiet': True,
                 'no_warnings': True,
@@ -58,16 +60,23 @@ class YouTubeShortsHandler(BaseHandler):
                     logger.error("Не удалось получить информацию о видео")
                     return None
 
-                if not file_path.exists():
-                    logger.error(f"Файл не найден: {file_path}")
-                    return None
+                possible_video = file_path.with_suffix('.mp4')
+                if not possible_video.exists():
+                    for f in self.TEMP_DIR.glob(f"{unique_id}.*"):
+                        if f.suffix in ['.mp4', '.mkv', '.webm']:
+                            possible_video = f
+                            break
+                    else:
+                        logger.error(f"Файл не найден: {file_path}")
+                        return None
+                file_path = possible_video
 
                 file_size = file_path.stat().st_size
                 if file_size > 50 * 1024 * 1024:
                     logger.warning(f"Видео слишком большое ({file_size} байт). Удаляем.")
                     file_path.unlink()
                     return None
-                
+
                 possible_thumb = file_path.with_suffix('.jpg')
                 if possible_thumb.exists():
                     thumb_path = possible_thumb
@@ -86,6 +95,16 @@ class YouTubeShortsHandler(BaseHandler):
                 }
         except Exception as e:
             logger.exception(f"Ошибка при скачивании видео: {e}")
+            if file_path and file_path.exists():
+                try:
+                    file_path.unlink()
+                except Exception as cleanup_err:
+                    logger.error(f"Ошибка удаления {file_path}: {cleanup_err}")
+            if thumb_path and thumb_path.exists():
+                try:
+                    thumb_path.unlink()
+                except Exception as cleanup_err:
+                    logger.error(f"Ошибка удаления {thumb_path}: {cleanup_err}")
             return None
 
     def cleanup(self, file_info: Dict[str, Any]) -> None:
