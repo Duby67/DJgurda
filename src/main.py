@@ -15,7 +15,7 @@ from src.config import ADMIN_ID, BOT_TOKEN
 from src.utils.logger import setup_logging
 from src.bot.processing import split_into_blocks, get_user_link
 
-from src.bot.handlers.base import BaseHandler
+from src.bot.handlers.services.base import BaseHandler
 
 from src.services.TikTok import TikTokHandler
 from src.services.YouTube import YouTubeShortsHandler
@@ -59,20 +59,6 @@ async def on_shutdown() -> None:
         logger.error(f"Не удалось отправить уведомление о выключении: {e}")
 
 
-@dp.message(Command("start"))
-async def start_command(message: types.Message) -> None:
-    await message.answer("Чики-Брики! Отправь ссылку и я все сделаю красиво.")
-
-@dp.message(Command("help"))
-async def help_command(message: types.Message) -> None:
-    sources = [handler.source_name for handler in handlers]
-    sources_text = "\n".join(f"• {source}" for source in sources)
-    help_text = (
-        "Кидай ссылку и я дам тебе сочный контент\n"
-        "Я хаваю:\n"
-        f"{sources_text}"
-    )
-    await message.answer(help_text)
 
 
         
