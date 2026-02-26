@@ -1,8 +1,8 @@
 import re
+import uuid
 import logging
 import asyncio
 import aiohttp
-import hashlib
 import aiofiles
 
 from pathlib import Path
@@ -23,6 +23,17 @@ class YandexMusicHandler(BaseHandler):
         if not YANDEX_MUSIC_TOKEN:
             logger.error("YANDEX_MUSIC_TOKEN не задан. Обработчик Яндекс.Музыки не будет работать.")
         self.token = YANDEX_MUSIC_TOKEN
+        self._client = None
+        self._lock = asyncio.Lock()  # для потокобезопасности клиента
+
+    async def _get_client(self):
+        """Ленивая инициализация клиента с блокировкой."""
+        if self._client is None:
+            # Инициализация клиента – синхронная операция, выполняем в потоке
+            def init_client():
+                return Client(self.token).init()
+            self._client = await asyncio.to_thread(init_client)
+        return self._client
 
     @property
     def pattern(self) -> re.Pattern:
@@ -50,7 +61,8 @@ class YandexMusicHandler(BaseHandler):
         if not cover_uri:
             return None
         cover_url = f"https://{cover_uri.replace('%%', '400x400')}"
-        cover_hash = hashlib.md5(cover_url.encode()).hexdigest()
+        # Используем uuid для уникальности, но можно оставить хеш для избежания дублей – оставим оба
+        cover_hash = uuid.uuid4().hex[:8]
         cover_filename = f"cover_{cover_hash}.jpg"
         cover_path = self.TEMP_DIR / cover_filename
         if await self._download_file(cover_url, cover_path):
@@ -62,6 +74,8 @@ class YandexMusicHandler(BaseHandler):
             logger.error("Пропуск обработки: токен Яндекс.Музыки отсутствует")
             return None
 
+        file_path = None
+        cover_path = None
         try:
             track_match = re.search(r'/track/(\d+)', url)
             if not track_match:
@@ -69,28 +83,36 @@ class YandexMusicHandler(BaseHandler):
                 return None
             track_id = track_match.group(1)
 
-            client = await asyncio.to_thread(lambda: Client(self.token).init())
-            tracks = await asyncio.to_thread(client.tracks, [track_id])
-            if not tracks:
-                logger.error(f"Трек {track_id} не найден")
-                return None
-            track = tracks[0]
+            # Используем блокировку для безопасного вызова методов клиента
+            async with self._lock:
+                client = await self._get_client()
+                tracks = await asyncio.to_thread(client.tracks, [track_id])
+                if not tracks:
+                    logger.error(f"Трек {track_id} не найден")
+                    return None
+                track = tracks[0]
 
-            download_info = await asyncio.to_thread(track.get_download_info)
-            if not download_info:
-                logger.error("Нет информации для скачивания")
-                return None
+                download_info = await asyncio.to_thread(track.get_download_info)
+                if not download_info:
+                    logger.error("Нет информации для скачивания")
+                    return None
 
-            download_info.sort(key=lambda x: x.bitrate_in_kbps, reverse=True)
-            best = download_info[0]
-            direct_link = await asyncio.to_thread(best.get_direct_link)
+                download_info.sort(key=lambda x: x.bitrate_in_kbps, reverse=True)
+                best = download_info[0]
+                direct_link = await asyncio.to_thread(best.get_direct_link)
 
-            artists = ", ".join(artist.name for artist in track.artists)
-            title = track.title
-            filename = f"{artists} - {title}.mp3"
-            filename = "".join(c for c in filename if c.isalnum() or c in " ._-").strip()
-            file_path = self.TEMP_DIR / filename
+                artists = ", ".join(artist.name for artist in track.artists)
+                title = track.title
+                filename = f"{artists} - {title}.mp3"
+                filename = "".join(c for c in filename if c.isalnum() or c in " ._-").strip()
+                # Добавляем уникальный суффикс
+                unique_suffix = uuid.uuid4().hex[:8]
+                stem = Path(filename).stem
+                ext = Path(filename).suffix
+                filename = f"{stem}_{unique_suffix}{ext}"
+                file_path = self.TEMP_DIR / filename
 
+            # Скачивание файла (уже вне блокировки, т.к. это aiohttp)
             if not await self._download_file(direct_link, file_path):
                 return None
 
@@ -100,7 +122,6 @@ class YandexMusicHandler(BaseHandler):
                 file_path.unlink()
                 return None
 
-            cover_path = None
             if track.cover_uri:
                 cover_path = await self._get_cover_file(track.cover_uri)
 
@@ -117,6 +138,16 @@ class YandexMusicHandler(BaseHandler):
             }
         except Exception as e:
             logger.exception(f"Ошибка при скачивании трека: {e}")
+            if file_path and file_path.exists():
+                try:
+                    file_path.unlink()
+                except Exception as cleanup_err:
+                    logger.error(f"Ошибка удаления {file_path}: {cleanup_err}")
+            if cover_path and cover_path.exists():
+                try:
+                    cover_path.unlink()
+                except Exception as cleanup_err:
+                    logger.error(f"Ошибка удаления {cover_path}: {cleanup_err}")
             return None
 
     def cleanup(self, file_info: Dict[str, Any]) -> None:
