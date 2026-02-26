@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MAX_CAPTION = 1024
+MAX_AGE_SECONDS = 3600
 
 BOT_VERSION = os.getenv("BOT_VERSION")
 if not BOT_VERSION:

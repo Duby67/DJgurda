@@ -1,3 +1,4 @@
+import shutil
 import asyncio
 import logging
 
@@ -10,8 +11,14 @@ from src.utils.logger import setup_logging
 from src.bot.lifespan import on_startup, on_shutdown
 from src.bot.processing.media import router as media_router
 
+
+
+
 setup_logging()
 logger = logging.getLogger(__name__)
+
+if not shutil.which("ffmpeg"):
+    logger.error("FFmpeg не найден. Некоторые функции могут не работать.")
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
