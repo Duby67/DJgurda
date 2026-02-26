@@ -10,7 +10,7 @@ from src.config import PROJECT_TEMP_DIR
 
 logger = logging.getLogger(__name__)
 
-class InstagramReelsHandler(BaseHandler):
+class InstagramHandler(BaseHandler):
     PATTERN = re.compile(r'https?://(?:www\.)?instagram\.com/(?:reel|p|tv)/\S+')
     TEMP_DIR = PROJECT_TEMP_DIR / "Instagram"
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
@@ -21,7 +21,7 @@ class InstagramReelsHandler(BaseHandler):
 
     @property
     def source_name(self) -> str:
-        return "Instagram Reels"
+        return "Instagram"
 
     async def process(self, url: str, context: str) -> Optional[Dict[str, Any]]:
         file_path = None

@@ -14,7 +14,7 @@ from src.services.base import BaseHandler
 
 logger = logging.getLogger(__name__)
 
-class YouTubeShortsHandler(BaseHandler):
+class YouTubeHandler(BaseHandler):
     PATTERN = re.compile(r'https?://(?:www\.)?(?:youtube\.com/shorts/|youtu\.be/)\S+')
     TEMP_DIR = PROJECT_TEMP_DIR / "YouTube"
     TEMP_DIR.mkdir(parents=True, exist_ok=True)

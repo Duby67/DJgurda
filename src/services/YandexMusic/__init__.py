@@ -1,0 +1,1 @@
+from .YandexMusic import YandexMusicHandler

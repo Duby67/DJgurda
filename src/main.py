@@ -11,9 +11,6 @@ from src.utils.logger import setup_logging
 from src.bot.lifespan import on_startup, on_shutdown
 from src.bot.processing.media import router as media_router
 
-
-
-
 setup_logging()
 logger = logging.getLogger(__name__)
 

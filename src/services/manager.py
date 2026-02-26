@@ -3,19 +3,19 @@ import re
 from typing import List, Optional
 
 from src.services.base import BaseHandler
-from src.services.YouTube import YouTubeShortsHandler
+from src.services.YouTube import YouTubeHandler
 from src.services.YandexMusic import YandexMusicHandler
 from src.services.TikTok import TikTokHandler
-from src.services.Instagram import InstagramReelsHandler
+from src.services.Instagram import InstagramHandler
 
 
 class ServiceManager:
     def __init__(self):
         self.handlers: List[BaseHandler] = [
-            YouTubeShortsHandler(),
+            YouTubeHandler(),
             YandexMusicHandler(),
             TikTokHandler(),
-            InstagramReelsHandler(),
+            InstagramHandler(),
         ]
 
     def get_handler(self, url: str) -> Optional[BaseHandler]:
