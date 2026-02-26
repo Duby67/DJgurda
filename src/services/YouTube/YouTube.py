@@ -1,19 +1,21 @@
 import re
 import yt_dlp
-import asyncio
+import random
 import logging
-from pathlib import Path
-from typing import Optional, Dict, Any
+import asyncio
 
-from src.bot.handlers.base import BaseHandler
-
+from src.config import YOUTUBE_COOKIES
 from src.config import PROJECT_TEMP_DIR
+
+from typing import Optional, Dict, Any
+from src.services.base import BaseHandler
+
 
 logger = logging.getLogger(__name__)
 
-class InstagramReelsHandler(BaseHandler):
-    PATTERN = re.compile(r'https?://(?:www\.)?instagram\.com/(?:reel|p|tv)/\S+')
-    TEMP_DIR = PROJECT_TEMP_DIR/"Instagram"
+class YouTubeShortsHandler(BaseHandler):
+    PATTERN = re.compile(r'https?://(?:www\.)?(?:youtube\.com/shorts/|youtu\.be/)\S+')
+    TEMP_DIR = PROJECT_TEMP_DIR / "YouTube"
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
     @property
@@ -22,35 +24,38 @@ class InstagramReelsHandler(BaseHandler):
 
     @property
     def source_name(self) -> str:
-        return "Instagram Reels"
+        return "YouTube"
 
     async def process(self, url: str, context: str) -> Optional[Dict[str, Any]]:
         try:
-            # Извлекаем короткий код
-            shortcode_match = re.search(r'/(reel|p|tv)/([a-zA-Z0-9_-]+)', url)
-            if not shortcode_match:
-                logger.error("Не удалось извлечь код Instagram")
-                return None
-            shortcode = shortcode_match.group(2)
-            file_path = self.TEMP_DIR / f"{shortcode}.mp4"
-            thumb_path = self.TEMP_DIR / f"{shortcode}.jpg"
+            delay = random.uniform(1, 3)
+            logger.info(f"Ожидание {delay:.2f} секунд перед скачиванием {url}")
+            await asyncio.sleep(delay)
+            
+            video_id_match = re.search(r'/(?:shorts/|)([a-zA-Z0-9_-]+)', url)
+            video_id = video_id_match.group(1) if video_id_match else "unknown"
+            file_path = self.TEMP_DIR / f"{video_id}.mp4"
+            thumb_path = self.TEMP_DIR / f"{video_id}.jpg"
 
             ydl_opts = {
                 'outtmpl': str(file_path),
-                'format': 'best[ext=mp4]/best',
+                'format': 'best',
                 'writethumbnail': True,
                 'quiet': True,
                 'no_warnings': True,
-                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                # Если есть файл с куками Instagram, раскомментируйте:
-                # 'cookiefile': 'instagram_cookies.txt'
+                #'cookiefile': YOUTUBE_COOKIES,
+                'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+                'postprocessors': [{
+                    'key': 'FFmpegVideoConvertor',
+                    'preferedformat': 'mp4',
+                }],
+                'merge_output_format': 'mp4'
             }
-
-            loop = asyncio.get_event_loop()
+            
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = await loop.run_in_executor(None, lambda: ydl.extract_info(url, download=True))
+                info = await asyncio.to_thread(ydl.extract_info, url, download=True)
                 if not info:
-                    logger.error("Не удалось получить информацию о видео Instagram")
+                    logger.error("Не удалось получить информацию о видео")
                     return None
 
                 if not file_path.exists():
@@ -62,7 +67,7 @@ class InstagramReelsHandler(BaseHandler):
                     logger.warning(f"Видео слишком большое ({file_size} байт). Удаляем.")
                     file_path.unlink()
                     return None
-
+                
                 possible_thumb = file_path.with_suffix('.jpg')
                 if possible_thumb.exists():
                     thumb_path = possible_thumb
@@ -75,16 +80,15 @@ class InstagramReelsHandler(BaseHandler):
                     'file_path': file_path,
                     'thumbnail_path': thumb_path,
                     'title': info.get('title', 'Unknown'),
-                    'uploader': info.get('uploader', info.get('channel', 'Unknown')),
+                    'uploader': info.get('uploader', 'Unknown'),
                     'original_url': url,
                     'context': context,
                 }
         except Exception as e:
-            logger.exception(f"Ошибка при скачивании видео Instagram: {e}")
+            logger.exception(f"Ошибка при скачивании видео: {e}")
             return None
 
     def cleanup(self, file_info: Dict[str, Any]) -> None:
-        """Удаляет временные файлы."""
         if file_info.get('file_path'):
             try:
                 file_info['file_path'].unlink()

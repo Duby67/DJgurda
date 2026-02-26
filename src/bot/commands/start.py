@@ -5,5 +5,5 @@ from aiogram.filters import Command
 router = Router()
 
 @router.message(Command("start"))
-async def start_command(message: types.Message) -> None:
+async def start_command(message: Message) -> None:
     await message.answer("Чики-Брики! Отправь ссылку и я все сделаю красиво.")
