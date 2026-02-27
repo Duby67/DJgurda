@@ -6,6 +6,8 @@ load_dotenv()
 
 MAX_CAPTION = 1024
 MAX_AGE_SECONDS = 3600
+PHOTO_SIZE_LIMIT = 10 * 1024 * 1024
+VIDEO_SIZE_LIMIT = 50 * 1024 * 1024
 
 PROJECT_ROOT = Path(__file__).parent.parent
 if not PROJECT_ROOT:
