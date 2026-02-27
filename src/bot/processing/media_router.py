@@ -29,7 +29,7 @@ async def _process_single_block(
     handler,
     user_link: str,
     message: Message
-):
+) -> bool:
     """Обрабатывает один блок: загружает и отправляет медиа."""
     file_info = None
     try:
@@ -40,7 +40,7 @@ async def _process_single_block(
             error_text = build_error_text("Не удалось загрузить контент",user_context, user_link, url)
             await message.answer(text=error_text)
             logger.info(f"Блок {idx}: ошибка загрузки")
-            return
+            return False
 
         caption = build_caption(user_context, file_info, user_link, url, handler)
 
@@ -80,6 +80,7 @@ async def _process_single_block(
         logger.exception(f"Необработанная ошибка при обработке блока {idx}: {e}")
         error_text = build_error_text("Внутренняя ошибка при обработке ссылки",user_context, user_link, url)
         await message.answer(text=error_text)
+        return False
 
 @router.message(F.text & ~F.text.startswith("/"))
 async def handle_media_message(message: Message) -> None:
@@ -91,14 +92,24 @@ async def handle_media_message(message: Message) -> None:
 
     user_link = get_user_link(message.from_user)
 
-    try:
-        await message.delete()
-        logger.info("Исходное сообщение удалено")
-    except Exception as e:
-        logger.warning(f"Не удалось удалить сообщение: {e}")
-
     tasks = [
         _process_single_block(idx, url, context, handler, user_link, message)
         for idx, (url, context, handler) in enumerate(blocks, start=1)
     ]
-    await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    success_count = 0
+    for res in results:
+        if res is True:
+            success_count += 1
+        elif isinstance(res, Exception):
+            logger.error(f"Необработанное исключение в задаче: {res}")
+    if success_count > 0:
+        try:
+            await message.delete()
+            logger.info("Исходное сообщение удалено")
+        except Exception as e:
+            logger.warning(f"Не удалось удалить сообщение: {e}")
+    else:
+        await message.reply("❌Не удалось обработать ссылку.")
+        logger.info("Все блоки завершились ошибкой, исходное сообщение сохранено")
