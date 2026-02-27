@@ -14,7 +14,7 @@ async def status_command(message: Message):
     if start_time:
         emoji = get_source_emoji("DJgurda")
         await message.answer(
-            f"{emoji} Погоняло: DJ гурда\n"
+            f"{emoji} Погоняло: DJ_gurda\n"
             f"📊 Статья: {BOT_VERSION}\n"
             f"🕒 Заход: от {start_time.strftime('%Y-%m-%d %H:%M:%S')}"
         )

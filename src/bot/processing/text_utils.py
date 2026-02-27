@@ -39,10 +39,10 @@ def remove_hashtags(text: str) -> str:
 
 def get_user_link(user: User) -> str:
     """Возвращает кликабельное имя пользователя."""
+    full_name = html.escape(user.full_name)
     if user.username:
-        return f"@{user.username}"
-    name = html.escape(user.full_name)
-    return f'<a href="tg://user?id={user.id}">{name}</a>'
+        return f'<a href="https://t.me/{user.username}">{full_name}</a>'
+    return f'<a href="tg://user?id={user.id}">{full_name}</a>'
 
 def split_into_blocks(text: str, service_manager) -> List[Tuple[str, str, BaseHandler]]:
     """
