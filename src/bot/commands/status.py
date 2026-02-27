@@ -3,6 +3,7 @@ from aiogram.types import Message
 from aiogram.filters import Command
 
 from src.config import BOT_VERSION
+from src.bot.processing.text_utils import get_source_emoji
 
 router = Router()
 
@@ -12,7 +13,7 @@ async def status_command(message: Message):
     start_time = bot.start_time
     if start_time:
         await message.answer(
-            f"🤖 Погоняло: DJ гурда\n"
+            f"{get_source_emoji("DJgurda")} Погоняло: DJ гурда\n"
             f"📊 Статья: {BOT_VERSION}\n"
             f"🕒 Заход: от {start_time.strftime('%Y-%m-%d %H:%M:%S')}"
         )
