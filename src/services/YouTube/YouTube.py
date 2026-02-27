@@ -40,18 +40,20 @@ class YouTubeHandler(BaseHandler):
             thumb_path = self.TEMP_DIR / f"{unique_id}.jpg"
 
             ydl_opts = {
-                'outtmpl': str(file_path),
-                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]',
+                'outtmpl': str(file_path.with_suffix('')),
+                'format': 'bestvideo+bestaudio/best',
                 'writethumbnail': True,
                 'quiet': True,
                 'no_warnings': True,
-                #'cookiefile': YOUTUBE_COOKIES,
-                'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'extractor_args': {'youtube': {'player_client': ['android', 'web', 'ios']}},
+                'merge_output_format': 'mp4',
+                'geo_bypass': True,
                 'postprocessors': [{
                     'key': 'FFmpegVideoConvertor',
                     'preferedformat': 'mp4',
-                }],
-                'merge_output_format': 'mp4'
+                    'ffmpeg_args': ['-c:v', 'libx264', '-c:a', 'aac', '-movflags', '+faststart']
+                }]
             }
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:

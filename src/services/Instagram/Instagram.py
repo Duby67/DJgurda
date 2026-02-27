@@ -38,11 +38,18 @@ class InstagramHandler(BaseHandler):
 
             ydl_opts = {
                 'outtmpl': str(file_path.with_suffix('')),
-                'format': 'best[ext=mp4]/best',
+                'format': 'bestvideo+bestaudio/best',
                 'writethumbnail': True,
                 'quiet': True,
                 'no_warnings': True,
                 'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'merge_output_format': 'mp4',
+                'geo_bypass': True,
+                'postprocessors': [{
+                    'key': 'FFmpegVideoConvertor',
+                    'preferedformat': 'mp4',
+                    'ffmpeg_args': ['-c:v', 'libx264', '-c:a', 'aac', '-movflags', '+faststart']
+                }]
             }
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
