@@ -51,8 +51,7 @@ class YouTubeHandler(BaseHandler):
                 'geo_bypass': True,
                 'postprocessors': [{
                     'key': 'FFmpegVideoConvertor',
-                    'preferedformat': 'mp4',
-                    'ffmpeg_args': ['-c:v', 'libx264', '-c:a', 'aac', '-movflags', '+faststart']
+                    'preferedformat': 'mp4'
                 }]
             }
             

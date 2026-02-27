@@ -12,8 +12,8 @@ async def status_command(message: Message):
     start_time = bot.start_time
     if start_time:
         await message.answer(
-            f"🤖 Погоняло: Джигурда\n"
-            f"📊 Статья: v{BOT_VERSION}\n"
+            f"🤖 Погоняло: DJ гурда\n"
+            f"📊 Статья: {BOT_VERSION}\n"
             f"🕒 Заход: от {start_time.strftime('%Y-%m-%d %H:%M:%S')}"
         )
     else:
