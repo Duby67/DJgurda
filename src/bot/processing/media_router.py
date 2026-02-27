@@ -38,7 +38,7 @@ async def _process_single_block(
 
         if not file_info:
             error_text = build_error_text("Не удалось загрузить контент",user_context, user_link, url)
-            await message.answer(text=error_text)
+            #await message.answer(text=error_text)
             logger.info(f"Блок {idx}: ошибка загрузки")
             return False
 
@@ -72,14 +72,14 @@ async def _process_single_block(
         except Exception as e:
             logger.exception(f"Ошибка при отправке контента для {url}")
             error_text = build_error_text("Не удалось отправить контент",user_context, user_link, url)
-            await message.answer(text=error_text)
+            #await message.answer(text=error_text)
         finally:
             if file_info:
                 handler.cleanup(file_info)
     except Exception as e:
         logger.exception(f"Необработанная ошибка при обработке блока {idx}: {e}")
         error_text = build_error_text("Внутренняя ошибка при обработке ссылки",user_context, user_link, url)
-        await message.answer(text=error_text)
+        #await message.answer(text=error_text)
         return False
 
 @router.message(F.text & ~F.text.startswith("/"))
