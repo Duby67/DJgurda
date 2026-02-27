@@ -11,7 +11,7 @@ from src.config import BOT_TOKEN
 from src.utils.logger import setup_logging 
 
 from src.bot.lifespan import on_startup, on_shutdown
-from src.bot.processing.media import router as media_router
+from src.bot.processing.media_router import router as media_router
 
 
 from src.bot.commands import command_routers
