@@ -14,8 +14,6 @@ from src.bot.processing.text_utils import (
     build_error_text
 )
 
-from src.config import MAX_CAPTION
-
 logger = logging.getLogger(__name__)
 
 router = Router()
@@ -37,7 +35,7 @@ async def _process_single_block(
             file_info = await handler.process(url, user_context)
 
         if not file_info:
-            error_text = build_error_text("Не удалось загрузить контент",user_context, user_link, url)
+            #error_text = build_error_text("Не удалось загрузить контент",user_context, user_link, url)
             #await message.answer(text=error_text)
             logger.info(f"Блок {idx}: ошибка загрузки")
             return False
@@ -53,7 +51,7 @@ async def _process_single_block(
                     caption=caption,
                     thumbnail=thumb,
                     supports_streaming=True
-                )
+                )                
             elif file_info['type'] == 'audio':
                 audio = FSInputFile(file_info['file_path'])
                 thumb = FSInputFile(file_info['thumbnail_path']) if file_info.get('thumbnail_path') and file_info['thumbnail_path'].exists() else None
@@ -69,16 +67,17 @@ async def _process_single_block(
                 await message.answer_photo(photo=photo, caption=caption)
 
             logger.info(f"Блок {idx} успешно отправлен")
+            return True
         except Exception as e:
             logger.exception(f"Ошибка при отправке контента для {url}")
-            error_text = build_error_text("Не удалось отправить контент",user_context, user_link, url)
+            #error_text = build_error_text("Не удалось отправить контент",user_context, user_link, url)
             #await message.answer(text=error_text)
         finally:
             if file_info:
                 handler.cleanup(file_info)
     except Exception as e:
         logger.exception(f"Необработанная ошибка при обработке блока {idx}: {e}")
-        error_text = build_error_text("Внутренняя ошибка при обработке ссылки",user_context, user_link, url)
+        #error_text = build_error_text("Внутренняя ошибка при обработке ссылки",user_context, user_link, url)
         #await message.answer(text=error_text)
         return False
 
