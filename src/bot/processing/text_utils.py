@@ -8,8 +8,34 @@ from aiogram.types import User
 from src.services.base import BaseHandler
 from src.config import MAX_CAPTION
 
+SOURCE_EMOJI = {
+    "DJgurda": {"emoji": "🤖", "custom_id": 5264975008282742838},
+    "TikTok": {"emoji": "🎵", "custom_id": 5262660471881765089},
+    "YouTube": {"emoji": "📹", "custom_id": 5263003845927147424},
+    "Instagram": {"emoji": "📸", "custom_id": 5264912443494144118},
+    "Яндекс.Музыка": {"emoji": "🎧", "custom_id": 5264990513114683176}
+}
+ERROR_EMOJI = "❌"
+DEFAULT_EMOJI = "🔗"
+
 logger = logging.getLogger(__name__)
 URL_PATTERN = re.compile(r'https?://\S+')
+HASHTAG_PATTERN = re.compile(r'#\w+')
+
+def get_source_emoji(source_name: str) -> str:
+    """Возвращает HTML-код для отображения эмодзи источника (обычного или кастомного)."""
+    info = SOURCE_EMOJI.get(source_name, {"emoji": DEFAULT_EMOJI})
+    fallback = info["emoji"]
+    custom_id = info.get("custom_id")
+    if custom_id:
+        return f'<tg-emoji emoji-id="{custom_id}">{fallback}</tg-emoji>'
+    return fallback
+
+def remove_hashtags(text: str) -> str:
+    """Удаляет хештеги из текста."""
+    cleaned = HASHTAG_PATTERN.sub('', text)
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned
 
 def get_user_link(user: User) -> str:
     """Возвращает кликабельное имя пользователя."""
@@ -48,17 +74,21 @@ def build_caption(
 ) -> str:
     """Формирует подпись к медиафайлу."""
     lines = []
+    source = handler.source_name
+    
     if user_context:
         lines.append(html.escape(user_context))
-    if handler.source_name != "Яндекс.Музыка" and file_info['type'] == 'video':
-        safe_title = html.escape(file_info['title'])
+    if source != "Яндекс.Музыка" and file_info['type'] == 'video':
+        clean_title = remove_hashtags(file_info['title'])
+        safe_title = html.escape(clean_title)
         safe_uploader = html.escape(file_info['uploader'])
         lines.append("")
-        lines.append(f"🎬 {safe_title} — {safe_uploader}")
+        lines.append(f"🎬{safe_title} — {safe_uploader}")
     lines.append("")
     lines.append(f"От ↣ {user_link}")
-    lines.append(f"<a href='{url}'>{handler.source_name}</a>")
+    lines.append(f"{get_source_emoji(source)} <a href='{url}'>{source}</a>")
     caption = "\n".join(lines)
+    
     if len(caption) > MAX_CAPTION:
         caption = caption[:MAX_CAPTION-3] + "..."
     return caption
@@ -70,7 +100,7 @@ def build_error_text(
     url: str) -> str:
     """Сообщение об ошибке."""
     error_text = (
-        f"❌{error_message}.\n\n"
+        f"{ERROR_EMOJI}{error_message}.\n\n"
         f"{user_context}\n\n"
         f"От ↣ {user_link}\n"
         f"{url}"
