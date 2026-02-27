@@ -12,7 +12,7 @@ class ServiceManager:
             TikTokHandler(),
             YouTubeHandler(),
             InstagramHandler(),
-            YandexMusicHandler(),   
+            YandexMusicHandler(),
         ]
 
     def get_handler(self, url: str) -> Optional[BaseHandler]:

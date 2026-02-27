@@ -1,6 +1,8 @@
 import yt_dlp
+import aiohttp
 import asyncio
 import logging
+import aiofiles
 import requests
 
 from pathlib import Path
@@ -96,6 +98,8 @@ class PhotoMixin:
         if size_limit is None:
             size_limit = getattr(self, 'photo_limit', 10 * 1024 * 1024)
 
+        await self._random_delay()
+
         def sync_download():
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -120,3 +124,56 @@ class PhotoMixin:
                 dest_path.unlink(missing_ok=True)
                 return False
         return success
+    
+    
+class AudioMixin:
+    async def _download_file(self, url: str, dest_path: Path) -> bool:
+        """Скачивает файл по URL и сохраняет в dest_path, используя aiohttp."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status != 200:
+                        logger.error(f"Ошибка скачивания {url}: HTTP {response.status}")
+                        return False
+                    async with aiofiles.open(dest_path, 'wb') as f:
+                        await f.write(await response.read())
+            return True
+        except Exception as e:
+            logger.exception(f"Ошибка при скачивании {url}: {e}")
+            return False
+
+    async def _download_audio(self, url: str, dest_path: Path, size_limit: int = None) -> bool:
+        """Скачивает аудио, проверяет размер, возвращает True при успехе."""
+        if size_limit is None:
+            size_limit = getattr(self, 'audio_limit', 50 * 1024 * 1024)
+
+        await self._random_delay() 
+        success = await self._download_file(url, dest_path)
+        if not success:
+            return False
+
+        file_size = dest_path.stat().st_size
+        if file_size > size_limit:
+            logger.warning(f"Аудио слишком большое ({file_size} байт). Удаляем.")
+            dest_path.unlink(missing_ok=True)
+            return False
+        return True
+
+    async def _download_thumbnail(self, url: str, dest_path: Path, size_limit: int = None) -> bool:
+        """Скачивает обложку (изображение), проверяет размер."""
+        if size_limit is None:
+            size_limit = getattr(self, 'photo_limit', 10 * 1024 * 1024)
+
+        await self._random_delay()
+        success = await self._download_file(url, dest_path)
+        if not success:
+            return False
+
+        file_size = dest_path.stat().st_size
+        if file_size > size_limit:
+            logger.warning(f"Обложка слишком большая ({file_size} байт). Удаляем.")
+            dest_path.unlink(missing_ok=True)
+            return False
+        return True
+    
+    

@@ -7,15 +7,19 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional, Dict, Any
 
-from src.config import PHOTO_SIZE_LIMIT
-from src.config import VIDEO_SIZE_LIMIT
+from src.config import PROJECT_TEMP_DIR, PHOTO_SIZE_LIMIT, VIDEO_SIZE_LIMIT, AUDIO_SIZE_LIMIT
 
 logger = logging.getLogger(__name__)
 
 class BaseHandler(ABC):
-    TEMP_DIR: Path = None
-    video_limit = VIDEO_SIZE_LIMIT
     photo_limit = PHOTO_SIZE_LIMIT
+    video_limit = VIDEO_SIZE_LIMIT
+    audio_limit = AUDIO_SIZE_LIMIT
+    base_temp_dir = PROJECT_TEMP_DIR
+
+    def __init__(self):
+        self.temp_dir = self.base_temp_dir / self.__class__.__name__
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     @abstractmethod
@@ -33,7 +37,7 @@ class BaseHandler(ABC):
 
     def _generate_unique_path(self, identifier: str, suffix: str = "") -> Path:
         unique_id = f"{identifier}_{uuid.uuid4().hex[:8]}"
-        return self.TEMP_DIR / f"{unique_id}{suffix}"
+        return self.temp_dir / f"{unique_id}{suffix}"
 
     def _extract_video_id(self, url: str) -> str:
         parts = url.rstrip('/').split('/')
