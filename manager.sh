@@ -25,6 +25,10 @@ echo "Deploying $ENV environment: container=$CONTAINER_NAME, image=$IMAGE"
 docker stop "$CONTAINER_NAME" 2>/dev/null || true
 docker rm "$CONTAINER_NAME" 2>/dev/null || true
 
+rm -rf "$HOME"/.cache 2>/dev/null || true
+rm -rf "$HOME"/.lesshst 2>/dev/null || true
+rm -rf "$HOME"/.bash_history 2>/dev/null || true
+
 rm -rf "$BOT_DIR"/.cache 2>/dev/null || true
 rm -rf "$BOT_DIR"/.lesshst 2>/dev/null || true
 rm -rf "$BOT_DIR"/.bash_history 2>/dev/null || true
