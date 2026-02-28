@@ -1,6 +1,10 @@
 yt-dlp
+
 tzdata>=2025.3
 aiogram>=3.25.0
+
+aiosqlite>=0.22.1
+
 yandex-music==2.2.0
 python-dotenv>=1.2.0
 beautifulsoup4>=4.14.0

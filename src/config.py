@@ -33,6 +33,10 @@ if not PROJECT_ROOT:
     raise ValueError("PROJECT_ROOT не определен!")
 PROJECT_TEMP_DIR = PROJECT_ROOT/"src"/"data"/"temp_files"
 
+DB_PATH = os.getenv("BOT_DB_PATH")
+if not DB_PATH:
+    raise ValueError("BOT_VERSION не найден в .env!")
+
 BOT_VERSION = os.getenv("BOT_VERSION")
 if not BOT_VERSION:
     raise ValueError("BOT_VERSION не найден в .env!")

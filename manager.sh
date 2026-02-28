@@ -10,11 +10,13 @@ if [ "$ENV" == "prod" ]; then
     CONTAINER_NAME="DJgurda-prod"
     IMAGE="ghcr.io/duby67/djgurda:latest"
     RESTART="always"
+    DB=$HOME/bot_prod/data
 elif [ "$ENV" == "dev" ]; then
     BOT_DIR="$HOME/bot_dev"
     CONTAINER_NAME="DJgurda-dev"
     IMAGE="ghcr.io/duby67/djgurda:dev-latest"
     RESTART="unless-stopped"
+    DB=$HOME/bot_dev/data
 else
     echo "Invalid environment: $ENV."
     exit 1
@@ -39,4 +41,5 @@ docker run -d \
   --name "$CONTAINER_NAME" \
   --restart "$RESTART" \
   --env-file "$ENV_FILE" \
+  -v $DB:/app/src/data/db \
   "$IMAGE"

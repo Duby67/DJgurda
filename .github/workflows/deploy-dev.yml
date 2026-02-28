@@ -77,13 +77,15 @@ jobs:
           port: 228
           script: |
             mkdir -p /home/${{ secrets.SSH_USER }}/bot_dev
+            mkdir -p /home/${{ secrets.SSH_USER }}/bot_dev/data
             cd /home/${{ secrets.SSH_USER }}/bot_dev
 
+            echo "BOT_VERSION=${{ steps.version.outputs.VERSION }}" >> .env
             echo "ADMIN_ID=${{ secrets.ADMIN_ID }}" > .env
-            echo "BOT_TOKEN=${{ secrets.BOT_TOKEN_DEV }}" >> .env
+            echo "BOT_DB_PATH=${{ secrets.BOT_DB_PATH }}" >> .env
+            echo "BOT_TOKEN=${{ secrets.BOT_TOKEN_PROD }}" >> .env
             echo "YANDEX_MUSIC_TOKEN=${{ secrets.YANDEX_MUSIC_TOKEN }}" >> .env
             echo "YOUTUBE_COOKIES_PATH=${{ secrets.YOUTUBE_COOKIES_PATH }}" >> .env
-            echo "BOT_VERSION=${{ steps.version.outputs.VERSION }}" >> .env
 
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ env.OWNER_LC }} --password-stdin
             docker pull ghcr.io/${{ env.REPO_LC }}:dev-latest
