@@ -1,6 +1,6 @@
 from .help import router as help_router
 from .start import router as start_router
-from .status import router as status_router
+from .info import router as status_router
 from .toggle_errors import router as toggle_errors_router
 
 command_routers = [
