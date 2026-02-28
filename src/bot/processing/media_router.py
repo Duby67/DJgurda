@@ -111,11 +111,11 @@ async def handle_media_message(message: Message) -> None:
             success_count += 1
         elif isinstance(res, Exception):
             logger.error(f"Необработанное исключение в задаче: {res}")
-    if success_count > 0:
+    if success_count == len(blocks):
         try:
             await message.delete()
             logger.info("Исходное сообщение удалено")
         except Exception as e:
             logger.warning(f"Не удалось удалить сообщение: {e}")
     else:
-        logger.info("Все блоки завершились ошибкой, исходное сообщение сохранено")
+        logger.info("Не все блоки завершились успешно")
