@@ -83,8 +83,8 @@ jobs:
             mkdir -p /home/${{ secrets.SSH_USER }}/bot_prod/data
             cd /home/${{ secrets.SSH_USER }}/bot_prod
 
-            echo "BOT_VERSION=${{ steps.version.outputs.VERSION }}" >> .env
             echo "ADMIN_ID=${{ secrets.ADMIN_ID }}" > .env
+            echo "BOT_VERSION=${{ steps.version.outputs.VERSION }}" >> .env
             echo "BOT_DB_PATH=${{ secrets.BOT_DB_PATH }}" >> .env
             echo "BOT_TOKEN=${{ secrets.BOT_TOKEN_PROD }}" >> .env
             echo "YANDEX_MUSIC_TOKEN=${{ secrets.YANDEX_MUSIC_TOKEN }}" >> .env
