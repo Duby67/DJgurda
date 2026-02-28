@@ -6,8 +6,8 @@ import requests
 from bs4 import BeautifulSoup
 from typing import Optional, Dict, Any
 
-from src.services.base import BaseHandler
-from src.services.mixins import VideoMixin, PhotoMixin
+from src.handlers.base import BaseHandler
+from src.handlers.mixins import VideoMixin, PhotoMixin
 
 logger = logging.getLogger(__name__)
 

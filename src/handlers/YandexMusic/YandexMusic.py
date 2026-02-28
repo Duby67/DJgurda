@@ -8,8 +8,8 @@ from yandex_music import Client
 from typing import Optional, Dict, Any
 
 from src.config import YANDEX_MUSIC_TOKEN
-from src.services.base import BaseHandler
-from src.services.mixins import AudioMixin
+from src.handlers.base import BaseHandler
+from src.handlers.mixins import AudioMixin
 
 logger = logging.getLogger(__name__)
 

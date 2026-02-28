@@ -3,8 +3,8 @@ import logging
 
 from typing import Optional, Dict, Any
 
-from src.services.base import BaseHandler
-from src.services.mixins import VideoMixin
+from src.handlers.base import BaseHandler
+from src.handlers.mixins import VideoMixin
 
 logger = logging.getLogger(__name__)
 

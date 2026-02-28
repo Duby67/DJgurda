@@ -6,7 +6,7 @@ from typing import List, Tuple
 from aiogram.types import User
 
 from src.config import MAX_CAPTION
-from src.services.base import BaseHandler
+from src.handlers.base import BaseHandler
 from src.bot.processing.emoji import get_emoji, EMOJI_ERROR, EMOJI_ARROW
 
 logger = logging.getLogger(__name__)

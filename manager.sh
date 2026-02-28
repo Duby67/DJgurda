@@ -9,10 +9,12 @@ if [ "$ENV" == "prod" ]; then
     BOT_DIR="$HOME/bot_prod"
     CONTAINER_NAME="DJgurda-prod"
     IMAGE="ghcr.io/duby67/djgurda:latest"
+    RESTART="always"
 elif [ "$ENV" == "dev" ]; then
     BOT_DIR="$HOME/bot_dev"
     CONTAINER_NAME="DJgurda-dev"
     IMAGE="ghcr.io/duby67/djgurda:dev-latest"
+    RESTART="unless-stopped"
 else
     echo "Invalid environment: $ENV."
     exit 1
@@ -35,6 +37,6 @@ rm -rf "$BOT_DIR"/.bash_history 2>/dev/null || true
 
 docker run -d \
   --name "$CONTAINER_NAME" \
-  --restart always \
+  --restart "$RESTART" \
   --env-file "$ENV_FILE" \
   "$IMAGE"

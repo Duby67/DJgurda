@@ -5,7 +5,7 @@ from aiogram import Router, F
 from aiogram.types import Message, ReplyParameters
 from aiogram.types.input_file import FSInputFile
 
-from src.services.manager import ServiceManager
+from src.handlers.manager import ServiceManager
 from src.bot.commands.toggle_errors import is_error_messages_enabled
 from src.bot.processing.text_utils import (
     split_into_blocks, 

@@ -2,7 +2,7 @@ from aiogram import Router
 from aiogram.types import Message
 from aiogram.filters import Command
 
-from src.services.manager import ServiceManager
+from src.handlers.manager import ServiceManager
 from src.bot.processing.emoji import get_emoji
 
 router = Router()

@@ -7,7 +7,7 @@ from src.bot.processing.emoji import EMOJI_DJGURDA, EMOJI_VERSION, EMOJI_STARTTI
 
 router = Router()
 
-@router.message(Command("status"))
+@router.message(Command("info"))
 async def status_command(message: Message):
     bot = message.bot
     start_time = bot.start_time

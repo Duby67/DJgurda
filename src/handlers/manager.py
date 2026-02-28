@@ -1,10 +1,10 @@
 from typing import List, Optional
 
-from src.services.base import BaseHandler
-from src.services.TikTok import TikTokHandler
-from src.services.YouTube import YouTubeHandler
-from src.services.Instagram import InstagramHandler
-from src.services.YandexMusic import YandexMusicHandler
+from src.handlers.base import BaseHandler
+from src.handlers.TikTok import TikTokHandler
+from src.handlers.YouTube import YouTubeHandler
+from src.handlers.Instagram import InstagramHandler
+from src.handlers.YandexMusic import YandexMusicHandler
 
 class ServiceManager:
     def __init__(self):
