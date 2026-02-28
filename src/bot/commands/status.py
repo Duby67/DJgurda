@@ -3,7 +3,7 @@ from aiogram.types import Message
 from aiogram.filters import Command
 
 from src.config import BOT_VERSION
-from src.bot.processing.text_utils import get_source_emoji
+from src.bot.processing.emoji import EMOJI_DJGURDA, EMOJI_VERSION, EMOJI_STARTTIME
 
 router = Router()
 
@@ -12,11 +12,10 @@ async def status_command(message: Message):
     bot = message.bot
     start_time = bot.start_time
     if start_time:
-        emoji = get_source_emoji("DJgurda")
         await message.answer(
-            f"{emoji} Погоняло: DJ_gurda\n"
-            f"📊 Статья: {BOT_VERSION}\n"
-            f"🕒 Заход: от {start_time.strftime('%Y-%m-%d %H:%M:%S')}"
+            f"{EMOJI_DJGURDA}Погоняло: DJgurda\n"
+            f"{EMOJI_VERSION}Статья: {BOT_VERSION}\n"
+            f"{EMOJI_STARTTIME}Заход: от {start_time.strftime('%Y-%m-%d %H:%M:%S')}"
         )
     else:
         await message.answer("Время запуска неизвестно.")

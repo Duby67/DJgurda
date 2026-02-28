@@ -37,7 +37,7 @@ class YandexMusicHandler(BaseHandler, AudioMixin):
 
     @property
     def source_name(self) -> str:
-        return "Яндекс.Музыка"
+        return "Yandex.Music"
 
     async def _get_cover_file(self, cover_uri: str) -> Optional[Path]:
         if not cover_uri:

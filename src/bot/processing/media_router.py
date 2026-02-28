@@ -1,12 +1,12 @@
-import html
 import logging
 import asyncio
 
 from aiogram import Router, F
-from aiogram.types import Message
+from aiogram.types import Message, ReplyParameters
 from aiogram.types.input_file import FSInputFile
 
 from src.services.manager import ServiceManager
+from src.bot.commands.toggle_errors import is_error_messages_enabled
 from src.bot.processing.text_utils import (
     split_into_blocks, 
     get_user_link, 
@@ -30,14 +30,16 @@ async def _process_single_block(
 ) -> bool:
     """Обрабатывает один блок: загружает и отправляет медиа."""
     file_info = None
+    chat_id = message.chat.id
     try:
         async with DOWNLOAD_SEMAPHORE:
             file_info = await handler.process(url, user_context)
 
         if not file_info:
-            #error_text = build_error_text("Не удалось загрузить контент",user_context, user_link, url)
-            #await message.answer(text=error_text)
-            logger.info(f"Блок {idx}: ошибка загрузки")
+            if is_error_messages_enabled(chat_id):
+                error_text = build_error_text("Не удалось загрузить контент", url, handler)
+                await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id, quote=url))
+            logger.info(f"Блок {idx}: ошибка загрузки file_info")
             return False
 
         caption = build_caption(user_context, file_info, user_link, url, handler)
@@ -68,17 +70,23 @@ async def _process_single_block(
 
             logger.info(f"Блок {idx} успешно отправлен")
             return True
+        
         except Exception as e:
+            if is_error_messages_enabled(chat_id):
+                error_text = build_error_text("Не удалось отправить контент", url, handler)
+                await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id), quote=url)
             logger.exception(f"Ошибка при отправке контента для {url}")
-            #error_text = build_error_text("Не удалось отправить контент",user_context, user_link, url)
-            #await message.answer(text=error_text)
+            return False
+        
         finally:
             if file_info:
                 handler.cleanup(file_info)
+                
     except Exception as e:
+        if is_error_messages_enabled(chat_id):
+            error_text = build_error_text("Внутренняя ошибка при обработке ссылки", url, handler)
+            await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id, quote=url))
         logger.exception(f"Необработанная ошибка при обработке блока {idx}: {e}")
-        #error_text = build_error_text("Внутренняя ошибка при обработке ссылки",user_context, user_link, url)
-        #await message.answer(text=error_text)
         return False
 
 @router.message(F.text & ~F.text.startswith("/"))
@@ -110,5 +118,4 @@ async def handle_media_message(message: Message) -> None:
         except Exception as e:
             logger.warning(f"Не удалось удалить сообщение: {e}")
     else:
-        await message.reply("❌Не удалось обработать ссылку.")
         logger.info("Все блоки завершились ошибкой, исходное сообщение сохранено")
