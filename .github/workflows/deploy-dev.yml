@@ -3,10 +3,7 @@ name: Deploy Telegram Bot to Server
 on:
   push:
     branches:
-      - main
-
-  schedule:
-    - cron: '0 1 * * 0'
+      - dev
   workflow_dispatch:
 
 jobs:
@@ -31,13 +28,13 @@ jobs:
       - name: Generate version
         id: version
         run: |
-          TAG=$(git describe --tags --exact-match 2>/dev/null || true)
-          if [ -n "$TAG" ]; then
-            VERSION="$TAG"
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          if [ -n "$LATEST_TAG" ]; then
+              VERSION="$LATEST_TAG"
           else
-            SHORT_HASH=$(git rev-parse --short HEAD)
-            DATE=$(date +'%Y-%m-%d')
-            VERSION="${SHORT_HASH} от ${DATE}"
+              SHORT_HASH=$(git rev-parse --short HEAD)
+              DATE=$(date +'%Y-%m-%d')
+              VERSION="${SHORT_HASH} от ${DATE}"
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
           echo "Generated version: ${VERSION}"
@@ -55,8 +52,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ env.REPO_LC }}:latest
-            ghcr.io/${{ env.REPO_LC }}:${{ github.sha }}
+            ghcr.io/${{ env.REPO_LC }}:dev-latest
+            ghcr.io/${{ env.REPO_LC }}:dev-${{ github.sha }}
           platforms: linux/amd64
 
       - name: Copy manager.sh to server
@@ -67,7 +64,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 228
           source: "manager.sh"
-          target: "/home/${{ secrets.SSH_USER }}/"
+          target: "/home/${{ secrets.SSH_USER }}"
           overwrite: true
           strip_components: 0
 
@@ -79,17 +76,18 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 228
           script: |
-            chmod +x /home/${{ secrets.SSH_USER }}/manager.sh
-            cd /home/${{ secrets.SSH_USER }}/bot
-            
+            mkdir -p /home/${{ secrets.SSH_USER }}/bot_dev
+            cd /home/${{ secrets.SSH_USER }}/bot_dev
+
             echo "ADMIN_ID=${{ secrets.ADMIN_ID }}" > .env
-            echo "BOT_TOKEN=${{ secrets.BOT_TOKEN }}" >> .env
+            echo "BOT_TOKEN=${{ secrets.BOT_TOKEN_DEV }}" >> .env
             echo "YANDEX_MUSIC_TOKEN=${{ secrets.YANDEX_MUSIC_TOKEN }}" >> .env
             echo "YOUTUBE_COOKIES_PATH=${{ secrets.YOUTUBE_COOKIES_PATH }}" >> .env
             echo "BOT_VERSION=${{ steps.version.outputs.VERSION }}" >> .env
 
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ env.OWNER_LC }} --password-stdin
-            docker pull ghcr.io/${{ env.REPO_LC }}:latest
+            docker pull ghcr.io/${{ env.REPO_LC }}:dev-latest
 
-            /home/${{ secrets.SSH_USER }}/manager.sh
+            chmod +x /home/${{ secrets.SSH_USER }}/manager.sh
+            /home/${{ secrets.SSH_USER }}/manager.sh dev
             docker system prune -f
