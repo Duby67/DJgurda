@@ -1,5 +1,3 @@
-import logging
-
 from aiogram import Router
 from aiogram.types import Message
 from aiogram.filters import Command
@@ -8,7 +6,6 @@ from src.bot.processing.emoji import EMOJI_SUCCESS, EMOJI_ERROR
 from src.middlewares.db import get_errors_enabled, set_errors_enabled
 
 router = Router()
-logger = logging.getLogger(__name__)
 
 @router.message(Command("toggle_errors"))
 async def toggle_errors(message: Message):

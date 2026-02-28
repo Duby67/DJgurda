@@ -1,5 +1,3 @@
-import logging
-
 from aiogram import Router
 from aiogram.types import Message
 from aiogram.filters import Command
@@ -8,7 +6,6 @@ from src.middlewares.db import get_bot_enabled, set_bot_enabled
 from src.bot.processing.emoji import EMOJI_SUCCESS, EMOJI_ERROR
 
 router = Router()
-logger = logging.getLogger(__name__)
 
 @router.message(Command("toggle_bot"))
 async def cmd_toggle_bot(message: Message):
