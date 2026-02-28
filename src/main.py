@@ -31,6 +31,8 @@ async def main():
     
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
+    dp.message.middleware(BotEnabledMiddleware())
+    
     for router in command_routers:
         dp.include_router(router)
     dp.include_router(media_router)
