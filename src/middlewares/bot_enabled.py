@@ -16,8 +16,11 @@ class BotEnabledMiddleware(BaseMiddleware):
         data: Dict[str, Any]
     ) -> Any:
         try:
-            if event.text and event.text.startswith("/toggle_bot"):
-                return await handler(event, data)
+            _is_start = event.text.startswith("/start")
+            _is_toggle_bot = event.text.startswith("/toggle_bot")
+            if event.text:
+                if _is_start or _is_toggle_bot :
+                    return await handler(event, data)
 
             enabled = await get_bot_enabled(event.chat.id)
             if enabled:
