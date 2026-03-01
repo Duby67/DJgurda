@@ -11,6 +11,7 @@ VIDEO_SIZE_LIMIT = 50 * 1024 * 1024
 AUDIO_SIZE_LIMIT = 50 * 1024 * 1024
 
 DEFAULT_KEY = "DEFAULT"
+MEDALS = ["🥇", "🥈", "🥉"]
 SOURCE_EMOJI = {
     "DJgurda": {"emoji": "🤖", "custom_id": 5264975008282742838},
     "Version":  {"emoji": "📊", "custom_id": 5265156526485574081},

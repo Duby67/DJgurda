@@ -6,7 +6,7 @@ from aiogram.types import Message, ReplyParameters
 from aiogram.types.input_file import FSInputFile
 
 from src.handlers.manager import ServiceManager
-from src.bot.commands.toggle_errors import is_error_messages_enabled
+from src.middlewares.db import get_errors_enabled, update_stats
 from src.bot.processing.text_utils import (
     split_into_blocks, 
     get_user_link, 
@@ -36,7 +36,7 @@ async def _process_single_block(
             file_info = await handler.process(url, user_context)
 
         if not file_info:
-            if is_error_messages_enabled(chat_id):
+            if await get_errors_enabled(chat_id):
                 error_text = build_error_text("Не удалось загрузить контент", url, handler)
                 await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id, quote=url))
             logger.info(f"Блок {idx}: ошибка загрузки file_info")
@@ -69,10 +69,12 @@ async def _process_single_block(
                 await message.answer_photo(photo=photo, caption=caption)
 
             logger.info(f"Блок {idx} успешно отправлен")
+            await update_stats(message.chat.id, message.from_user.id, handler.source_name)
+            logger.info(f"Блок {idx} записана в статистику")
             return True
         
         except Exception as e:
-            if is_error_messages_enabled(chat_id):
+            if await get_errors_enabled(chat_id):
                 error_text = build_error_text("Не удалось отправить контент", url, handler)
                 await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id), quote=url)
             logger.exception(f"Ошибка при отправке контента для {url}")
@@ -83,7 +85,7 @@ async def _process_single_block(
                 handler.cleanup(file_info)
                 
     except Exception as e:
-        if is_error_messages_enabled(chat_id):
+        if await get_errors_enabled(chat_id):
             error_text = build_error_text("Внутренняя ошибка при обработке ссылки", url, handler)
             await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id, quote=url))
         logger.exception(f"Необработанная ошибка при обработке блока {idx}: {e}")
