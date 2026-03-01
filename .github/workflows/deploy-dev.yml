@@ -83,7 +83,7 @@ jobs:
             echo "ADMIN_ID=${{ secrets.ADMIN_ID }}" > .env
             echo "BOT_VERSION=${{ steps.version.outputs.VERSION }}" >> .env
             echo "BOT_DB_PATH=${{ secrets.BOT_DB_PATH }}" >> .env
-            echo "BOT_TOKEN=${{ secrets.BOT_TOKEN_PROD }}" >> .env
+            echo "BOT_TOKEN=${{ secrets.BOT_TOKEN_DEV }}" >> .env
             echo "YANDEX_MUSIC_TOKEN=${{ secrets.YANDEX_MUSIC_TOKEN }}" >> .env
             echo "YOUTUBE_COOKIES_PATH=${{ secrets.YOUTUBE_COOKIES_PATH }}" >> .env
 
