@@ -1,6 +1,8 @@
 import logging
 import aiosqlite
 
+from typing import List
+
 from src.config import DB_PATH
 
 logger = logging.getLogger(__name__)
@@ -15,6 +17,7 @@ async def init_db():
             )
             await __add_column(db, "bot_settings", "bot_enabled", "INTEGER", 1)
             await __add_column(db, "bot_settings", "errors_enabled", "INTEGER", 0)
+            await __add_column(db, "bot_settings", "notifications_enabled", "INTEGER", 1)
             
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS stats (
@@ -37,6 +40,9 @@ async def set_bot_enabled(chat_id: int, enabled: bool):
     
 async def set_errors_enabled(chat_id: int, enabled: bool):
     await _set_setting(chat_id, "errors_enabled", enabled)
+    
+async def set_notifications_enabled(chat_id: int, enabled: bool):
+    await _set_setting(chat_id, "notifications_enabled", enabled)
 
 
 async def get_bot_enabled(chat_id: int) -> bool:
@@ -44,6 +50,9 @@ async def get_bot_enabled(chat_id: int) -> bool:
 
 async def get_errors_enabled(chat_id: int) -> bool:
     return await _get_setting(chat_id, "errors_enabled", False)
+
+async def get_notifications_enabled(chat_id: int) -> bool:
+    return await _get_setting(chat_id, "notifications_enabled", True)
 
 
 async def update_stats(chat_id: int, user_id: int, source: str):
@@ -138,3 +147,16 @@ async def _set_setting(chat_id: int, column: str, value: bool):
     except Exception as e:
         logger.exception(f"Ошибка в _set_setting({column}) для chat {chat_id}")
         raise
+    
+    
+async def get_chats_with_notifications_enabled() -> List[int]:
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            async with db.execute(
+                "SELECT chat_id FROM bot_settings WHERE notifications_enabled = 1"
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [row[0] for row in rows]
+    except Exception as e:
+        logger.exception("Ошибка получения списка чатов с уведомлениями")
+        return []
