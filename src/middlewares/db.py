@@ -66,11 +66,10 @@ async def update_stats(chat_id: int, user_id: int, source: str):
         logger.exception(f"Ошибка обновления статистики для chat {chat_id}, user {user_id}, source {source}")
 
 async def get_chat_stats(chat_id: int, limit: int = 10):
-    """Возвращает топ пользователей по общему количеству ссылок в чате."""
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             async with db.execute(
-                "SELECT user_id, source, count FROM stats WHERE chat_id = ? ORDER BY user_id, count DESC",
+                "SELECT user_id, source, count FROM stats WHERE chat_id = ?",
                 (chat_id,)
             ) as cursor:
                 rows = await cursor.fetchall()
