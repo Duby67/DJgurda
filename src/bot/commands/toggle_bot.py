@@ -10,23 +10,21 @@ from src.bot.processing.emoji import EMOJI_SUCCESS, EMOJI_ERROR
 router = Router()
 logger = logging.getLogger(__name__)
 
-
 @router.message(Command("start"))
 async def cmd_start_bot(message: Message):
-    __change_bot_state(message, "start", True)
+    await __change_bot_state(message, "start", True)
 
 @router.message(Command("stop"))
 async def cmd_stop_bot(message: Message):
-    __change_bot_state(message, "stop", False)
+    await __change_bot_state(message, "stop", False)
 
 @router.message(Command("toggle_bot"))
 async def cmd_toggle_bot(message: Message):
-    current = await get_bot_enabled(message.chat_id)
+    current = await get_bot_enabled(message.chat.id)
     new_state = not current
-    __change_bot_state(message, "start", new_state)
+    await __change_bot_state(message, "toggle_bot", new_state)
 
-
-async def __change_bot_state(message: Message,command: str, new_state: bool):
+async def __change_bot_state(message: Message, command: str, new_state: bool):
     chat_id = message.chat.id
     user_id = message.from_user.id
     try:

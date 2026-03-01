@@ -10,23 +10,21 @@ from src.bot.processing.emoji import EMOJI_SUCCESS, EMOJI_ERROR
 router = Router()
 logger = logging.getLogger(__name__)
 
-
 @router.message(Command("enable_notifications"))
 async def cmd_enable_notifications(message: Message):
-    __change_notifications_enabled(message, "enable_notifications", True)
+    await __change_notifications_enabled(message, "enable_notifications", True)
 
 @router.message(Command("disable_notifications"))
 async def cmd_disable_notifications(message: Message):
-    __change_notifications_enabled(message, "disable_notifications", False)
+    await __change_notifications_enabled(message, "disable_notifications", False)
 
 @router.message(Command("toggle_notifications"))
 async def cmd_toggle_notifications(message: Message):
-    current = await get_notifications_enabled(message.chat_id)
+    current = await get_notifications_enabled(message.chat.id)
     new_state = not current
-    __change_notifications_enabled(message, "toggle_notifications", new_state)
+    await __change_notifications_enabled(message, "toggle_notifications", new_state)
 
-
-async def __change_notifications_enabled(message: Message,command: str, new_state: bool):
+async def __change_notifications_enabled(message: Message, command: str, new_state: bool):
     chat_id = message.chat.id
     user_id = message.from_user.id
     try:

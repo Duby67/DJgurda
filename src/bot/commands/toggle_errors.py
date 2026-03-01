@@ -10,23 +10,21 @@ from src.bot.processing.emoji import EMOJI_SUCCESS, EMOJI_ERROR
 router = Router()
 logger = logging.getLogger(__name__)
 
-
 @router.message(Command("enable_errors"))
 async def cmd_enable_errors(message: Message):
-    __change_errors_enabled(message, "enable_errors", True)
+    await __change_errors_enabled(message, "enable_errors", True)
 
 @router.message(Command("disable_errors"))
 async def cmd_disable_errors(message: Message):
-    __change_errors_enabled(message, "disable_errors", False)
+    await __change_errors_enabled(message, "disable_errors", False)
 
 @router.message(Command("toggle_errors"))
 async def cmd_toggle_errors(message: Message):
-    current = await get_errors_enabled(message.chat_id)
+    current = await get_errors_enabled(message.chat.id)
     new_state = not current
-    __change_errors_enabled(message, "toggle_errors", new_state)
+    await __change_errors_enabled(message, "toggle_errors", new_state)
 
-
-async def __change_errors_enabled(message: Message,command: str, new_state: bool):
+async def __change_errors_enabled(message: Message, command: str, new_state: bool):
     chat_id = message.chat.id
     user_id = message.from_user.id
     try:
