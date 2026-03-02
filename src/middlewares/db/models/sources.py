@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import relationship
 
-from src.middlewares.db.core import Base
+from .base import Base
 
 class Source(Base):
     __tablename__ = 'sources'

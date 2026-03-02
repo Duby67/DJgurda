@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, Boolean, Index
 
-from src.middlewares.db.core import Base
+from .base import Base
 
 class BotSettings(Base):
     __tablename__ = 'bot_settings'

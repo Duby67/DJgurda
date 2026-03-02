@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, DateTime, ForeignKey, UniqueConstraint, 
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
-from src.middlewares.db.core import Base
+from .base import Base
 
 class Stats(Base):
     __tablename__ = 'stats'

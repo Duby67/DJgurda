@@ -4,8 +4,8 @@ from datetime import datetime
 from sqlalchemy import text, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.middlewares.db.models.sources import Source
-from src.middlewares.db.models.stats import Stats
+from .models.sources import Source
+from .models.stats import Stats
 
 logger = logging.getLogger(__name__)
 
@@ -26,13 +26,9 @@ async def migrate_from_old_schema(session: AsyncSession):
 
         logger.info("Обнаружена старая схема. Запускаем миграцию...")
 
-        from src.middlewares.db.core import Base
-        async with session.bind.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
         sources_result = await session.execute(text("SELECT DISTINCT source FROM stats"))
         source_names = [row[0] for row in sources_result]
-        
+
         source_map = {}
         for name in source_names:
             existing = await session.execute(
