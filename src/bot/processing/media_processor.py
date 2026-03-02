@@ -6,7 +6,6 @@ from aiogram.types.input_file import FSInputFile
 
 from src.utils.messages import build_caption, build_error
 from src.middlewares.db import get_errors_enabled, update_stats
-from .link_extractor import split_into_blocks, get_user_link
 
 logger = logging.getLogger(__name__)
 

@@ -11,7 +11,7 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 @router.message(Command("info"))
-async def status_command(message: Message):
+async def info_command(message: Message):
     user = message.from_user
     logger.info(
         "User %d (@%s) called /info",
