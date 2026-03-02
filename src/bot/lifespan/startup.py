@@ -7,12 +7,14 @@ from datetime import datetime, timezone
 
 
 from src.config import ADMIN_ID, PROJECT_TEMP_DIR, MAX_AGE_SECONDS
-from src.middlewares.db import get_chats_with_notifications_enabled
+from src.middlewares.db import get_chats_with_notifications_enabled, init_db
 from src.utils.Emoji import EMOJI_SUCCESS
 
 logger = logging.getLogger(__name__)
 
 async def on_startup(bot: Bot) -> None:
+    await init_db()
+    
     now = time.time()
     for f in PROJECT_TEMP_DIR.glob("**/*"):
         if f.is_file() and (now - f.stat().st_mtime) > MAX_AGE_SECONDS:

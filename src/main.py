@@ -7,14 +7,10 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
 from src.config import BOT_TOKEN
-
 from src.bot.commands import command_routers
 from src.bot.lifespan import on_startup, on_shutdown
 from src.bot.processing.media_router import router as media_router
-
-from src.middlewares.db import init_db
 from src.middlewares.bot_enabled import BotEnabledMiddleware
-
 from src.utils.logger import setup_logging 
 
 setup_logging()
@@ -24,8 +20,6 @@ if not shutil.which("ffmpeg"):
     logger.error("FFmpeg не найден. Некоторые функции могут не работать.")
 
 async def main():
-    await init_db()
-    
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     
