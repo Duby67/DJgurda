@@ -5,7 +5,7 @@ from aiogram.types import Message
 from aiogram.filters import Command
 
 from src.config import BOT_VERSION
-from src.bot.processing.emoji import EMOJI_DJGURDA, EMOJI_VERSION, EMOJI_STARTTIME
+from src.utils.Emoji import EMOJI_DJGURDA, EMOJI_VERSION, EMOJI_STARTTIME
 
 router = Router()
 logger = logging.getLogger(__name__)

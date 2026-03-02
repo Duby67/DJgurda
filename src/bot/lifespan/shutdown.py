@@ -2,8 +2,8 @@ import logging
 from aiogram import Bot, Dispatcher
 
 from src.config import ADMIN_ID
-from src.bot.processing.emoji import EMOJI_WARNING
 from src.middlewares.db import get_chats_with_notifications_enabled
+from src.utils.Emoji import EMOJI_WARNING
 
 logger = logging.getLogger(__name__)
 

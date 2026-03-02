@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 
 
 from src.config import ADMIN_ID, PROJECT_TEMP_DIR, MAX_AGE_SECONDS
-from src.bot.processing.emoji import EMOJI_SUCCESS
 from src.middlewares.db import get_chats_with_notifications_enabled
+from src.utils.Emoji import EMOJI_SUCCESS
 
 logger = logging.getLogger(__name__)
 

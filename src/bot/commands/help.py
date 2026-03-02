@@ -22,8 +22,8 @@ async def help_command(message: Message) -> None:
         sources = []
         for handler in service_manager.handlers:
             name = handler.source_name
-            emoji = emoji(name)
-            sources.append(f"{emoji}{name}")
+            source_emoji = emoji(name)
+            sources.append(f"{source_emoji} {name}")
         sources_text = "\n".join(sources)
         help_text = (
             "Кидай ссылку и я дам тебе сочный контент\n"
@@ -31,6 +31,7 @@ async def help_command(message: Message) -> None:
             f"{sources_text}"
         )
         await message.answer(help_text)
+        
     except Exception as e:
         logger.exception("Error in /help command for user %d", user.id)
         await message.answer("Произошла ошибка при формировании списка источников.")

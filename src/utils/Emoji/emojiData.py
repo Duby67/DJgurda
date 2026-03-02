@@ -2,6 +2,7 @@ DEFAULT_KEY = "DEFAULT"
 EMOJI_DATA = [
     ("DJgurda", "🤖", 5264975008282742838),
     ("Version", "📊", 5265156526485574081),
+    ("Statistics", "📊"),
     ("StartTime", "🕒", 5265082193486583367),
     
     ("ERROR", "❌", 5265178374984210675),

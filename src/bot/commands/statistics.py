@@ -4,19 +4,19 @@ from aiogram import Router
 from aiogram.types import Message
 from aiogram.filters import Command
 
-from src.config import MEDALS
 from src.middlewares.db import get_chat_stats
-from src.bot.processing.emoji import get_emoji
+from src.utils.Emoji import emoji, EMOJI_FIRSTPLACE, EMOJI_SECONDPLACE, EMOJI_THIRDPLACE, EMOJI_STATISTICS
 
 router = Router()
 logger = logging.getLogger(__name__)
 
+MEDALS = [EMOJI_FIRSTPLACE, EMOJI_SECONDPLACE, EMOJI_THIRDPLACE]
 
 @router.message(Command("statistics"))
 async def status_command(message: Message):
     user = message.from_user
     logger.info(
-        "User %d (@%s) called /start",
+        "User %d (@%s) called /statistics",
         user.id, user.username or "unknown"
     )
     try:
@@ -25,7 +25,7 @@ async def status_command(message: Message):
             await message.answer("В этом чате пока нет статистики.")
             return
 
-        lines = ["📊 <b>Статистика активности</b>\n"]
+        lines = [f"{EMOJI_STATISTICS} <b>Статистика активности</b>\n"]
         for idx, (user_id, total, sources) in enumerate(stats, start=1):
             medal = MEDALS[idx-1] if idx <= 3 else f"{idx}."
 
@@ -37,12 +37,12 @@ async def status_command(message: Message):
 
             line = f"{medal} <b>{user_name}</b>\n"
             for source, count in sources.items():
-                emoji = get_emoji(source)
-                line += f"   {emoji} {count}\n"
+                source_emoji = emoji(source)
+                line += f"   {source_emoji} {count}\n"
             line += f"   <b>Всего:</b> {total}\n"
             lines.append(line)
 
         await message.answer("\n".join(lines), parse_mode="HTML")
     except Exception as e:
-        logger.exception("Error in /status command for user %d", user.id)
+        logger.exception("Error in /statistics command for user %d", user.id)
         await message.answer("Произошла ошибка при получении статистики.")

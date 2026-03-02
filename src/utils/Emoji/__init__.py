@@ -2,6 +2,7 @@ from .emojiProcessor import emoji
 
 EMOJI_DJGURDA = emoji("DJgurda")
 EMOJI_VERSION = emoji("Version")
+EMOJI_STATISTICS = emoji("Statistics")
 EMOJI_STARTTIME = emoji("StartTime")
 
 EMOJI_ERROR = emoji("ERROR")
@@ -26,6 +27,7 @@ __all__ = [
     
     'EMOJI_DJGURDA',
     'EMOJI_VERSION',
+    'EMOJI_STATISTICS',
     'EMOJI_STARTTIME',
     
     'EMOJI_ERROR',
