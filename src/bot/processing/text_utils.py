@@ -6,7 +6,7 @@ from typing import List, Tuple
 from aiogram.types import User
 
 from src.config import MAX_CAPTION
-from src.bot.processing.emoji import get_emoji, EMOJI_ERROR, EMOJI_ARROW
+from src.bot.media.emoji import get_emoji, EMOJI_ERROR, EMOJI_ARROW
 
 logger = logging.getLogger(__name__)
 URL_PATTERN = re.compile(r'https?://\S+')

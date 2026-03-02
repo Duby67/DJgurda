@@ -10,25 +10,6 @@ PHOTO_SIZE_LIMIT = 10 * 1024 * 1024
 VIDEO_SIZE_LIMIT = 50 * 1024 * 1024
 AUDIO_SIZE_LIMIT = 50 * 1024 * 1024
 
-DEFAULT_KEY = "DEFAULT"
-MEDALS = ["🥇", "🥈", "🥉"]
-SOURCE_EMOJI = {
-    "DJgurda": {"emoji": "🤖", "custom_id": 5264975008282742838},
-    "Version":  {"emoji": "📊", "custom_id": 5265156526485574081},
-    "StartTime":  {"emoji": "🕒", "custom_id": 5265082193486583367},
-    
-    "DEFAULT":  {"emoji": "🔗", "custom_id": 5265144934368844008},
-    "ERROR":  {"emoji": "❌", "custom_id": 5265178374984210675},
-    "WARNING":  {"emoji": "⚠️", "custom_id": 5264832501267860869},
-    "SUCCESS":  {"emoji": "✅", "custom_id": 5264890723844530032}, 
-    
-    "Arrow": {"emoji": "➡️", "custom_id": 5265014762500037687},
-    "TikTok": {"emoji": "🎵", "custom_id": 5262660471881765089},
-    "YouTube": {"emoji": "📹", "custom_id": 5263003845927147424},
-    "Instagram": {"emoji": "📸", "custom_id": 5264912443494144118},
-    "Yandex.Music": {"emoji": "🎧", "custom_id": 5264990513114683176}
-}
-
 PROJECT_ROOT = Path(__file__).parent.parent
 if not PROJECT_ROOT:
     raise ValueError("PROJECT_ROOT не определен!")
