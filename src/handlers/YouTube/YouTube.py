@@ -9,7 +9,9 @@ from src.handlers.mixins import VideoMixin
 logger = logging.getLogger(__name__)
 
 class YouTubeHandler(BaseHandler, VideoMixin):
-    PATTERN = re.compile(r'https?://(?:www\.)?(?:youtube\.com/shorts/|youtu\.be/)\S+')
+    PATTERN = re.compile(
+    r'https?://(?:www\.|m\.)?(?:youtube\.com/(?:watch\?v=|shorts/|embed/)|youtu\.be/)\S+'
+    )
 
     @property
     def pattern(self) -> re.Pattern:
@@ -19,13 +21,14 @@ class YouTubeHandler(BaseHandler, VideoMixin):
     def source_name(self) -> str:
         return "YouTube"
 
-    async def process(self, url: str, context: str) -> Optional[Dict[str, Any]]:
+    async def process(self, url: str, context: str, resolved_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        target_url = resolved_url or url
         ydl_opts = {
             'format': 'bestvideo+bestaudio/best',
             'extractor_args': {'youtube': {'player_client': ['android', 'web', 'ios']}},
             'writethumbnail': True,
         }
-        result = await self._download_video(url, ydl_opts)
+        result = await self._download_video(target_url, ydl_opts)
         if not result:
             return None
 

@@ -12,7 +12,9 @@ from src.handlers.mixins import VideoMixin, PhotoMixin
 logger = logging.getLogger(__name__)
 
 class TikTokHandler(BaseHandler, VideoMixin, PhotoMixin):
-    PATTERN = re.compile(r'https?://(?:www\.|vm\.|vt\.)?tiktok\.com/\S+')
+    PATTERN = re.compile(
+    r'https?://(?:www\.|m\.)?(?:tiktok\.com/@[\w.]+/video/|vt\.tiktok\.com/\S+)|vm\.tiktok\.com/\S+'
+    )
 
     @property
     def pattern(self) -> re.Pattern:
@@ -59,13 +61,14 @@ class TikTokHandler(BaseHandler, VideoMixin, PhotoMixin):
                 return None
         return await asyncio.to_thread(sync_extract)
 
-    async def process(self, url: str, context: str) -> Optional[Dict[str, Any]]:
-        if '/photo/' in url:
+    async def process(self, url: str, context: str, resolved_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        target_url = resolved_url or url
+        if '/photo/' in target_url:
             await self._random_delay()
-            video_id_match = re.search(r'/(\d+)[?/]?', url)
+            video_id_match = re.search(r'/(\d+)[?/]?', target_url)
             video_id = video_id_match.group(1) if video_id_match else "unknown"
             dest_path = self._generate_unique_path(video_id, suffix=".jpg")
-            photo_info = await self._extract_photo_info(url)
+            photo_info = await self._extract_photo_info(target_url)
             if not photo_info:
                 return None
 
@@ -83,13 +86,13 @@ class TikTokHandler(BaseHandler, VideoMixin, PhotoMixin):
                 'context': context,
             }
         else:
-            video_id_match = re.search(r'/(\d+)[?/]?', url)
-            video_id = video_id_match.group(1) if video_id_match else self._extract_video_id(url)
+            video_id_match = re.search(r'/(\d+)[?/]?', target_url)
+            video_id = video_id_match.group(1) if video_id_match else self._extract_video_id(target_url)
             ydl_opts = {
                 'format': 'best[ext=mp4]/best',
                 'writethumbnail': True,
             }
-            result = await self._download_video(url, ydl_opts, video_id=video_id)
+            result = await self._download_video(target_url, ydl_opts, video_id=video_id)
             if not result:
                 return None
 

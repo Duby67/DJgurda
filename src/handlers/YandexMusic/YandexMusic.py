@@ -14,7 +14,9 @@ from src.handlers.mixins import AudioMixin
 logger = logging.getLogger(__name__)
 
 class YandexMusicHandler(BaseHandler, AudioMixin):
-    PATTERN = re.compile(r'https?://music\.yandex\.(?:ru|by|kz|ua)/\S+')
+    PATTERN = re.compile(
+    r'https?://(?:music\.yandex\.(?:ru|by|kz|ua)/|yandex\.ru/music/)\S+'
+    )
 
     def __init__(self):
         super().__init__()
@@ -49,7 +51,8 @@ class YandexMusicHandler(BaseHandler, AudioMixin):
             return cover_path
         return None
 
-    async def process(self, url: str, context: str) -> Optional[Dict[str, Any]]:
+    async def process(self, url: str, context: str, resolved_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        target_url = resolved_url or url
         if not self.token:
             logger.error("Пропуск обработки: токен Яндекс.Музыки отсутствует")
             return None
@@ -57,7 +60,7 @@ class YandexMusicHandler(BaseHandler, AudioMixin):
         file_path = None
         cover_path = None
         try:
-            track_match = re.search(r'/track/(\d+)', url)
+            track_match = re.search(r'/track/(\d+)', target_url)
             if not track_match:
                 logger.error("Не удалось извлечь ID трека")
                 return None

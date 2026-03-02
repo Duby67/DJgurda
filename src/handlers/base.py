@@ -32,7 +32,7 @@ class BaseHandler(ABC):
         pass
 
     @abstractmethod
-    async def process(self, url: str, context: str) -> Optional[Dict[str, Any]]:
+    async def process(self, url: str, context: str, resolved_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
         pass
 
     def _generate_unique_path(self, identifier: str, suffix: str = "") -> Path:

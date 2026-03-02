@@ -9,7 +9,9 @@ from src.handlers.mixins import VideoMixin
 logger = logging.getLogger(__name__)
 
 class InstagramHandler(BaseHandler, VideoMixin):
-    PATTERN = re.compile(r'https?://(?:www\.)?instagram\.com/(?:reel|p|tv)/\S+')
+    PATTERN = re.compile(
+    r'https?://(?:www\.|m\.)?instagram\.com/(?:p|reel|tv)/[\w-]+/?'
+    )
 
     @property
     def pattern(self) -> re.Pattern:
@@ -19,15 +21,16 @@ class InstagramHandler(BaseHandler, VideoMixin):
     def source_name(self) -> str:
         return "Instagram"
 
-    async def process(self, url: str, context: str) -> Optional[Dict[str, Any]]:
-        shortcode_match = re.search(r'/(reel|p|tv)/([a-zA-Z0-9_-]+)', url)
-        video_id = shortcode_match.group(2) if shortcode_match else self._extract_video_id(url)
+    async def process(self, url: str, context: str, resolved_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        target_url = resolved_url or url
+        shortcode_match = re.search(r'/(reel|p|tv)/([a-zA-Z0-9_-]+)', target_url)
+        video_id = shortcode_match.group(2) if shortcode_match else self._extract_video_id(target_url)
 
         ydl_opts = {
             'format': 'best[ext=mp4]/best',
             'writethumbnail': True,
         }
-        result = await self._download_video(url, ydl_opts, video_id=video_id)
+        result = await self._download_video(target_url, ydl_opts, video_id=video_id)
         if not result:
             return None
 
