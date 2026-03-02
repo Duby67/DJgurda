@@ -24,8 +24,7 @@ def emoji(key: str) -> str:
     fallback = data["emoji"]
     custom_id = data.get("custom_id")
     if custom_id:
-        return f'<tg-emoji emoji-id="{custom_id}"></tg-emoji>'
-        #return f'<tg-emoji emoji-id="{custom_id}">{fallback}</tg-emoji>'
+        return f'<tg-emoji emoji-id="{custom_id}">{fallback}</tg-emoji>'
     else:
         logger.warning(f"Не найден custom_id для ключа '{key}', используется обычный эмодзи: {fallback}")
         return fallback
