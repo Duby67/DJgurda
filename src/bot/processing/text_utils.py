@@ -6,7 +6,6 @@ from typing import List, Tuple
 from aiogram.types import User
 
 from src.config import MAX_CAPTION
-from src.handlers.base import BaseHandler
 from src.bot.processing.emoji import get_emoji, EMOJI_ERROR, EMOJI_ARROW
 
 logger = logging.getLogger(__name__)
@@ -26,12 +25,13 @@ def get_user_link(user: User) -> str:
         return f'<a href="https://t.me/{user.username}">{full_name}</a>'
     return f'<a href="tg://user?id={user.id}">{full_name}</a>'
 
-def split_into_blocks(text: str, service_manager) -> List[Tuple[str, str, BaseHandler]]:
+def split_into_blocks(text: str) -> List[Tuple[str, str]]:
     """
     Разбивает текст на блоки, где каждая ссылка получает контекст:
     - для первой ссылки — текст до неё
     - для последующих — текст между предыдущей ссылкой и текущей,
     - последняя ссылка также получает текст после себя.
+    Возвращает список кортежей (url, context).
     """
     urls = URL_PATTERN.findall(text)
     if not urls:
@@ -40,10 +40,6 @@ def split_into_blocks(text: str, service_manager) -> List[Tuple[str, str, BaseHa
     
     blocks = []
     for i, url in enumerate(urls):
-        handler = service_manager.get_handler(url)
-        if not handler:
-            logger.debug(f"Неизвестный тип ссылки: {url}")
-            continue
         context_before = parts[i].strip()
         if i == len(urls) - 1:
             context_after = parts[-1].strip()
@@ -57,7 +53,7 @@ def split_into_blocks(text: str, service_manager) -> List[Tuple[str, str, BaseHa
         else:
             context = context_before
 
-        blocks.append((url, context, handler))
+        blocks.append((url, context))
 
     return blocks
 

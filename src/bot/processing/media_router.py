@@ -9,9 +9,9 @@ from src.utils.url import resolve_url
 from src.handlers.manager import ServiceManager
 from src.middlewares.db import get_errors_enabled, update_stats
 from src.bot.processing.text_utils import (
-    split_into_blocks, 
-    get_user_link, 
-    build_caption, 
+    split_into_blocks,
+    get_user_link,
+    build_caption,
     build_error_text
 )
 
@@ -23,7 +23,8 @@ DOWNLOAD_SEMAPHORE = asyncio.Semaphore(3)
 
 async def _process_single_block(
     idx: int,
-    url: str,
+    raw_url: str,
+    resolved_url: str,
     user_context: str,
     handler,
     user_link: str,
@@ -34,16 +35,16 @@ async def _process_single_block(
     chat_id = message.chat.id
     try:
         async with DOWNLOAD_SEMAPHORE:
-            file_info = await handler.process(url, user_context)
+            file_info = await handler.process(raw_url, user_context, resolved_url=resolved_url)
 
         if not file_info:
             if await get_errors_enabled(chat_id):
-                error_text = build_error_text("Не удалось загрузить контент", url, handler)
-                await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id, quote=url))
+                error_text = build_error_text("Не удалось загрузить контент", raw_url, handler)
+                await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id, quote=raw_url))
             logger.info(f"Блок {idx}: ошибка загрузки file_info")
             return False
-
-        caption = build_caption(user_context, file_info, user_link, url, handler)
+        
+        caption = build_caption(user_context, file_info, user_link, raw_url, handler)
 
         try:
             if file_info['type'] == 'video':
@@ -71,14 +72,13 @@ async def _process_single_block(
 
             logger.info(f"Блок {idx} успешно отправлен")
             await update_stats(message.chat.id, message.from_user.id, handler.source_name)
-            logger.info(f"Блок {idx} записана в статистику")
             return True
         
         except Exception as e:
             if await get_errors_enabled(chat_id):
-                error_text = build_error_text("Не удалось отправить контент", url, handler)
-                await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id), quote=url)
-            logger.exception(f"Ошибка при отправке контента для {url}")
+                error_text = build_error_text("Не удалось отправить контент", raw_url, handler)
+                await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id, quote=raw_url))
+            logger.exception(f"Ошибка при отправке контента для {raw_url}")
             return False
         
         finally:
@@ -87,25 +87,50 @@ async def _process_single_block(
                 
     except Exception as e:
         if await get_errors_enabled(chat_id):
-            error_text = build_error_text("Внутренняя ошибка при обработке ссылки", url, handler)
-            await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id, quote=url))
+            error_text = build_error_text("Внутренняя ошибка при обработке ссылки", raw_url, handler)
+            await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id, quote=raw_url))
         logger.exception(f"Необработанная ошибка при обработке блока {idx}: {e}")
         return False
 
 @router.message(F.text & ~F.text.startswith("/"))
 async def handle_media_message(message: Message) -> None:
     text = message.text
-    blocks = split_into_blocks(text, service_manager)
+    blocks = split_into_blocks(text)
     if not blocks:
-        logger.debug("Сообщение не содержит поддерживаемых ссылок")
+        logger.debug("Сообщение не содержит ссылок")
         return
 
     user_link = get_user_link(message.from_user)
 
-    tasks = [
-        _process_single_block(idx, url, context, handler, user_link, message)
-        for idx, (url, context, handler) in enumerate(blocks, start=1)
-    ]
+    tasks = []
+    for idx, (raw_url, context) in enumerate(blocks, start=1):
+        
+        resolved_url = await resolve_url(raw_url)
+        handler = service_manager.get_handler(resolved_url)
+        if not handler:
+            logger.warning(f"Не найден обработчик для разрешённого URL: {resolved_url}")
+            if await get_errors_enabled(message.chat.id):
+                await message.answer(
+                    f"❌ Неподдерживаемый источник: {resolved_url}",
+                    reply_parameters=ReplyParameters(message_id=message.message_id, quote=raw_url)
+                )
+            continue
+
+        tasks.append(
+            _process_single_block(
+                idx,
+                raw_url,
+                resolved_url,
+                context,
+                handler,
+                user_link,
+                message
+            )
+        )
+
+    if not tasks:
+        return
+
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
     success_count = 0
@@ -114,6 +139,7 @@ async def handle_media_message(message: Message) -> None:
             success_count += 1
         elif isinstance(res, Exception):
             logger.error(f"Необработанное исключение в задаче: {res}")
+    # Удаляем исходное сообщение только если все ссылки обработаны успешно
     if success_count == len(blocks):
         try:
             await message.delete()
