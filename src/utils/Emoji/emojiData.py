@@ -9,9 +9,7 @@ EMOJI_DATA = [
     ("SUCCESS", "✅", 5264890723844530032),
     ("DEFAULT", "🔗", 5265144934368844008),
     
-    ("FirstPlace", "🥇"),
-    ("SecondPlace", "🥈"),
-    ("ThirdPlace", "🥉"),
+    ("Video", "🎬"),
     
     ("Arrow", "➡️", 5265014762500037687),
     ("TikTok", "🎵", 5262660471881765089),
@@ -19,5 +17,7 @@ EMOJI_DATA = [
     ("Instagram", "📸", 5264912443494144118),
     ("Yandex.Music", "🎧", 5264990513114683176),
     
-    #ADD 🎬
+    ("FirstPlace", "🥇"),
+    ("SecondPlace", "🥈"),
+    ("ThirdPlace", "🥉"),
 ]

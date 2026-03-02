@@ -2,7 +2,7 @@ import re
 import html
 
 from src.config import MAX_CAPTION
-from src.utils.Emoji import emoji, EMOJI_ARROW, EMOJI_ERROR
+from src.utils.Emoji import emoji, EMOJI_ERROR, EMOJI_VIDEO, EMOJI_ARROW
 
 HASHTAG_PATTERN = re.compile(r'#\w+')
 
@@ -30,7 +30,7 @@ def build_caption(
         clean_title = _remove_hashtags(file_info['title'])
         safe_title = html.escape(clean_title)
         safe_uploader = html.escape(file_info['uploader'])
-        lines.append(f"🎬{safe_title} — {safe_uploader}")
+        lines.append(f"{EMOJI_VIDEO} {safe_title} — {safe_uploader}")
         
     lines.append("")
     lines.append(f"{EMOJI_ARROW} {user_link}")

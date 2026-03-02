@@ -1,28 +1,16 @@
-import re
 import logging
 import asyncio
 
-from typing import List, Tuple
-from aiogram.types import User
-
-from aiogram import Router, F
 from aiogram.types import Message, ReplyParameters
 from aiogram.types.input_file import FSInputFile
 
-from src.utils.url import resolve_url
-from src.handlers.manager import ServiceManager
+from src.utils.messages import build_caption, build_error
 from src.middlewares.db import get_errors_enabled, update_stats
-from src.bot.processing.text_utils import (
-    split_into_blocks,
-    get_user_link,
-    build_caption,
-    build_error_text
-)
+from .link_extractor import split_into_blocks, get_user_link
 
 logger = logging.getLogger(__name__)
 
 DOWNLOAD_SEMAPHORE = asyncio.Semaphore(3)
-URL_PATTERN = re.compile(r'https?://\S+')
 
 async def process_block(
     idx: int,
@@ -33,7 +21,6 @@ async def process_block(
     user_link: str,
     message: Message
 ) -> bool:
-    """Обрабатывает один блок: загружает и отправляет медиа."""
     file_info = None
     chat_id = message.chat.id
     try:
@@ -42,7 +29,7 @@ async def process_block(
 
         if not file_info:
             if await get_errors_enabled(chat_id):
-                error_text = build_error_text("Не удалось загрузить контент", raw_url, handler)
+                error_text = build_error("Не удалось загрузить контент", raw_url, handler)
                 await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id, quote=raw_url))
             logger.info(f"Блок {idx}: ошибка загрузки file_info")
             return False
@@ -79,7 +66,7 @@ async def process_block(
         
         except Exception as e:
             if await get_errors_enabled(chat_id):
-                error_text = build_error_text("Не удалось отправить контент", raw_url, handler)
+                error_text = build_error("Не удалось отправить контент", raw_url, handler)
                 await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id, quote=raw_url))
             logger.exception(f"Ошибка при отправке контента для {raw_url}")
             return False
@@ -90,32 +77,7 @@ async def process_block(
                 
     except Exception as e:
         if await get_errors_enabled(chat_id):
-            error_text = build_error_text("Внутренняя ошибка при обработке ссылки", raw_url, handler)
+            error_text = build_error("Внутренняя ошибка при обработке ссылки", raw_url, handler)
             await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id, quote=raw_url))
         logger.exception(f"Необработанная ошибка при обработке блока {idx}: {e}")
         return False
-    
-def split_into_blocks(text: str) -> List[Tuple[str, str]]:
-    urls = URL_PATTERN.findall(text)
-    if not urls:
-        return []
-    parts = re.split(URL_PATTERN, text)
-    
-    blocks = []
-    for i, url in enumerate(urls):
-        context_before = parts[i].strip()
-        if i == len(urls) - 1:
-            context_after = parts[-1].strip()
-            if context_after:
-                if context_before:
-                    context = context_before + '\n' + context_after
-                else:
-                    context = context_after
-            else:
-                context = context_before
-        else:
-            context = context_before
-
-        blocks.append((url, context))
-
-    return blocks

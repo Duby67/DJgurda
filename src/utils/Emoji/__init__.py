@@ -9,15 +9,17 @@ EMOJI_WARNING = emoji("WARNING")
 EMOJI_SUCCESS = emoji("SUCCESS")
 EMOJI_LINK = emoji("DEFAULT")
 
-EMOJI_FIRSTPLACE = emoji("FirstPlace")
-EMOJI_SECONDPLACE = emoji("SecondPlace")
-EMOJI_THIRDPLACE = emoji("ThirdPlace")
+EMOJI_VIDEO = emoji("Video")
 
 EMOJI_ARROW = emoji("Arrow")
 EMOJI_TIKTOK = emoji("TikTok")
 EMOJI_YOUTUBE = emoji("YouTube")
 EMOJI_INSTAGRAM = emoji("Instagram")
 EMOJI_YANDEXMUSIC = emoji("Yandex.Music")
+
+EMOJI_FIRSTPLACE = emoji("FirstPlace")
+EMOJI_SECONDPLACE = emoji("SecondPlace")
+EMOJI_THIRDPLACE = emoji("ThirdPlace")
 
 __all__ = [
     'emoji',
@@ -31,13 +33,15 @@ __all__ = [
     'EMOJI_SUCCESS',
     'EMOJI_LINK',
     
-    'EMOJI_FIRSTPLACE',
-    'EMOJI_SECONDPLACE',
-    'EMOJI_THIRDPLACE',
-    
+    'EMOJI_VIDEO',
+      
     'EMOJI_ARROW',
     'EMOJI_TIKTOK',
     'EMOJI_YOUTUBE',
     'EMOJI_INSTAGRAM',
     'EMOJI_YANDEXMUSIC',
+    
+    'EMOJI_FIRSTPLACE',
+    'EMOJI_SECONDPLACE',
+    'EMOJI_THIRDPLACE',
 ]
