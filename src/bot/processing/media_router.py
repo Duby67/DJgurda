@@ -18,9 +18,12 @@ logger = logging.getLogger(__name__)
 router = Router()
 service_manager = ServiceManager()
 
-@router.message(F.text & ~F.text.startswith("/"))
+@router.message(F.text | F.caption)
 async def handle_media_message(message: Message) -> None:
-    text = message.text
+    text = message.text or message.caption
+    if text.startswith("/"):
+        return
+    
     blocks = split_into_blocks(text)
     if not blocks:
         logger.debug("Сообщение не содержит ссылок")
