@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
-async def migrate_from_old_schema(session: AsyncSession):
+async def migrate(session: AsyncSession):
     try:
         # 1. Проверяем существование старой таблицы
         result = await session.execute(
