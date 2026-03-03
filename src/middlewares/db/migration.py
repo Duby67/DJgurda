@@ -43,10 +43,14 @@ async def migrate(session: AsyncSession):
                 source_map[name] = row[0]
             else:
                 cursor = await session.execute(
-                    text("INSERT INTO sources (name) VALUES (:name) RETURNING id"), 
+                    text("INSERT INTO sources (name) VALUES (:name) RETURNING id"),
                     {"name": name}
                 )
-                source_id = (await cursor.first())[0]
+                row = cursor.first()
+                source_id = row[0] if row else None
+                if source_id is None:
+                    logger.error(f"Не удалось получить ID для нового источника {name}")
+                    continue
                 source_map[name] = source_id
                 logger.debug(f"Добавлен новый источник: {name}")
 
