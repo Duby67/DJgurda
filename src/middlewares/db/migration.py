@@ -1,15 +1,12 @@
 import logging
 
 from datetime import datetime
-from sqlalchemy import text, select
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from .models.sources import Source
-from .models.stats import Stats
 
 logger = logging.getLogger(__name__)
 
-async def migrate(session: AsyncSession):
+async def migrate_from_old_schema(session: AsyncSession):
     try:
         result = await session.execute(
             text("SELECT name FROM sqlite_master WHERE type='table' AND name='stats'")
@@ -26,52 +23,67 @@ async def migrate(session: AsyncSession):
 
         logger.info("Обнаружена старая схема. Запускаем миграцию...")
 
+        await session.execute(text("""
+            CREATE TABLE IF NOT EXISTS sources (
+                id INTEGER PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL
+            )
+        """))
+
         sources_result = await session.execute(text("SELECT DISTINCT source FROM stats"))
         source_names = [row[0] for row in sources_result]
 
         source_map = {}
         for name in source_names:
             existing = await session.execute(
-                select(Source).where(Source.name == name)
+                text("SELECT id FROM sources WHERE name = :name"), {"name": name}
             )
-            source_obj = existing.scalar_one_or_none()
-            if source_obj:
-                source_map[name] = source_obj.id
+            row = existing.first()
+            if row:
+                source_map[name] = row[0]
             else:
-                new_source = Source(name=name)
-                session.add(new_source)
-                await session.flush()
-                source_map[name] = new_source.id
+                cursor = await session.execute(
+                    text("INSERT INTO sources (name) VALUES (:name) RETURNING id"), 
+                    {"name": name}
+                )
+                source_id = (await cursor.first())[0]
+                source_map[name] = source_id
                 logger.debug(f"Добавлен новый источник: {name}")
 
         rows = await session.execute(
             text("SELECT chat_id, user_id, source, count FROM stats")
         )
+        now = datetime.utcnow().isoformat()
         for chat_id, user_id, source, count in rows:
             source_id = source_map.get(source)
             if not source_id:
                 logger.error(f"Не найден source_id для {source}, пропускаем запись")
                 continue
 
-            existing_stats = await session.execute(
-                select(Stats).where(
-                    Stats.chat_id == chat_id,
-                    Stats.user_id == user_id,
-                    Stats.source_id == source_id
-                )
+            existing = await session.execute(
+                text("""
+                    SELECT id FROM stats 
+                    WHERE chat_id = :chat_id AND user_id = :user_id AND source_id = :source_id
+                """),
+                {"chat_id": chat_id, "user_id": user_id, "source_id": source_id}
             )
-            if existing_stats.first():
+            if existing.first():
                 continue
 
-            new_stats = Stats(
-                chat_id=chat_id,
-                user_id=user_id,
-                source_id=source_id,
-                count=count,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+            await session.execute(
+                text("""
+                    INSERT INTO stats (chat_id, user_id, source_id, count, created_at, updated_at)
+                    VALUES (:chat_id, :user_id, :source_id, :count, :created_at, :updated_at)
+                """),
+                {
+                    "chat_id": chat_id,
+                    "user_id": user_id,
+                    "source_id": source_id,
+                    "count": count,
+                    "created_at": now,
+                    "updated_at": now
+                }
             )
-            session.add(new_stats)
 
         await session.execute(text("ALTER TABLE stats RENAME TO stats_backup"))
         logger.info("Миграция успешно завершена, старая таблица переименована в 'stats_backup'.")
