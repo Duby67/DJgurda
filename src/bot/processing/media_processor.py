@@ -58,6 +58,13 @@ async def process_block(
             elif file_info['type'] == 'photo':
                 photo = FSInputFile(file_info['file_path'])
                 await message.answer_photo(photo=photo, caption=caption)
+                
+            elif file_info['type'] == 'profile':
+                if file_info['file_path'] and file_info['file_path'].exists():
+                    photo = FSInputFile(file_info['file_path'])
+                    await message.answer_photo(photo=photo, caption=file_info['caption_text'])
+                else:
+                    await message.answer(file_info['caption_text'])
 
             logger.info(f"Блок {idx} успешно отправлен")
             await update_stats(message.chat.id, message.from_user.id, handler.source_name)
