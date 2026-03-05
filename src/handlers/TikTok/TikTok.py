@@ -14,7 +14,7 @@ class TikTokHandler(
     TikTokProfile
     ):
     PATTERN = re.compile(
-        r'https?://(?:www\.|m\.)?(?:tiktok\.com/@[\w.]+/video/|vt\.tiktok\.com/\S+)|vm\.tiktok\.com/\S+'
+        r'https?://(?:www\.|m\.)?(?:tiktok\.com|vt\.tiktok\.com|vm\.tiktok\.com)\S+'
     )
 
     @property
