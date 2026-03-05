@@ -2,17 +2,17 @@ from typing import List, Optional
 
 from src.handlers.base import BaseHandler
 from src.handlers.TikTok import TikTokHandler
-from src.handlers.YouTube import YouTubeHandler
-from src.handlers.Instagram import InstagramHandler
-from src.handlers.YandexMusic import YandexMusicHandler
+#from src.handlers.YouTube import YouTubeHandler
+#from src.handlers.Instagram import InstagramHandler
+#from src.handlers.YandexMusic import YandexMusicHandler
 
 class ServiceManager:
     def __init__(self):
         self.handlers: List[BaseHandler] = [
             TikTokHandler(),
-            YouTubeHandler(),
-            InstagramHandler(),
-            YandexMusicHandler(),
+            #YouTubeHandler(),
+            #InstagramHandler(),
+            #YandexMusicHandler(),
         ]
 
     def get_handler(self, url: str) -> Optional[BaseHandler]:

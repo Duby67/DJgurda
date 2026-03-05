@@ -1,26 +1,13 @@
 import re
-import uuid
-import asyncio
 import logging
-import random
-from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Optional, Dict, Any
 
-from src.config import PROJECT_TEMP_DIR, PHOTO_SIZE_LIMIT, VIDEO_SIZE_LIMIT, AUDIO_SIZE_LIMIT
+from pathlib import Path
+from abc import ABC, abstractmethod
+from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
 class BaseHandler(ABC):
-    photo_limit = PHOTO_SIZE_LIMIT
-    video_limit = VIDEO_SIZE_LIMIT
-    audio_limit = AUDIO_SIZE_LIMIT
-    base_temp_dir = PROJECT_TEMP_DIR
-
-    def __init__(self):
-        self.temp_dir = self.base_temp_dir / self.__class__.__name__
-        self.temp_dir.mkdir(parents=True, exist_ok=True)
-
     @property
     @abstractmethod
     def pattern(self) -> re.Pattern:
@@ -34,19 +21,6 @@ class BaseHandler(ABC):
     @abstractmethod
     async def process(self, url: str, context: str, resolved_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
         pass
-
-    def _generate_unique_path(self, identifier: str, suffix: str = "") -> Path:
-        unique_id = f"{identifier}_{uuid.uuid4().hex[:8]}"
-        return self.temp_dir / f"{unique_id}{suffix}"
-
-    def _extract_video_id(self, url: str) -> str:
-        parts = url.rstrip('/').split('/')
-        return parts[-1].split('?')[0]
-
-    async def _random_delay(self):
-        delay = random.uniform(1, 3)
-        logger.info(f"Ожидание {delay:.2f} секунд")
-        await asyncio.sleep(delay)
 
     def cleanup(self, file_info: Dict[str, Any]) -> None:
         for key in ['file_path', 'thumbnail_path']:

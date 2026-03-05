@@ -7,7 +7,6 @@ logger = logging.getLogger(__name__)
 
 async def migrate(session: AsyncSession):
     try:
-        # 1. Проверяем существование старой таблицы
         result = await session.execute(
             text("SELECT name FROM sqlite_master WHERE type='table' AND name='stats'")
         )
@@ -15,7 +14,6 @@ async def migrate(session: AsyncSession):
             logger.info("Таблица 'stats' не найдена, миграция не требуется.")
             return
 
-        # 2. Проверяем структуру: есть ли колонка 'source' (признак старой схемы)
         pragma = await session.execute(text("PRAGMA table_info(stats)"))
         columns = [row[1] for row in pragma]
         if 'source' not in columns:
@@ -24,12 +22,9 @@ async def migrate(session: AsyncSession):
 
         logger.info("Обнаружена старая схема. Запускаем миграцию...")
 
-        # 3. Переименовываем старую таблицу во временную
         await session.execute(text("ALTER TABLE stats RENAME TO stats_old_temp"))
         logger.debug("Старая таблица переименована в stats_old_temp")
 
-        # 4. Создаём новые таблицы через SQL (так как create_all уже был вызван, но не создал нужную)
-        # Создаём sources
         await session.execute(text("""
             CREATE TABLE IF NOT EXISTS sources (
                 id INTEGER PRIMARY KEY,
@@ -37,7 +32,6 @@ async def migrate(session: AsyncSession):
             )
         """))
 
-        # Создаём новую stats с правильной структурой
         await session.execute(text("""
             CREATE TABLE IF NOT EXISTS stats (
                 id INTEGER PRIMARY KEY,
@@ -55,11 +49,9 @@ async def migrate(session: AsyncSession):
 
         logger.debug("Новые таблицы созданы")
 
-        # 5. Собираем уникальные источники из старой таблицы
         sources_result = await session.execute(text("SELECT DISTINCT source FROM stats_old_temp"))
         source_names = [row[0] for row in sources_result]
 
-        # 6. Заполняем sources и получаем соответствие name -> id
         source_map = {}
         for name in source_names:
             existing = await session.execute(
@@ -81,7 +73,6 @@ async def migrate(session: AsyncSession):
                 source_map[name] = source_id
                 logger.debug(f"Добавлен новый источник: {name}")
 
-        # 7. Переносим данные
         rows = await session.execute(
             text("SELECT chat_id, user_id, source, count FROM stats_old_temp")
         )
@@ -92,7 +83,6 @@ async def migrate(session: AsyncSession):
                 logger.error(f"Не найден source_id для {source}, пропускаем запись")
                 continue
 
-            # Проверяем дубликаты (на случай повторного запуска)
             existing = await session.execute(
                 text("""
                     SELECT id FROM stats 
@@ -118,7 +108,6 @@ async def migrate(session: AsyncSession):
                 }
             )
 
-        # 8. Удаляем временную таблицу (или можно оставить как резервную копию)
         await session.execute(text("DROP TABLE stats_old_temp"))
         logger.info("Миграция успешно завершена, временная таблица удалена.")
 
