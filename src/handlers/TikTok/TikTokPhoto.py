@@ -1,7 +1,7 @@
 import re
 import asyncio
+import aiohttp
 import logging
-import requests
 
 from bs4 import BeautifulSoup
 from typing import Optional, Dict, Any
@@ -10,18 +10,20 @@ from src.handlers.mixins import PhotoMixin
 
 logger = logging.getLogger(__name__)
 
-class TikTokPhoto(PhotoMixin):
+class TikTokPhotoMixin:
     async def _extract_photo_info(self, url: str) -> Optional[Dict]:
-        def sync_extract():
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            }
-            try:
-                resp = requests.get(url, headers=headers, timeout=10)
-                if resp.status_code != 200:
-                    logger.error(f"HTTP {resp.status_code} при загрузке страницы фото")
-                    return None
-                soup = BeautifulSoup(resp.text, 'html.parser')
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers, timeout=10) as resp:
+                    if resp.status != 200:
+                        logger.error(f"HTTP {resp.status} при загрузке страницы фото")
+                        return None
+                    html = await resp.text()
+                    soup = await asyncio.to_thread(BeautifulSoup, html, 'html.parser')
+                
                 og_image = soup.find('meta', property='og:image')
                 img_url = og_image.get('content') if og_image else None
                 if not img_url:
@@ -43,10 +45,9 @@ class TikTokPhoto(PhotoMixin):
                     'title': title,
                     'uploader': uploader
                 }
-            except Exception as e:
-                logger.exception(f"Ошибка парсинга фото TikTok: {e}")
-                return None
-        return await asyncio.to_thread(sync_extract)
+        except Exception as e:
+            logger.exception(f"Ошибка парсинга фото TikTok: {e}")
+            return None
 
     async def _process_tiktok_photo(
         self,
@@ -54,6 +55,7 @@ class TikTokPhoto(PhotoMixin):
         context: str,
         resolved_url: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
+        
         target_url = resolved_url or url
         video_id_match = re.search(r'/(\d+)[?/]?', target_url)
         video_id = video_id_match.group(1) if video_id_match else "unknown"

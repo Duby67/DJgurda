@@ -19,7 +19,7 @@ class TikTokVideo(VideoMixin):
         video_id = video_id_match.group(1) if video_id_match else self._extract_video_id(target_url)
 
         ydl_opts = {
-            'format': 'best[ext=mp4]/best',
+            'format': 'best[height<=1080][ext=mp4]/best[height<=1080]',
             'writethumbnail': True,
         }
 
