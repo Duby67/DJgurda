@@ -2,9 +2,11 @@ import re
 import asyncio
 import logging
 import requests
+
 from bs4 import BeautifulSoup
 from typing import Optional, Dict, Any
-from src.handlers.mixins.photo import PhotoMixin
+
+from src.handlers.mixins import PhotoMixin
 
 logger = logging.getLogger(__name__)
 

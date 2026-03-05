@@ -1,7 +1,9 @@
 import re
 import logging
+
 from typing import Optional, Dict, Any
-from src.handlers.mixins.video import VideoMixin
+
+from src.handlers.mixins import VideoMixin
 
 logger = logging.getLogger(__name__)
 
