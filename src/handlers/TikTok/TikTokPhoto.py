@@ -29,11 +29,20 @@ class TikTokPhoto(PhotoMixin, MediaGroupMixin):
 
         # Опции для yt-dlp: хотим получить все изображения и аудио
         ydl_opts = {
-            'format': 'bestaudio/best',        # для аудио
-            'writethumbnail': False,            # не нужны отдельные эскизы
-            'extract_flat': False,               # не нужно, скачиваем реально
-            'ignoreerrors': True,                 # пропускать ошибки для отдельных элементов
-            'playlistend': None,                   # загружать все элементы (по умолчанию все)
+            'format': 'bestaudio/best',
+            'writethumbnail': False,
+            'extract_flat': False,
+            'ignoreerrors': True,
+            'playlistend': None,
+            'extractor_args': {
+                'tiktok': {
+                    'api_hostname': 'www.tiktok.com',
+                    'extract_flat': False,  # важно для получения всех элементов
+                    'webpage_fallback': False,  # не падать на веб-страницу
+                }
+            },
+            # Пробуем принудительно указать extractor
+            'force_generic_extractor': False,  # не использовать generic
         }
         # Для TikTok, возможно, нужно указать extractor_args, но обычно yt-dlp сам определяет.
 
