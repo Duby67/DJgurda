@@ -1,6 +1,7 @@
 import logging
 import asyncio
 
+from aiogram import types
 from aiogram.types import Message, ReplyParameters
 from aiogram.types.input_file import FSInputFile
 
@@ -58,6 +59,27 @@ async def process_block(
             elif file_info['type'] == 'photo':
                 photo = FSInputFile(file_info['file_path'])
                 await message.answer_photo(photo=photo, caption=caption)
+                
+            elif file_info['type'] == 'media_group':
+                # Отправляем группу фото
+                media = []
+                for f in file_info['files']:
+                    if f['type'] == 'photo':
+                        media.append(types.InputMediaPhoto(media=FSInputFile(f['file_path'])))
+                if media:
+                    caption = build_caption(user_context, file_info, user_link, raw_url, handler)
+                    media[-1].caption = caption
+                    await message.answer_media_group(media=media)
+
+                # Если есть аудио, отправляем отдельно
+                if 'audio' in file_info:
+                    audio = FSInputFile(file_info['audio']['file_path'])
+                    await message.answer_audio(
+                        audio=audio,
+                        title=file_info['audio']['title'],
+                        performer=file_info['audio']['performer'],
+                        caption=None  # или можно добавить подпись, если нужно
+                    )
                 
             elif file_info['type'] == 'profile':
                 if file_info['file_path'] and file_info['file_path'].exists():
