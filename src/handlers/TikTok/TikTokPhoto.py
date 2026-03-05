@@ -10,7 +10,7 @@ from src.handlers.mixins import PhotoMixin
 
 logger = logging.getLogger(__name__)
 
-class TikTokPhotoMixin:
+class TikTokPhoto(PhotoMixin):
     async def _extract_photo_info(self, url: str) -> Optional[Dict]:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -57,10 +57,12 @@ class TikTokPhotoMixin:
     ) -> Optional[Dict[str, Any]]:
         
         target_url = resolved_url or url
-        video_id_match = re.search(r'/(\d+)[?/]?', target_url)
-        video_id = video_id_match.group(1) if video_id_match else "unknown"
-        dest_path = self._generate_unique_path(video_id, suffix=".jpg")
+        photo_id_match = re.search(r'/(\d+)[?/]?', target_url)
+        photo_id = photo_id_match.group(1) if photo_id_match else "unknown"
+        dest_path = self._generate_unique_path(photo_id, suffix=".jpg")
 
+        await self._random_delay()
+        
         photo_info = await self._extract_photo_info(target_url)
         if not photo_info:
             return None
