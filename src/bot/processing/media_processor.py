@@ -1,6 +1,8 @@
 import logging
 import asyncio
 
+from typing import Any
+
 from aiogram import types
 from aiogram.types import Message, ReplyParameters
 from aiogram.types.input_file import FSInputFile
@@ -18,7 +20,7 @@ async def process_block(
     raw_url: str,
     resolved_url: str,
     user_context: str,
-    handler,
+    handler: Any,
     user_link: str,
     message: Message
 ) -> bool:
@@ -124,10 +126,11 @@ async def process_block(
                     await message.answer(file_info['caption_text'])
 
             logger.info(f"Блок {idx} успешно отправлен")
-            await update_stats(message.chat.id, message.from_user.id, handler.source_name)
+            if message.from_user:
+                await update_stats(message.chat.id, message.from_user.id, handler.source_name)
             return True
         
-        except Exception as e:
+        except Exception:
             if await get_errors_enabled(chat_id):
                 error_text = build_error("Не удалось отправить контент", raw_url, handler)
                 await message.answer(
@@ -145,7 +148,7 @@ async def process_block(
             if file_info:
                 handler.cleanup(file_info)
                 
-    except Exception as e:
+    except Exception as exc:
         if await get_errors_enabled(chat_id):
             error_text = build_error("Внутренняя ошибка при обработке ссылки", raw_url, handler)
             await message.answer(
@@ -155,5 +158,5 @@ async def process_block(
                     quote=raw_url
                 )
             )
-        logger.exception(f"Необработанная ошибка при обработке блока {idx}: {e}")
+        logger.exception("Необработанная ошибка при обработке блока %s: %s", idx, exc)
         return False

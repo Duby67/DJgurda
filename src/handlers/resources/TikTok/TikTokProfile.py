@@ -4,7 +4,6 @@
 
 import re
 import json
-import asyncio
 import aiohttp
 import logging
 from typing import Optional, Dict, Any
@@ -18,7 +17,7 @@ class TikTokProfile(PhotoMixin):
     Миксин для обработки профилей TikTok.
     """
     
-    async def _extract_profile_info(self, url: str) -> Optional[Dict]:
+    async def _extract_profile_info(self, url: str) -> Optional[Dict[str, Any]]:
         """
         Извлекает информацию о профиле TikTok из HTML страницы.
         
@@ -56,8 +55,11 @@ class TikTokProfile(PhotoMixin):
                 # Альтернативный путь
                 user_info = data.get("UserModule", {}).get("users", {})
                 if user_info and isinstance(user_info, dict):
-                    username = list(user_info.keys())[0]
-                    user_info = user_info[username]
+                    usernames = list(user_info.keys())
+                    if not usernames:
+                        logger.error("Пустой блок users в UserModule")
+                        return None
+                    user_info = user_info[usernames[0]]
                 else:
                     logger.error("Не удалось извлечь userInfo из JSON")
                     return None
@@ -78,8 +80,8 @@ class TikTokProfile(PhotoMixin):
             
             return profile_info
 
-        except Exception as e:
-            logger.exception(f"Ошибка парсинга профиля TikTok: {e}")
+        except Exception as exc:
+            logger.exception("Ошибка парсинга профиля TikTok: %s", exc)
             return None
 
     async def _process_tiktok_profile(
@@ -121,12 +123,15 @@ class TikTokProfile(PhotoMixin):
         lines = []
         
         # Заголовок с именем и ссылкой
-        if profile_info['nickname']:
-            profile_link = f"https://www.tiktok.com/@{profile_info['unique_id']}"
+        unique_id = profile_info.get("unique_id")
+        profile_link = f"https://www.tiktok.com/@{unique_id}" if unique_id else target_url
+
+        if profile_info.get("nickname"):
             lines.append(f'<a href="{profile_link}"><b>{profile_info["nickname"]}</b></a>')
+        elif unique_id:
+            lines.append(f'<a href="{profile_link}"><b>@{unique_id}</b></a>')
         else:
-            profile_link = f"https://www.tiktok.com/@{profile_info['unique_id']}"
-            lines.append(f'<a href="{profile_link}"><b>@{profile_info["unique_id"]}</b></a>')
+            lines.append(f'<a href="{profile_link}"><b>TikTok Profile</b></a>')
 
         # Описание профиля
         if profile_info['signature']:
@@ -149,8 +154,8 @@ class TikTokProfile(PhotoMixin):
             'source_name': 'TikTok',
             'file_path': avatar_path,
             'thumbnail_path': None,
-            'title': profile_info['nickname'] or profile_info['unique_id'],
-            'uploader': profile_info['unique_id'],
+            'title': profile_info.get('nickname') or unique_id or 'unknown',
+            'uploader': unique_id or 'unknown',
             'original_url': url,
             'context': context,
             'caption_text': caption,

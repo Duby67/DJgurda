@@ -28,6 +28,8 @@ python -m venv venv
 .\venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+# при необходимости dev-инструментов:
+# python -m pip install -r requirements-dev.txt
 ```
 
 3. Настройка `.env` (обязательные переменные валидируются в `src/config.py`):

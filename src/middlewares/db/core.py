@@ -5,6 +5,7 @@
 """
 
 import logging
+
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
 from src.config import DB_PATH
@@ -30,7 +31,7 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False  # Не истекать объектам после коммита
 )
 
-async def init_db():
+async def init_db() -> None:
     """
     Инициализирует базу данных: создает таблицы и применяет миграции.
     """
@@ -47,11 +48,11 @@ async def init_db():
 
         logger.info("База данных инициализирована успешно")
         
-    except Exception as e:
-        logger.error(f"Ошибка инициализации базы данных: {e}")
+    except Exception:
+        logger.exception("Ошибка инициализации базы данных")
         raise
 
-async def close_db():
+async def close_db() -> None:
     """
     Корректно закрывает соединения с базой данных.
     """

@@ -6,12 +6,12 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 from datetime import datetime, timezone
 
-
 from src.config import ADMIN_ID, PROJECT_TEMP_DIR, MAX_AGE_SECONDS
 from src.middlewares.db import get_chats_with_notifications_enabled, init_db
 from src.utils.Emoji import EMOJI_SUCCESS
 
 logger = logging.getLogger(__name__)
+
 
 async def on_startup(bot: Bot) -> None:
     """Обработчик запуска бота."""
@@ -39,8 +39,8 @@ async def on_startup(bot: Bot) -> None:
         # Уведомление администратору
         try:
             await bot.send_message(chat_id=ADMIN_ID, text=message_text)
-        except Exception as e:
-            logger.error(f"Не удалось отправить уведомление о запуске админу: {e}")
+        except Exception as exc:
+            logger.error("Не удалось отправить уведомление о запуске админу: %s", exc)
 
         # Рассылка уведомлений
         chats = await get_chats_with_notifications_enabled()
@@ -49,9 +49,9 @@ async def on_startup(bot: Bot) -> None:
                 continue
             try:
                 await bot.send_message(chat_id=chat_id, text=message_text)
-            except Exception as e:
-                logger.error(f"Не удалось отправить уведомление о запуске в чат {chat_id}: {e}")
-            
-    except Exception as e:
-        logger.error(f"Ошибка при запуске бота: {e}")
+            except Exception as exc:
+                logger.error("Не удалось отправить уведомление о запуске в чат %s: %s", chat_id, exc)
+
+    except Exception:
+        logger.exception("Ошибка при запуске бота")
         raise

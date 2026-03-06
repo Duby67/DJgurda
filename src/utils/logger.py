@@ -21,12 +21,13 @@ def setup_logging(level: int = logging.INFO, log_file: Optional[str] = None) -> 
     
     # Добавляем файловый обработчик если указан
     if log_file:
-        handlers.append(logging.FileHandler(log_file))
+        handlers.append(logging.FileHandler(log_file, encoding="utf-8"))
     
     logging.basicConfig(
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         level=level,
-        handlers=handlers
+        handlers=handlers,
+        force=True,
     )
     
     # Устанавливаем уровень для aiohttp и подобных библиотек

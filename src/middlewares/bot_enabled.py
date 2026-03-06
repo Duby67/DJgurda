@@ -15,6 +15,7 @@ from src.middlewares.db import get_bot_enabled
 
 logger = logging.getLogger(__name__)
 
+
 class BotEnabledMiddleware(BaseMiddleware):
     """
     Middleware для проверки состояния бота в чате.
@@ -53,9 +54,10 @@ class BotEnabledMiddleware(BaseMiddleware):
             
             # Команды управления всегда пропускаются
             is_start_command = event.text.startswith("/start")
+            is_stop_command = event.text.startswith("/stop")
             is_toggle_command = event.text.startswith("/toggle_bot")
             
-            if is_start_command or is_toggle_command:
+            if is_start_command or is_stop_command or is_toggle_command:
                 logger.debug(f"Команда управления пропущена: {event.text}")
                 return await handler(event, data)
             
@@ -67,7 +69,7 @@ class BotEnabledMiddleware(BaseMiddleware):
                 logger.debug(f"Бот отключен в чате {event.chat.id}, сообщение пропущено: {event.text}")
                 return
                 
-        except Exception as e:
+        except Exception:
             logger.exception(f"Ошибка в BotEnabledMiddleware для чата {event.chat.id}")
             # При ошибке пропускаем сообщение для сохранения функциональности
             return await handler(event, data)

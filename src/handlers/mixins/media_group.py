@@ -9,11 +9,12 @@ import asyncio
 import logging
 
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from .base import BaseMixin
 
 logger = logging.getLogger(__name__)
+
 
 class MediaGroupMixin(BaseMixin):
     """
@@ -23,9 +24,9 @@ class MediaGroupMixin(BaseMixin):
     async def _download_media_group(
         self,
         url: str,
-        ydl_opts: dict,
-        group_id: str = None,
-        size_limit: int = None
+        ydl_opts: Dict[str, Any],
+        group_id: Optional[str] = None,
+        size_limit: Optional[int] = None
     ) -> Optional[List[Dict[str, Any]]]:
         """
         Скачивает все доступные медиафайлы из URL (например, слайд-шоу TikTok).
@@ -133,8 +134,8 @@ class MediaGroupMixin(BaseMixin):
 
                 return downloaded_files
 
-        except Exception as e:
-            logger.exception(f"Ошибка при скачивании медиа-группы: {e}")
+        except Exception as exc:
+            logger.exception("Ошибка при скачивании медиа-группы: %s", exc)
             # Очищаем временные файлы при ошибке
             for file_path in file_paths_to_cleanup:
                 if file_path.exists():

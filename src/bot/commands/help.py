@@ -1,8 +1,8 @@
 import logging
 
 from aiogram import Router
-from aiogram.types import Message
 from aiogram.filters import Command
+from aiogram.types import Message
 
 from src.handlers.manager import ServiceManager
 from src.utils.Emoji import emoji
@@ -11,12 +11,16 @@ router = Router()
 service_manager = ServiceManager()
 logger = logging.getLogger(__name__)
 
+
 @router.message(Command("help"))
 async def help_command(message: Message) -> None:
     user = message.from_user
+    user_id = user.id if user else 0
+    username = user.username if user and user.username else "unknown"
     logger.info(
         "User %d (@%s) called /help",
-        user.id, user.username or "unknown"
+        user_id,
+        username,
     )
     try:
         sources = []
@@ -31,7 +35,7 @@ async def help_command(message: Message) -> None:
             f"{sources_text}"
         )
         await message.answer(help_text)
-        
-    except Exception as e:
-        logger.exception("Error in /help command for user %d", user.id)
+
+    except Exception:
+        logger.exception("Error in /help command for user %d", user_id)
         await message.answer("Произошла ошибка при формировании списка источников.")

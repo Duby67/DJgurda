@@ -13,6 +13,7 @@ from src.middlewares.db.models.bot_settings import BotSettings
 
 logger = logging.getLogger(__name__)
 
+
 async def _get_setting(chat_id: int, column: str, default: bool) -> bool:
     """
     Получает значение настройки для чата.
@@ -32,9 +33,10 @@ async def _get_setting(chat_id: int, column: str, default: bool) -> bool:
                 logger.debug(f"{column} для chat {chat_id}: запись не найдена")
                 return default
             return getattr(settings, column)
-    except Exception as e:
+    except Exception:
         logger.exception(f"Ошибка в _get_setting({column}) для chat {chat_id}")
         return default
+
 
 async def _set_setting(chat_id: int, column: str, value: bool) -> None:
     """
@@ -60,9 +62,10 @@ async def _set_setting(chat_id: int, column: str, value: bool) -> None:
                 else:
                     setattr(settings, column, value)
                     logger.info(f"Обновлена {column} для chat {chat_id}: {value}")
-    except Exception as e:
+    except Exception:
         logger.exception(f"Ошибка в _set_setting({column}) для chat {chat_id}")
         raise
+
 
 async def get_chats_with_notifications_enabled() -> list[int]:
     """
@@ -74,12 +77,13 @@ async def get_chats_with_notifications_enabled() -> list[int]:
     try:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
-                select(BotSettings.chat_id).where(BotSettings.notifications_enabled == True)
+                select(BotSettings.chat_id).where(BotSettings.notifications_enabled.is_(True))
             )
             return [row[0] for row in result.all()]
-    except Exception as e:
+    except Exception:
         logger.exception("Ошибка получения списка чатов с уведомлениями")
         return []
+
 
 # Функции для управления состоянием бота
 async def set_bot_enabled(chat_id: int, enabled: bool) -> None:

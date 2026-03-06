@@ -20,6 +20,7 @@ from src.config import (
 
 logger = logging.getLogger(__name__)
 
+
 class BaseMixin:
     """
     Базовый класс для миксинов обработки медиа.
@@ -28,11 +29,11 @@ class BaseMixin:
     """
     
     # Лимиты размеров файлов (в байтах)
-    video_limit = VIDEO_SIZE_LIMIT
-    photo_limit = PHOTO_SIZE_LIMIT
-    audio_limit = AUDIO_SIZE_LIMIT
+    video_limit: int = VIDEO_SIZE_LIMIT
+    photo_limit: int = PHOTO_SIZE_LIMIT
+    audio_limit: int = AUDIO_SIZE_LIMIT
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: object, **kwargs: object) -> None:
         """
         Инициализирует миксин, создавая временную директорию для класса.
         """

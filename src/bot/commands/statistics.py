@@ -1,8 +1,8 @@
 import logging
 
 from aiogram import Router
-from aiogram.types import Message
 from aiogram.filters import Command
+from aiogram.types import Message
 
 from src.middlewares.db import get_chat_stats
 from src.utils.Emoji import emoji, EMOJI_FIRSTPLACE, EMOJI_SECONDPLACE, EMOJI_THIRDPLACE, EMOJI_STATISTICS
@@ -12,12 +12,16 @@ logger = logging.getLogger(__name__)
 
 MEDALS = [EMOJI_FIRSTPLACE, EMOJI_SECONDPLACE, EMOJI_THIRDPLACE]
 
+
 @router.message(Command("statistics"))
-async def status_command(message: Message):
+async def status_command(message: Message) -> None:
     user = message.from_user
+    user_id = user.id if user else 0
+    username = user.username if user and user.username else "unknown"
     logger.info(
         "User %d (@%s) called /statistics",
-        user.id, user.username or "unknown"
+        user_id,
+        username,
     )
     try:
         stats = await get_chat_stats(message.chat.id, limit=10)
@@ -43,6 +47,6 @@ async def status_command(message: Message):
             lines.append(line)
 
         await message.answer("\n".join(lines), parse_mode="HTML")
-    except Exception as e:
-        logger.exception("Error in /statistics command for user %d", user.id)
+    except Exception:
+        logger.exception("Error in /statistics command for user %d", user_id)
         await message.answer("Произошла ошибка при получении статистики.")

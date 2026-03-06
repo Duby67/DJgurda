@@ -27,8 +27,8 @@ class VKHandler(BaseHandler, VideoMixin):
     async def _download_audio_ytdlp(
         self,
         url: str,
-        video_id: str = None,
-        size_limit: int = None
+        video_id: Optional[str] = None,
+        size_limit: Optional[int] = None
     ) -> Optional[Dict[str, Any]]:
         
         if size_limit is None:
@@ -102,8 +102,8 @@ class VKHandler(BaseHandler, VideoMixin):
                     'info': info
                 }
 
-        except Exception as e:
-            logger.exception(f"Ошибка при скачивании аудио ВК: {e}")
+        except Exception as exc:
+            logger.exception("Ошибка при скачивании аудио ВК: %s", exc)
             if file_path and file_path.exists():
                 file_path.unlink(missing_ok=True)
             if thumb_path and thumb_path.exists():

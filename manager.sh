@@ -10,6 +10,14 @@ fi
 
 ENV="$1"
 LOG_FILE="/tmp/djgurda_deploy_${ENV}.log"
+REQUIRED_ENV_KEYS=(
+  "ADMIN_ID"
+  "BOT_VERSION"
+  "BOT_DB_PATH"
+  "BOT_TOKEN"
+  "YANDEX_MUSIC_TOKEN"
+  "YOUTUBE_COOKIES_PATH"
+)
 
 {
     echo "=== DJgurda Deploy Started: $(date) ==="
@@ -45,6 +53,14 @@ LOG_FILE="/tmp/djgurda_deploy_${ENV}.log"
         echo "ERROR: .env file not found: $ENV_FILE"
         exit 1
     fi
+    
+    echo "Validating required environment keys..."
+    for key in "${REQUIRED_ENV_KEYS[@]}"; do
+        if ! grep -q "^${key}=" "$ENV_FILE"; then
+            echo "ERROR: Missing required key in $ENV_FILE: ${key}"
+            exit 1
+        fi
+    done
 
     echo "Stopping existing container..."
     docker stop "$CONTAINER_NAME" 2>/dev/null || true

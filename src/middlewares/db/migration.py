@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
-async def migrate(session: AsyncSession):
+
+async def migrate(session: AsyncSession) -> None:
     """
     Выполняет миграции базы данных при необходимости.
     
@@ -84,12 +85,13 @@ async def migrate(session: AsyncSession):
 
         await session.commit()
 
-    except Exception as e:
+    except Exception:
         logger.exception("Критическая ошибка при миграции")
         await session.rollback()
         raise
 
-async def _migrate_data(session: AsyncSession):
+
+async def _migrate_data(session: AsyncSession) -> None:
     """
     Переносит данные из старой схемы в новую.
     

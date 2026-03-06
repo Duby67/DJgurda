@@ -5,7 +5,7 @@
 """
 
 from .logger import setup_logging
-from .messages import build_caption, build_error, _remove_hashtags
+from .messages import build_caption, build_error
 from .url import resolve_url
 from .Emoji import (
     emoji, 
@@ -35,7 +35,6 @@ __all__ = [
     # Сообщения
     'build_caption',
     'build_error',
-    '_remove_hashtags',
     
     # URL
     'resolve_url',

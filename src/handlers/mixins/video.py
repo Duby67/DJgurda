@@ -9,11 +9,12 @@ import asyncio
 import logging
 
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 from .base import BaseMixin
 
 logger = logging.getLogger(__name__)
+
 
 class VideoMixin(BaseMixin):
     """
@@ -23,9 +24,9 @@ class VideoMixin(BaseMixin):
     async def _download_video(
         self,
         url: str,
-        ydl_opts: dict,
-        video_id: str = None,
-        size_limit: int = None
+        ydl_opts: Dict[str, Any],
+        video_id: Optional[str] = None,
+        size_limit: Optional[int] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Скачивает видео через yt-dlp.
@@ -103,8 +104,8 @@ class VideoMixin(BaseMixin):
                     'info': info
                 }
 
-        except Exception as e:
-            logger.exception(f"Ошибка при скачивании видео: {e}")
+        except Exception as exc:
+            logger.exception("Ошибка при скачивании видео: %s", exc)
             # Очищаем временные файлы при ошибке
             if file_path and file_path.exists():
                 file_path.unlink(missing_ok=True)

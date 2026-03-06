@@ -7,10 +7,12 @@ import aiohttp
 import aiofiles
 
 from pathlib import Path
+from typing import Optional
 
 from .base import BaseMixin
 
 logger = logging.getLogger(__name__)
+
 
 class AudioMixin(BaseMixin):
     """
@@ -38,15 +40,15 @@ class AudioMixin(BaseMixin):
                     async with aiofiles.open(dest_path, 'wb') as f:
                         await f.write(await response.read())
             return True
-        except Exception as e:
-            logger.exception(f"Ошибка при скачивании {url}: {e}")
+        except Exception as exc:
+            logger.exception("Ошибка при скачивании %s: %s", url, exc)
             return False
 
     async def _download_audio(
         self,
         url: str,
         dest_path: Path,
-        size_limit: int = None
+        size_limit: Optional[int] = None
     ) -> bool:
         """
         Скачивает аудио файл по URL.
@@ -81,7 +83,7 @@ class AudioMixin(BaseMixin):
         self, 
         url: str, 
         dest_path: Path, 
-        size_limit: int = None
+        size_limit: Optional[int] = None
     ) -> bool:
         """
         Скачивает миниатюру/обложку по URL.

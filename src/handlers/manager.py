@@ -1,33 +1,27 @@
 """
 Менеджер сервисов для обработки медиа.
 """
-import logging
 
+import logging
 from typing import List, Optional
 
 from .base import BaseHandler
 from src.handlers.resources import TikTokHandler
-#from src.handlers.YouTube import YouTubeHandler
-#from src.handlers.Instagram import InstagramHandler
-#from src.handlers.YandexMusic import YandexMusicHandler
 
 logger = logging.getLogger(__name__)
+
 
 class ServiceManager:
     """
     Менеджер для регистрации и поиска обработчиков медиа.
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Инициализирует менеджер с зарегистрированными обработчиками.
         """
-        self.handlers: List[BaseHandler] = [
-            TikTokHandler(),
-            #YouTubeHandler(),
-            #InstagramHandler(),
-            #YandexMusicHandler(),
-        ]
+        active_handler_classes = (TikTokHandler,)
+        self.handlers: List[BaseHandler] = [handler_cls() for handler_cls in active_handler_classes]
         logger.info(f"Зарегистрировано обработчиков: {len(self.handlers)}")
 
     def get_handler(self, url: str) -> Optional[BaseHandler]:

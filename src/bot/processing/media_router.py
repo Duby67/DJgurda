@@ -17,15 +17,23 @@ logger = logging.getLogger(__name__)
 router = Router()
 service_manager = ServiceManager()
 
+
 @router.message(F.text | F.caption)
 async def handle_media_message(message: Message) -> None:
     text = message.text or message.caption
+    if not text:
+        return
+
     if text.startswith("/"):
         return
     
     blocks = split_into_blocks(text)
     if not blocks:
         logger.debug("Сообщение не содержит ссылок")
+        return
+
+    if not message.from_user:
+        logger.debug("Сообщение без from_user пропущено")
         return
 
     user_link = get_user_link(message.from_user)
@@ -71,7 +79,7 @@ async def handle_media_message(message: Message) -> None:
         try:
             await message.delete()
             logger.info("Исходное сообщение удалено")
-        except Exception as e:
-            logger.warning(f"Не удалось удалить сообщение: {e}")
+        except Exception as exc:
+            logger.warning("Не удалось удалить сообщение: %s", exc)
     else:
         logger.info("Не все блоки завершились успешно")

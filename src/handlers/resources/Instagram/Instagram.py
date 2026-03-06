@@ -1,12 +1,9 @@
 import re
-import logging
 
 from typing import Optional, Dict, Any
 
 from src.handlers.base import BaseHandler
 from src.handlers.mixins import VideoMixin
-
-logger = logging.getLogger(__name__)
 
 class InstagramHandler(BaseHandler, VideoMixin):
     PATTERN = re.compile(

@@ -18,7 +18,7 @@ class YandexMusicHandler(BaseHandler, AudioMixin):
     r'https?://(?:music\.yandex\.(?:ru|by|kz|ua)/|yandex\.ru/music/)\S+'
     )
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         if not YANDEX_MUSIC_TOKEN:
             logger.error("YANDEX_MUSIC_TOKEN не задан. Обработчик Яндекс.Музыки не будет работать.")
@@ -26,7 +26,7 @@ class YandexMusicHandler(BaseHandler, AudioMixin):
         self._client = None
         self._lock = asyncio.Lock()
 
-    async def _get_client(self):
+    async def _get_client(self) -> Client:
         if self._client is None:
             def init_client():
                 return Client(self.token).init()
@@ -110,8 +110,8 @@ class YandexMusicHandler(BaseHandler, AudioMixin):
                 'original_url': url,
                 'context': context,
             }
-        except Exception as e:
-            logger.exception(f"Ошибка при скачивании трека: {e}")
+        except Exception as exc:
+            logger.exception("Ошибка при скачивании трека: %s", exc)
             if file_path and file_path.exists():
                 file_path.unlink(missing_ok=True)
             if cover_path and cover_path.exists():

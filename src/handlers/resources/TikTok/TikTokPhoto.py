@@ -4,7 +4,7 @@
 
 import re
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 from src.handlers.mixins import PhotoMixin, MediaGroupMixin
 

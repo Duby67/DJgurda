@@ -3,9 +3,10 @@ import logging
 
 from pathlib import Path
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Iterable, Optional
 
 logger = logging.getLogger(__name__)
+
 
 class BaseHandler(ABC):
     @property
@@ -22,11 +23,27 @@ class BaseHandler(ABC):
     async def process(self, url: str, context: str, resolved_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
         pass
 
-    def cleanup(self, file_info: Dict[str, Any]) -> None:
-        for key in ['file_path', 'thumbnail_path']:
+    def _collect_paths_for_cleanup(self, file_info: Dict[str, Any]) -> Iterable[Path]:
+        """Collect all temporary paths that may be present in handler output."""
+        for key in ("file_path", "thumbnail_path"):
             path = file_info.get(key)
-            if path and isinstance(path, Path):
-                try:
-                    path.unlink(missing_ok=True)
-                except Exception as e:
-                    logger.error(f"Ошибка удаления {path}: {e}")
+            if isinstance(path, Path):
+                yield path
+
+        for media_item in file_info.get("files", []):
+            media_path = media_item.get("file_path") if isinstance(media_item, dict) else None
+            if isinstance(media_path, Path):
+                yield media_path
+
+        audio_info = file_info.get("audio")
+        if isinstance(audio_info, dict):
+            audio_path = audio_info.get("file_path")
+            if isinstance(audio_path, Path):
+                yield audio_path
+
+    def cleanup(self, file_info: Dict[str, Any]) -> None:
+        for path in set(self._collect_paths_for_cleanup(file_info)):
+            try:
+                path.unlink(missing_ok=True)
+            except Exception as exc:
+                logger.error("Ошибка удаления %s: %s", path, exc)

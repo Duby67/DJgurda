@@ -7,13 +7,20 @@
 
 import re
 import html
-from typing import Dict, Any
+from typing import Any, Dict, Protocol
 
 from src.config import MAX_CAPTION
 from src.utils.Emoji import emoji, EMOJI_ERROR, EMOJI_VIDEO, EMOJI_ARROW
 
 # Паттерн для поиска хэштегов
 HASHTAG_PATTERN = re.compile(r'#\w+')
+
+
+class SourceHandler(Protocol):
+    """Protocol for handler objects used in message formatting."""
+
+    source_name: str
+
 
 def _remove_hashtags(text: str) -> str:
     """
@@ -34,7 +41,7 @@ def build_caption(
     file_info: Dict[str, Any],
     user_link: str,
     url: str,
-    handler
+    handler: SourceHandler
 ) -> str:
     """
     Строит подпись для медиа-контента.
@@ -68,7 +75,8 @@ def build_caption(
     # Добавляем информацию об источнике и пользователе
     lines.append("")
     lines.append(f"{EMOJI_ARROW} {user_link}")
-    lines.append(f"{emoji(source)} <a href='{url}'>{source}</a>")
+    safe_url = html.escape(url, quote=True)
+    lines.append(f"{emoji(source)} <a href='{safe_url}'>{source}</a>")
     
     # Собираем подпись
     caption = "\n".join(lines)
@@ -82,7 +90,7 @@ def build_caption(
 def build_error(
     error_message: str,
     url: str,
-    handler
+    handler: SourceHandler
 ) -> str:
     """
     Строит сообщение об ошибке.
@@ -96,8 +104,9 @@ def build_error(
         HTML-сообщение об ошибке
     """
     source = handler.source_name
+    safe_url = html.escape(url, quote=True)
     error_text = (
         f"{EMOJI_ERROR} {error_message}.\n"
-        f"{emoji(source)} <a href='{url}'>{source}</a>"
+        f"{emoji(source)} <a href='{safe_url}'>{source}</a>"
     )
     return error_text

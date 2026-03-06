@@ -6,11 +6,12 @@
 """
 
 import asyncio
-import aiohttp
 import logging
-from typing import Optional
+
+import aiohttp
 
 logger = logging.getLogger(__name__)
+
 
 async def resolve_url(initial_url: str, timeout: int = 10) -> str:
     """

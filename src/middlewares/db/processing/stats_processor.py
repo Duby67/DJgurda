@@ -6,7 +6,8 @@
 
 import logging
 
-from typing import List, Tuple, Dict, Any
+from typing import Dict, List, Tuple
+
 from sqlalchemy import select, and_
 from sqlalchemy.orm import joinedload
 
@@ -15,6 +16,7 @@ from src.middlewares.db.models.stats import Stats
 from src.middlewares.db.models.sources import Source
 
 logger = logging.getLogger(__name__)
+
 
 async def update_stats(chat_id: int, user_id: int, source: str) -> None:
     """
@@ -66,8 +68,9 @@ async def update_stats(chat_id: int, user_id: int, source: str) -> None:
                     stats.count += 1
                     logger.debug(f"Обновлена статистика: chat {chat_id}, user {user_id}, source {source}")
                     
-    except Exception as e:
+    except Exception:
         logger.exception(f"Ошибка обновления статистики для chat {chat_id}, user {user_id}, source {source}")
+
 
 async def get_chat_stats(chat_id: int, limit: int = 10) -> List[Tuple[int, int, Dict[str, int]]]:
     """
@@ -88,12 +91,12 @@ async def get_chat_stats(chat_id: int, limit: int = 10) -> List[Tuple[int, int, 
                 .where(Stats.chat_id == chat_id)
             )
             rows = result.unique().scalars().all()
-    except Exception as e:
+    except Exception:
         logger.exception(f"Ошибка получения статистики для чата {chat_id}")
         return []
 
     # Агрегируем статистику по пользователям
-    user_stats = {}
+    user_stats: dict[int, dict[str, int | dict[str, int]]] = {}
     for stat in rows:
         uid = stat.user_id
         if uid not in user_stats:

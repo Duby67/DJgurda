@@ -1,12 +1,13 @@
 import logging
+
 from aiogram import Bot, Dispatcher
 
 from src.middlewares.db import get_chats_with_notifications_enabled, close_db
-
 from src.config import ADMIN_ID
 from src.utils.Emoji import EMOJI_WARNING
 
 logger = logging.getLogger(__name__)
+
 
 async def on_shutdown(bot: Bot, dispatcher: Dispatcher) -> None:
     """Обработчик остановки бота."""
@@ -23,8 +24,8 @@ async def on_shutdown(bot: Bot, dispatcher: Dispatcher) -> None:
         # Уведомление администратору
         try:
             await bot.send_message(chat_id=ADMIN_ID, text=message_text)
-        except Exception as e:
-            logger.error(f"Не удалось отправить уведомление о выключении админу: {e}")
+        except Exception as exc:
+            logger.error("Не удалось отправить уведомление о выключении админу: %s", exc)
         
         # Рассылка уведомлений о выключении
         for chat_id in chats:
@@ -32,9 +33,9 @@ async def on_shutdown(bot: Bot, dispatcher: Dispatcher) -> None:
                 continue
             try:
                 await bot.send_message(chat_id=chat_id, text=message_text)
-            except Exception as e:
-                logger.error(f"Не удалось отправить уведомление о выключении в чат {chat_id}: {e}")
+            except Exception as exc:
+                logger.error("Не удалось отправить уведомление о выключении в чат %s: %s", chat_id, exc)
             
-    except Exception as e:
-        logger.error(f"Ошибка при остановке бота: {e}")
+    except Exception:
+        logger.exception("Ошибка при остановке бота")
         raise
