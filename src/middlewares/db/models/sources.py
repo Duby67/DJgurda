@@ -1,3 +1,9 @@
+"""
+Модель источников контента.
+
+Содержит информацию о поддерживаемых платформах (YouTube, TikTok и т.д.).
+"""
+
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import relationship
 
@@ -9,4 +15,5 @@ class Source(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True, nullable=False)
 
+    # Связь с статистикой
     stats = relationship("Stats", back_populates="source_rel")

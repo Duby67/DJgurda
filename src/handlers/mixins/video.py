@@ -1,3 +1,9 @@
+"""
+Миксин для обработки видео.
+
+Использует yt-dlp для загрузки видео с поддержкой миниатюр и метаданных.
+"""
+
 import yt_dlp
 import asyncio
 import logging
@@ -10,6 +16,10 @@ from .base import BaseMixin
 logger = logging.getLogger(__name__)
 
 class VideoMixin(BaseMixin):
+    """
+    Миксин для загрузки и обработки видео через yt-dlp.
+    """
+    
     async def _download_video(
         self,
         url: str,
@@ -17,6 +27,18 @@ class VideoMixin(BaseMixin):
         video_id: str = None,
         size_limit: int = None
     ) -> Optional[Dict[str, Any]]:
+        """
+        Скачивает видео через yt-dlp.
+        
+        Args:
+            url: URL видео
+            ydl_opts: Опции для yt-dlp
+            video_id: Идентификатор видео (опционально)
+            size_limit: Лимит размера файла в байтах
+            
+        Returns:
+            Словарь с путями к файлу и миниатюре, либо None при ошибке
+        """
         if size_limit is None:
             size_limit = self.video_limit
 
@@ -45,12 +67,14 @@ class VideoMixin(BaseMixin):
                     logger.error("Не удалось получить информацию о видео")
                     return None
 
+                # Определяем путь к скачанному файлу
                 if 'requested_downloads' in info:
                     downloaded_file = info['requested_downloads'][0]['filepath']
                 else:
                     downloaded_file = ydl.prepare_filename(info)
                 file_path = Path(downloaded_file)
 
+                # Ищем файл если он был переименован
                 if not file_path.exists():
                     candidates = list(self.temp_dir.glob(f"{base_path.stem}*"))
                     if candidates:
@@ -59,12 +83,14 @@ class VideoMixin(BaseMixin):
                         logger.error(f"Файл не найден: {file_path}")
                         return None
 
+                # Проверяем размер файла
                 file_size = file_path.stat().st_size
                 if file_size > size_limit:
                     logger.warning(f"Видео слишком большое ({file_size} байт). Удаляем.")
                     file_path.unlink(missing_ok=True)
                     return None
 
+                # Ищем миниатюру
                 for ext in ['.jpg', '.webp', '.png']:
                     thumb_candidate = file_path.with_suffix(ext)
                     if thumb_candidate.exists():
@@ -79,6 +105,7 @@ class VideoMixin(BaseMixin):
 
         except Exception as e:
             logger.exception(f"Ошибка при скачивании видео: {e}")
+            # Очищаем временные файлы при ошибке
             if file_path and file_path.exists():
                 file_path.unlink(missing_ok=True)
             if thumb_path and thumb_path.exists():

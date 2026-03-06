@@ -9,8 +9,8 @@ from aiogram.client.default import DefaultBotProperties
 from src.config import BOT_TOKEN
 from src.bot.commands import command_routers
 from src.bot.lifespan import on_startup, on_shutdown
-from src.bot.processing.media_router import router as media_router
-from src.middlewares.bot_enabled import BotEnabledMiddleware
+from src.bot.processing import media_router
+from src.middlewares import BotEnabledMiddleware
 from src.utils.logger import setup_logging 
 
 setup_logging()
@@ -25,10 +25,15 @@ async def main():
     
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
+    
+    # Регистрируем middleware для всех сообщений
     dp.message.middleware(BotEnabledMiddleware())
     
+    # Включаем роутеры команд
     for router in command_routers:
         dp.include_router(router)
+    
+    # Включаем медиа-роутер
     dp.include_router(media_router)
     
     await dp.start_polling(bot)

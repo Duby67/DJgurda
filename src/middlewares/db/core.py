@@ -1,38 +1,59 @@
-import logging
+"""
+Ядро модуля базы данных.
 
+Содержит настройки асинхронного соединения с БД и функции инициализации.
+"""
+
+import logging
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
 from src.config import DB_PATH
 from .models.base import Base
 from .migration import migrate
 
-from .models import sources, stats, bot_settings
-
 logger = logging.getLogger(__name__)
 
+# URL для подключения к SQLite с асинхронным драйвером
 SQLALCHEMY_DATABASE_URL = f"sqlite+aiosqlite:///{DB_PATH}"
 
+# Асинхронный движок базы данных
 engine = create_async_engine(
     SQLALCHEMY_DATABASE_URL,
-    echo=False,
-    future=True
+    echo=False,  # Включить для отладки SQL-запросов
+    future=True   # Использовать возможности SQLAlchemy 2.0
 )
 
+# Фабрика асинхронных сессий
 AsyncSessionLocal = async_sessionmaker(
     engine,
     class_=AsyncSession,
-    expire_on_commit=False
+    expire_on_commit=False  # Не истекать объектам после коммита
 )
 
 async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """
+    Инициализирует базу данных: создает таблицы и применяет миграции.
+    """
+    try:
+        # Создаем все таблицы на основе моделей
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Таблицы базы данных созданы")
 
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-            await migrate(session)
+        # Применяем миграции
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                await migrate(session)
 
-    logger.info("База данных инициализирована успешно")
+        logger.info("База данных инициализирована успешно")
+        
+    except Exception as e:
+        logger.error(f"Ошибка инициализации базы данных: {e}")
+        raise
 
 async def close_db():
+    """
+    Корректно закрывает соединения с базой данных.
+    """
     await engine.dispose()
+    logger.info("Соединения с базой данных закрыты")

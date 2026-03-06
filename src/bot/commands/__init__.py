@@ -1,3 +1,10 @@
+"""
+Обработчики команд бота.
+
+Каждый модуль содержит роутер с обработчиками конкретных команд.
+Все роутеры собираются в command_routers для включения в диспетчер.
+"""
+
 from .help import router as help_router
 from .info import router as info_router
 from .statistics import router as statistics_router

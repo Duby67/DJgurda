@@ -10,6 +10,7 @@ from src.middlewares.db import get_errors_enabled, update_stats
 
 logger = logging.getLogger(__name__)
 
+# Ограничение параллельных загрузок
 DOWNLOAD_SEMAPHORE = asyncio.Semaphore(3)
 
 async def process_block(
@@ -21,25 +22,54 @@ async def process_block(
     user_link: str,
     message: Message
 ) -> bool:
+    """
+    Обрабатывает один блок (ссылка + контекст).
+    
+    Args:
+        idx: Порядковый номер блока
+        raw_url: Исходный URL
+        resolved_url: Разрешенный URL
+        user_context: Контекст пользователя
+        handler: Обработчик для данного типа контента
+        user_link: HTML-ссылка на пользователя
+        message: Исходное сообщение
+        
+    Returns:
+        True если обработка успешна, иначе False
+    """
     file_info = None
     chat_id = message.chat.id
+    
     try:
+        # Ограничиваем параллельные загрузки
         async with DOWNLOAD_SEMAPHORE:
             file_info = await handler.process(raw_url, user_context, resolved_url=resolved_url)
 
         if not file_info:
             if await get_errors_enabled(chat_id):
                 error_text = build_error("Не удалось загрузить контент", raw_url, handler)
-                await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id, quote=raw_url))
+                await message.answer(
+                    text=error_text, 
+                    reply_parameters=ReplyParameters(
+                        message_id=message.message_id, 
+                        quote=raw_url
+                    )
+                )
             logger.info(f"Блок {idx}: ошибка загрузки file_info")
             return False
         
+        # Строим подпись для медиа
         caption = build_caption(user_context, file_info, user_link, raw_url, handler)
 
         try:
+            # Обрабатываем разные типы медиа
             if file_info['type'] == 'video':
                 video = FSInputFile(file_info['file_path'])
-                thumb = FSInputFile(file_info['thumbnail_path']) if file_info.get('thumbnail_path') and file_info['thumbnail_path'].exists() else None
+                thumb = (
+                    FSInputFile(file_info['thumbnail_path']) 
+                    if file_info.get('thumbnail_path') and file_info['thumbnail_path'].exists() 
+                    else None
+                )
                 await message.answer_video(
                     video=video,
                     caption=caption,
@@ -48,7 +78,11 @@ async def process_block(
                 )                
             elif file_info['type'] == 'audio':
                 audio = FSInputFile(file_info['file_path'])
-                thumb = FSInputFile(file_info['thumbnail_path']) if file_info.get('thumbnail_path') and file_info['thumbnail_path'].exists() else None
+                thumb = (
+                    FSInputFile(file_info['thumbnail_path']) 
+                    if file_info.get('thumbnail_path') and file_info['thumbnail_path'].exists() 
+                    else None
+                )
                 await message.answer_audio(
                     audio=audio,
                     title=file_info['title'],
@@ -61,24 +95,25 @@ async def process_block(
                 await message.answer_photo(photo=photo, caption=caption)
                 
             elif file_info['type'] == 'media_group':
-                # Отправляем группу фото
+                # Отправляем группу медиа
                 media = []
                 for f in file_info['files']:
                     if f['type'] == 'photo':
                         media.append(types.InputMediaPhoto(media=FSInputFile(f['file_path'])))
+                
                 if media:
-                    caption = build_caption(user_context, file_info, user_link, raw_url, handler)
+                    # Добавляем подпись к последнему медиа в группе
                     media[-1].caption = caption
                     await message.answer_media_group(media=media)
 
-                # Если есть аудио, отправляем отдельно
+                # Отдельно отправляем аудио, если есть
                 if 'audio' in file_info:
                     audio = FSInputFile(file_info['audio']['file_path'])
                     await message.answer_audio(
                         audio=audio,
                         title=file_info['audio']['title'],
                         performer=file_info['audio']['performer'],
-                        caption=None  # или можно добавить подпись, если нужно
+                        caption=None
                     )
                 
             elif file_info['type'] == 'profile':
@@ -95,17 +130,30 @@ async def process_block(
         except Exception as e:
             if await get_errors_enabled(chat_id):
                 error_text = build_error("Не удалось отправить контент", raw_url, handler)
-                await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id, quote=raw_url))
+                await message.answer(
+                    text=error_text, 
+                    reply_parameters=ReplyParameters(
+                        message_id=message.message_id, 
+                        quote=raw_url
+                    )
+                )
             logger.exception(f"Ошибка при отправке контента для {raw_url}")
             return False
         
         finally:
+            # Очищаем временные файлы
             if file_info:
                 handler.cleanup(file_info)
                 
     except Exception as e:
         if await get_errors_enabled(chat_id):
             error_text = build_error("Внутренняя ошибка при обработке ссылки", raw_url, handler)
-            await message.answer(text=error_text, reply_parameters=ReplyParameters(message_id=message.message_id, quote=raw_url))
+            await message.answer(
+                text=error_text, 
+                reply_parameters=ReplyParameters(
+                    message_id=message.message_id, 
+                    quote=raw_url
+                )
+            )
         logger.exception(f"Необработанная ошибка при обработке блока {idx}: {e}")
         return False

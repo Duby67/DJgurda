@@ -4,7 +4,6 @@ import asyncio
 from aiogram import Router, F
 from aiogram.types import Message, ReplyParameters
 
-
 from src.handlers.manager import ServiceManager
 from src.middlewares.db import get_errors_enabled
 from src.utils.url import resolve_url
