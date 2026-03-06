@@ -38,6 +38,13 @@ python -m pip install -r requirements.txt
 - `YANDEX_MUSIC_TOKEN`
 - `YOUTUBE_COOKIES_PATH`
 
+Шаблон:
+- `env.example` (скопируй в `.env` и подставь значения).
+
+Для Docker/deploy используются значения путей внутри контейнера:
+- `BOT_DB_PATH=/app/src/data/db/bot.db`
+- `YOUTUBE_COOKIES_PATH=/app/src/data/cookies/youtube_cookies.txt`
+
 4. Старт:
 ```bash
 python -m src.main

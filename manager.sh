@@ -20,13 +20,17 @@ LOG_FILE="/tmp/djgurda_deploy_${ENV}.log"
         CONTAINER_NAME="DJgurda-prod"
         IMAGE="ghcr.io/duby67/djgurda:latest"
         RESTART="always"
-        DB="$HOME/bot_prod/data"
+        DB_DIR="$HOME/bot_prod/data/db"
+        COOKIES_DIR="$HOME/bot_prod/data/cookies"
+        LOGS_DIR="$HOME/bot_prod/logs"
     elif [ "$ENV" == "dev" ]; then
         BOT_DIR="$HOME/bot_dev" 
         CONTAINER_NAME="DJgurda-dev"
         IMAGE="ghcr.io/duby67/djgurda:dev-latest"
         RESTART="unless-stopped"
-        DB="$HOME/bot_dev/data"
+        DB_DIR="$HOME/bot_dev/data/db"
+        COOKIES_DIR="$HOME/bot_dev/data/cookies"
+        LOGS_DIR="$HOME/bot_dev/logs"
     else
         echo "Invalid environment: $ENV"
         exit 1
@@ -48,16 +52,26 @@ LOG_FILE="/tmp/djgurda_deploy_${ENV}.log"
     rm -rf "$BOT_DIR"/.cache 2>/dev/null || true
     docker system prune -f 2>/dev/null || true
 
-    echo "Creating data directory..."
-    mkdir -p "$DB"
+    echo "Creating runtime directories..."
+    mkdir -p "$DB_DIR" "$COOKIES_DIR" "$LOGS_DIR"
+
+    if [ ! -f "$COOKIES_DIR/youtube_cookies.txt" ]; then
+        touch "$COOKIES_DIR/youtube_cookies.txt"
+        echo "Created empty cookies file: $COOKIES_DIR/youtube_cookies.txt"
+    fi
+
+    if [ ! -s "$COOKIES_DIR/youtube_cookies.txt" ]; then
+        echo "WARNING: youtube_cookies.txt is empty. YouTube extraction may fail."
+    fi
 
     echo "Starting new container..."
     docker run -d \
         --name "$CONTAINER_NAME" \
         --restart "$RESTART" \
         --env-file "$ENV_FILE" \
-        -v "$DB":/app/src/data/db \
-        -v "$BOT_DIR/logs":/app/logs \
+        -v "$DB_DIR":/app/src/data/db \
+        -v "$COOKIES_DIR":/app/src/data/cookies:ro \
+        -v "$LOGS_DIR":/app/logs \
         "$IMAGE"
 
     echo "=== Deploy Completed: $(date) ==="
