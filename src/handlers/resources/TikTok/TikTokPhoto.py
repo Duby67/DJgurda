@@ -24,12 +24,12 @@ class TikTokPhoto(PhotoMixin, MediaGroupMixin):
         """
         Обрабатывает фото и слайдшоу с TikTok.
         
-        Args:
+        Аргументы:
             url: URL контента
             context: Контекст сообщения
             resolved_url: Разрешенный URL
             
-        Returns:
+        Возвращает:
             Словарь с информацией о медиа или None при ошибке
         """
         target_url = resolved_url or url

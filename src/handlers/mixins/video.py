@@ -31,13 +31,13 @@ class VideoMixin(BaseMixin):
         """
         Скачивает видео через yt-dlp.
         
-        Args:
+        Аргументы:
             url: URL видео
             ydl_opts: Опции для yt-dlp
             video_id: Идентификатор видео (опционально)
             size_limit: Лимит размера файла в байтах
             
-        Returns:
+        Возвращает:
             Словарь с путями к файлу и миниатюре, либо None при ошибке
         """
         if size_limit is None:

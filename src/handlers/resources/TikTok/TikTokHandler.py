@@ -38,12 +38,12 @@ class TikTokHandler(BaseHandler, TikTokVideo, TikTokPhoto, TikTokProfile):
         """
         Обрабатывает URL TikTok и возвращает информацию о контенте.
         
-        Args:
+        Аргументы:
             url: Исходный URL
             context: Контекст сообщения
             resolved_url: Разрешенный URL (после редиректов)
             
-        Returns:
+        Возвращает:
             Словарь с информацией о контенте или None при ошибке
         """
         target_url = resolved_url or url

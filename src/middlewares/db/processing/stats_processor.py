@@ -24,7 +24,7 @@ async def update_stats(chat_id: int, user_id: int, source: str) -> None:
     
     Создает или увеличивает счетчик для конкретного источника.
     
-    Args:
+    Аргументы:
         chat_id: ID чата
         user_id: ID пользователя
         source: Название источника (платформы)
@@ -76,11 +76,11 @@ async def get_chat_stats(chat_id: int, limit: int = 10) -> List[Tuple[int, int, 
     """
     Получает статистику по чату.
     
-    Args:
+    Аргументы:
         chat_id: ID чата
         limit: Максимальное количество пользователей для возврата
         
-    Returns:
+    Возвращает:
         Список кортежей (user_id, total_count, {source: count})
     """
     try:

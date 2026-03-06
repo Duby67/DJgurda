@@ -25,7 +25,7 @@ class Stats(Base):
     source_rel = relationship("Source", back_populates="stats")
 
     __table_args__ = (
-        # Уникальный constraint для избежания дубликатов
+        # Уникальное ограничение для избежания дубликатов
         UniqueConstraint('chat_id', 'user_id', 'source_id', name='uq_stats_chat_user_source'),
         # Индекс для быстрого поиска по чату
         Index('ix_stats_chat_id', chat_id),

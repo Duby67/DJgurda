@@ -21,10 +21,10 @@ class TikTokProfile(PhotoMixin):
         """
         Извлекает информацию о профиле TikTok из HTML страницы.
         
-        Args:
+        Аргументы:
             url: URL профиля
             
-        Returns:
+        Возвращает:
             Словарь с информацией о профиле или None при ошибке
         """
         headers = {
@@ -93,12 +93,12 @@ class TikTokProfile(PhotoMixin):
         """
         Обрабатывает профиль TikTok.
         
-        Args:
+        Аргументы:
             url: URL профиля
             context: Контекст сообщения
             resolved_url: Разрешенный URL
             
-        Returns:
+        Возвращает:
             Словарь с информацией о профиле или None при ошибке
         """
         target_url = resolved_url or url

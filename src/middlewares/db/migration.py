@@ -18,7 +18,7 @@ async def migrate(session: AsyncSession) -> None:
     
     Обнаруживает старую схему и переносит данные в новую структуру.
     
-    Args:
+    Аргументы:
         session: Асинхронная сессия БД
         
     Raises:
@@ -95,7 +95,7 @@ async def _migrate_data(session: AsyncSession) -> None:
     """
     Переносит данные из старой схемы в новую.
     
-    Args:
+    Аргументы:
         session: Асинхронная сессия БД
     """
     # Получаем уникальные источники из старой таблицы

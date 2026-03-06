@@ -1,7 +1,7 @@
 """
 Процессор для работы с эмодзи.
 
-Генерирует HTML-разметку для кастомных Telegram эмодзи с fallback на стандартные.
+Генерирует HTML-разметку для кастомных Telegram-эмодзи с резервным вариантом на стандартные.
 """
 
 import logging
@@ -14,10 +14,10 @@ def _make_emoji_dict(emoji_list: list) -> Dict[str, Dict[str, Any]]:
     """
     Создает словарь эмодзи из списка данных.
     
-    Args:
+    Аргументы:
         emoji_list: Список кортежей с данными эмодзи
         
-    Returns:
+    Возвращает:
         Словарь вида {ключ: {"emoji": "символ", "custom_id": id}}
     """
     result = {}
@@ -37,10 +37,10 @@ def _get_emoji_data(key: str) -> Dict[str, Any]:
     """
     Получает данные эмодзи по ключу.
     
-    Args:
+    Аргументы:
         key: Ключ эмодзи
         
-    Returns:
+    Возвращает:
         Словарь с данными эмодзи или данные по умолчанию
     """
     return SOURCE_EMOJI.get(key, SOURCE_EMOJI[DEFAULT_KEY])
@@ -51,10 +51,10 @@ def emoji(key: str) -> str:
     
     Использует кастомный Telegram Emoji ID если доступен, иначе стандартный символ.
     
-    Args:
+    Аргументы:
         key: Ключ эмодзи из базы данных
         
-    Returns:
+    Возвращает:
         HTML-строка с разметкой эмодзи или обычный эмодзи-символ
     """
     data = _get_emoji_data(key)
@@ -65,6 +65,6 @@ def emoji(key: str) -> str:
         # Генерируем разметку для кастомного эмодзи
         return f'<tg-emoji emoji-id="{custom_id}">{fallback}</tg-emoji>'
     else:
-        # Логируем использование fallback
+        # Логируем использование резервного варианта
         logger.debug(f"Для ключа '{key}' используется стандартный эмодзи: {fallback}")
         return fallback

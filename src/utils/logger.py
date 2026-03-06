@@ -13,7 +13,7 @@ def setup_logging(level: int = logging.INFO, log_file: Optional[str] = None) -> 
     """
     Настраивает базовое логирование для бота.
     
-    Args:
+    Аргументы:
         level: Уровень логирования (по умолчанию INFO)
         log_file: Путь к файлу для записи логов (опционально)
     """

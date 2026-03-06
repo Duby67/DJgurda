@@ -24,12 +24,12 @@ class TikTokVideo(VideoMixin):
         """
         Обрабатывает видео с TikTok.
         
-        Args:
+        Аргументы:
             url: URL видео
             context: Контекст сообщения
             resolved_url: Разрешенный URL
             
-        Returns:
+        Возвращает:
             Словарь с информацией о видео или None при ошибке
         """
         target_url = resolved_url or url

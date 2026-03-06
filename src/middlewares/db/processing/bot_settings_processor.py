@@ -18,12 +18,12 @@ async def _get_setting(chat_id: int, column: str, default: bool) -> bool:
     """
     Получает значение настройки для чата.
     
-    Args:
+    Аргументы:
         chat_id: ID чата
         column: Название колонки (bot_enabled, errors_enabled, notifications_enabled)
         default: Значение по умолчанию если запись не найдена
         
-    Returns:
+    Возвращает:
         Значение настройки или значение по умолчанию
     """
     try:
@@ -42,7 +42,7 @@ async def _set_setting(chat_id: int, column: str, value: bool) -> None:
     """
     Устанавливает значение настройки для чата.
     
-    Args:
+    Аргументы:
         chat_id: ID чата
         column: Название колонки
         value: Новое значение
@@ -71,7 +71,7 @@ async def get_chats_with_notifications_enabled() -> list[int]:
     """
     Получает список чатов с включенными уведомлениями.
     
-    Returns:
+    Возвращает:
         Список ID чатов с уведомлениями
     """
     try:

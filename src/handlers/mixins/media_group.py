@@ -31,13 +31,13 @@ class MediaGroupMixin(BaseMixin):
         """
         Скачивает все доступные медиафайлы из URL (например, слайд-шоу TikTok).
         
-        Args:
+        Аргументы:
             url: URL медиа-группы
             ydl_opts: Опции для yt-dlp
             group_id: Идентификатор группы (опционально)
             size_limit: Лимит размера файла в байтах
             
-        Returns:
+        Возвращает:
             Список словарей с информацией о файлах или None при ошибке
         """
         if size_limit is None:

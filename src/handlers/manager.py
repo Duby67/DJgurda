@@ -28,10 +28,10 @@ class ServiceManager:
         """
         Находит обработчик, поддерживающий данный URL.
         
-        Args:
+        Аргументы:
             url: URL для обработки
             
-        Returns:
+        Возвращает:
             BaseHandler или None если подходящий обработчик не найден
         """
         for handler in self.handlers:

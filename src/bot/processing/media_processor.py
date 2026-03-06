@@ -27,7 +27,7 @@ async def process_block(
     """
     Обрабатывает один блок (ссылка + контекст).
     
-    Args:
+    Аргументы:
         idx: Порядковый номер блока
         raw_url: Исходный URL
         resolved_url: Разрешенный URL
@@ -36,7 +36,7 @@ async def process_block(
         user_link: HTML-ссылка на пользователя
         message: Исходное сообщение
         
-    Returns:
+    Возвращает:
         True если обработка успешна, иначе False
     """
     file_info = None

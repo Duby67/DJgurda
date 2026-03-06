@@ -10,10 +10,10 @@ def get_user_link(user: User) -> str:
     """
     Генерирует HTML-ссылку на пользователя.
     
-    Args:
+    Аргументы:
         user: Объект пользователя Telegram
         
-    Returns:
+    Возвращает:
         HTML-строка с ссылкой на пользователя
     """
     full_name = html.escape(user.full_name)
@@ -25,10 +25,10 @@ def split_into_blocks(text: str) -> List[Tuple[str, str]]:
     """
     Разбивает текст на блоки (URL + контекст).
     
-    Args:
+    Аргументы:
         text: Текст сообщения с URL
         
-    Returns:
+    Возвращает:
         Список кортежей (url, context)
     """
     urls = URL_PATTERN.findall(text)

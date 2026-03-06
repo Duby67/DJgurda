@@ -28,12 +28,12 @@ class PhotoMixin(BaseMixin):
         """
         Скачивает изображение по URL.
         
-        Args:
+        Аргументы:
             image_url: URL изображения
             dest_path: Путь для сохранения
             size_limit: Лимит размера файла в байтах
             
-        Returns:
+        Возвращает:
             bool: Успешно ли скачано изображение
         """
         if size_limit is None:

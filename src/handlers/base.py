@@ -24,7 +24,7 @@ class BaseHandler(ABC):
         pass
 
     def _collect_paths_for_cleanup(self, file_info: Dict[str, Any]) -> Iterable[Path]:
-        """Collect all temporary paths that may be present in handler output."""
+        """Собирает все временные пути, которые могут быть в результате обработчика."""
         for key in ("file_path", "thumbnail_path"):
             path = file_info.get(key)
             if isinstance(path, Path):

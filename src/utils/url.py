@@ -20,11 +20,11 @@ async def resolve_url(initial_url: str, timeout: int = 10) -> str:
     Сначала пытается использовать HEAD запрос (быстрее),
     если не получается - использует GET запрос.
     
-    Args:
+    Аргументы:
         initial_url: Исходная (возможно укороченная) ссылка
         timeout: Таймаут запроса в секундах
         
-    Returns:
+    Возвращает:
         Конечный URL после всех редиректов или исходный URL при ошибке
     """
     try:
@@ -54,5 +54,5 @@ async def resolve_url(initial_url: str, timeout: int = 10) -> str:
                 
     except Exception as e:
         logger.warning(f"Ошибка получения полной ссылки {initial_url}: {e}")
-        # Возвращаем исходный URL как fallback
+        # Возвращаем исходный URL как резервный вариант
         return initial_url

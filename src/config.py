@@ -1,4 +1,4 @@
-"""Application configuration loaded from environment variables."""
+"""Конфигурация приложения, загружаемая из переменных окружения."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Telegram and media constraints.
+# Ограничения Telegram и медиа-контента.
 MAX_CAPTION = 1024
 MAX_AGE_SECONDS = 3600
 PHOTO_SIZE_LIMIT = 10 * 1024 * 1024
@@ -21,7 +21,7 @@ PROJECT_TEMP_DIR = PROJECT_ROOT / "src" / "data" / "temp_files"
 
 
 def _require_env(name: str) -> str:
-    """Return required env value or raise with a clear message."""
+    """Возвращает обязательное значение env или выбрасывает понятную ошибку."""
     value = os.getenv(name)
     if not value:
         raise ValueError(f"{name} не найден в .env!")
@@ -29,7 +29,7 @@ def _require_env(name: str) -> str:
 
 
 def _require_int_env(name: str) -> int:
-    """Return required integer env value or raise."""
+    """Возвращает обязательное целочисленное значение env или выбрасывает ошибку."""
     value = _require_env(name)
     try:
         return int(value)

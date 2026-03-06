@@ -27,7 +27,7 @@ async def main() -> None:
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
     
-    # Регистрируем middleware для всех сообщений
+    # Регистрируем промежуточный слой для всех сообщений
     dp.message.middleware(BotEnabledMiddleware())
     
     # Включаем роутеры команд

@@ -17,7 +17,7 @@ HASHTAG_PATTERN = re.compile(r'#\w+')
 
 
 class SourceHandler(Protocol):
-    """Protocol for handler objects used in message formatting."""
+    """Протокол для объектов-обработчиков, используемых при форматировании сообщений."""
 
     source_name: str
 
@@ -26,10 +26,10 @@ def _remove_hashtags(text: str) -> str:
     """
     Удаляет хэштеги из текста и нормализует пробелы.
     
-    Args:
+    Аргументы:
         text: Исходный текст с хэштегами
         
-    Returns:
+    Возвращает:
         Очищенный текст без хэштегов
     """
     cleaned = HASHTAG_PATTERN.sub('', text)
@@ -46,14 +46,14 @@ def build_caption(
     """
     Строит подпись для медиа-контента.
     
-    Args:
+    Аргументы:
         user_context: Контекст сообщения пользователя
         file_info: Информация о файле от обработчика
         user_link: HTML-ссылка на пользователя
         url: Исходный URL
         handler: Обработчик контента
         
-    Returns:
+    Возвращает:
         HTML-подпись с ограничением длины
     """
     source = handler.source_name
@@ -95,12 +95,12 @@ def build_error(
     """
     Строит сообщение об ошибке.
     
-    Args:
+    Аргументы:
         error_message: Текст ошибки
         url: Проблемный URL
         handler: Обработчик контента
         
-    Returns:
+    Возвращает:
         HTML-сообщение об ошибке
     """
     source = handler.source_name

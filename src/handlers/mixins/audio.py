@@ -23,11 +23,11 @@ class AudioMixin(BaseMixin):
         """
         Базовый метод для загрузки файла по URL.
         
-        Args:
+        Аргументы:
             url: URL файла
             dest_path: Путь для сохранения
             
-        Returns:
+        Возвращает:
             bool: Успешно ли скачан файл
         """
         try:
@@ -53,12 +53,12 @@ class AudioMixin(BaseMixin):
         """
         Скачивает аудио файл по URL.
         
-        Args:
+        Аргументы:
             url: URL аудио файла
             dest_path: Путь для сохранения
             size_limit: Лимит размера файла в байтах
             
-        Returns:
+        Возвращает:
             bool: Успешно ли скачан аудио файл
         """
         if size_limit is None:
@@ -88,12 +88,12 @@ class AudioMixin(BaseMixin):
         """
         Скачивает миниатюру/обложку по URL.
         
-        Args:
+        Аргументы:
             url: URL миниатюры
             dest_path: Путь для сохранения
             size_limit: Лимит размера файла в байтах
             
-        Returns:
+        Возвращает:
             bool: Успешно ли скачана миниатюра
         """
         if size_limit is None:
