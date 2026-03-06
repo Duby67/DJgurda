@@ -35,7 +35,7 @@ class TikTokProfile(PhotoMixin):
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=headers, timeout=15) as resp:
                     if resp.status != 200:
-                        logger.error(f"HTTP {resp.status} при загрузке профиля TikTok")
+                        logger.error(f"HTTP {resp.status} while loading TikTok profile")
                         return None
                     html = await resp.text()
 
@@ -43,7 +43,7 @@ class TikTokProfile(PhotoMixin):
             pattern = r'<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">(.*?)</script>'
             match = re.search(pattern, html, re.DOTALL)
             if not match:
-                logger.error("Не найден JSON с данными профиля TikTok")
+                logger.error("TikTok profile JSON not found")
                 return None
 
             data = json.loads(match.group(1))
@@ -57,11 +57,11 @@ class TikTokProfile(PhotoMixin):
                 if user_info and isinstance(user_info, dict):
                     usernames = list(user_info.keys())
                     if not usernames:
-                        logger.error("Пустой блок users в UserModule")
+                        logger.error("Empty users block in UserModule")
                         return None
                     user_info = user_info[usernames[0]]
                 else:
-                    logger.error("Не удалось извлечь userInfo из JSON")
+                    logger.error("Failed to extract userInfo from JSON")
                     return None
 
             stats = user_info.get("stats", {})
@@ -81,7 +81,7 @@ class TikTokProfile(PhotoMixin):
             return profile_info
 
         except Exception as exc:
-            logger.exception("Ошибка парсинга профиля TikTok: %s", exc)
+            logger.exception("Failed to parse TikTok profile: %s", exc)
             return None
 
     async def _process_tiktok_profile(

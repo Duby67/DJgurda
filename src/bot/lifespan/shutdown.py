@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 async def on_shutdown(bot: Bot, dispatcher: Dispatcher) -> None:
     """Обработчик остановки бота."""
-    logger.info("Бот останавливается...")
+    logger.info("Bot is shutting down...")
     message_text = f"{EMOJI_WARNING} Бот выключается..."
     
     try:
@@ -25,7 +25,7 @@ async def on_shutdown(bot: Bot, dispatcher: Dispatcher) -> None:
         try:
             await bot.send_message(chat_id=ADMIN_ID, text=message_text)
         except Exception as exc:
-            logger.error("Не удалось отправить уведомление о выключении админу: %s", exc)
+            logger.error("Failed to send shutdown notification to admin: %s", exc)
         
         # Рассылка уведомлений о выключении
         for chat_id in chats:
@@ -34,8 +34,8 @@ async def on_shutdown(bot: Bot, dispatcher: Dispatcher) -> None:
             try:
                 await bot.send_message(chat_id=chat_id, text=message_text)
             except Exception as exc:
-                logger.error("Не удалось отправить уведомление о выключении в чат %s: %s", chat_id, exc)
+                logger.error("Failed to send shutdown notification to chat %s: %s", chat_id, exc)
             
     except Exception:
-        logger.exception("Ошибка при остановке бота")
+        logger.exception("Error during bot shutdown")
         raise

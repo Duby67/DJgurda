@@ -65,7 +65,7 @@ class VideoMixin(BaseMixin):
             with yt_dlp.YoutubeDL(merged_opts) as ydl:
                 info = await asyncio.to_thread(ydl.extract_info, url, download=True)
                 if not info:
-                    logger.error("Не удалось получить информацию о видео")
+                    logger.error("Failed to get video information")
                     return None
 
                 # Определяем путь к скачанному файлу
@@ -81,13 +81,13 @@ class VideoMixin(BaseMixin):
                     if candidates:
                         file_path = candidates[0]
                     else:
-                        logger.error(f"Файл не найден: {file_path}")
+                        logger.error(f"File not found: {file_path}")
                         return None
 
                 # Проверяем размер файла
                 file_size = file_path.stat().st_size
                 if file_size > size_limit:
-                    logger.warning(f"Видео слишком большое ({file_size} байт). Удаляем.")
+                    logger.warning(f"Video is too large ({file_size} bytes). Removing.")
                     file_path.unlink(missing_ok=True)
                     return None
 
@@ -105,7 +105,7 @@ class VideoMixin(BaseMixin):
                 }
 
         except Exception as exc:
-            logger.exception("Ошибка при скачивании видео: %s", exc)
+            logger.exception("Failed to download video: %s", exc)
             # Очищаем временные файлы при ошибке
             if file_path and file_path.exists():
                 file_path.unlink(missing_ok=True)

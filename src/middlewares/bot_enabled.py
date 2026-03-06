@@ -49,7 +49,7 @@ class BotEnabledMiddleware(BaseMiddleware):
                 if enabled:
                     return await handler(event, data)
                 else:
-                    logger.debug(f"Бот отключен в чате {event.chat.id}, медиа-сообщение пропущено")
+                    logger.debug(f"Bot is disabled in chat {event.chat.id}, media message skipped")
                     return
             
             # Команды управления всегда пропускаются
@@ -58,7 +58,7 @@ class BotEnabledMiddleware(BaseMiddleware):
             is_toggle_command = event.text.startswith("/toggle_bot")
             
             if is_start_command or is_stop_command or is_toggle_command:
-                logger.debug(f"Команда управления пропущена: {event.text}")
+                logger.debug(f"Management command allowed: {event.text}")
                 return await handler(event, data)
             
             # Для остальных сообщений проверяем состояние бота
@@ -66,10 +66,10 @@ class BotEnabledMiddleware(BaseMiddleware):
             if enabled:
                 return await handler(event, data)
             else:
-                logger.debug(f"Бот отключен в чате {event.chat.id}, сообщение пропущено: {event.text}")
+                logger.debug(f"Bot is disabled in chat {event.chat.id}, message skipped: {event.text}")
                 return
                 
         except Exception:
-            logger.exception(f"Ошибка в BotEnabledMiddleware для чата {event.chat.id}")
+            logger.exception(f"BotEnabledMiddleware error for chat {event.chat.id}")
             # При ошибке пропускаем сообщение для сохранения функциональности
             return await handler(event, data)

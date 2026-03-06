@@ -63,13 +63,13 @@ async def update_stats(chat_id: int, user_id: int, source: str) -> None:
                         count=1
                     )
                     session.add(stats)
-                    logger.debug(f"Создана запись статистики: chat {chat_id}, user {user_id}, source {source}")
+                    logger.debug(f"Created stats record: chat {chat_id}, user {user_id}, source {source}")
                 else:
                     stats.count += 1
-                    logger.debug(f"Обновлена статистика: chat {chat_id}, user {user_id}, source {source}")
+                    logger.debug(f"Updated stats: chat {chat_id}, user {user_id}, source {source}")
                     
     except Exception:
-        logger.exception(f"Ошибка обновления статистики для chat {chat_id}, user {user_id}, source {source}")
+        logger.exception(f"Failed to update stats for chat {chat_id}, user {user_id}, source {source}")
 
 
 async def get_chat_stats(chat_id: int, limit: int = 10) -> List[Tuple[int, int, Dict[str, int]]]:
@@ -92,7 +92,7 @@ async def get_chat_stats(chat_id: int, limit: int = 10) -> List[Tuple[int, int, 
             )
             rows = result.unique().scalars().all()
     except Exception:
-        logger.exception(f"Ошибка получения статистики для чата {chat_id}")
+        logger.exception(f"Failed to get stats for chat {chat_id}")
         return []
 
     # Агрегируем статистику по пользователям

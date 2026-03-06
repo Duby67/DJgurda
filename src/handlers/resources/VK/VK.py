@@ -63,7 +63,7 @@ class VKHandler(BaseHandler, VideoMixin):
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = await asyncio.to_thread(ydl.extract_info, url, download=True)
                 if not info:
-                    logger.error("Не удалось получить информацию об аудио")
+                    logger.error("Failed to get audio information")
                     return None
 
                 # Определяем путь к скачанному файлу
@@ -80,12 +80,12 @@ class VKHandler(BaseHandler, VideoMixin):
                     if possible:
                         file_path = possible[0]
                     else:
-                        logger.error(f"Файл не найден: {file_path}")
+                        logger.error(f"File not found: {file_path}")
                         return None
 
                 file_size = file_path.stat().st_size
                 if file_size > size_limit:
-                    logger.warning(f"Аудио слишком большое ({file_size} байт). Удаляем.")
+                    logger.warning(f"Audio file is too large ({file_size} bytes). Removing.")
                     file_path.unlink(missing_ok=True)
                     return None
 
@@ -103,7 +103,7 @@ class VKHandler(BaseHandler, VideoMixin):
                 }
 
         except Exception as exc:
-            logger.exception("Ошибка при скачивании аудио ВК: %s", exc)
+            logger.exception("Failed to download VK audio: %s", exc)
             if file_path and file_path.exists():
                 file_path.unlink(missing_ok=True)
             if thumb_path and thumb_path.exists():

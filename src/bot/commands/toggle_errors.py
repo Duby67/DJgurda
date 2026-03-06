@@ -37,5 +37,5 @@ async def _change_errors_enabled(message: Message, command: str, new_state: bool
         status = f"{EMOJI_SUCCESS} включена" if new_state else f"{EMOJI_ERROR} отключена"
         await message.reply(f"Отправка сообщений об ошибках в этом чате {status}.")
     except Exception:
-        logger.exception(f"Ошибка при выполнении /{command} в чате {chat_id} от пользователя {user_id}")
+        logger.exception(f"Error while executing /{command} in chat {chat_id} by user {user_id}")
         await message.reply(f"{EMOJI_ERROR} Произошла ошибка при переключении состояния бота.")

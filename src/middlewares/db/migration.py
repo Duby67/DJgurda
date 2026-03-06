@@ -31,7 +31,7 @@ async def migrate(session: AsyncSession) -> None:
         )
         
         if not result.first():
-            logger.info("Таблица 'stats' не найдена, миграция не требуется.")
+            logger.info("Table 'stats' not found, migration is not required.")
             return
 
         # Проверяем структуру таблицы stats
@@ -40,14 +40,14 @@ async def migrate(session: AsyncSession) -> None:
         
         # Если колонка 'source' присутствует - это старая схема
         if 'source' not in columns:
-            logger.info("Таблица 'stats' уже имеет новую схему или не требует миграции.")
+            logger.info("Table 'stats' already uses the new schema or does not require migration.")
             return
 
-        logger.info("Обнаружена старая схема. Запускаем миграцию...")
+        logger.info("Legacy schema detected. Starting migration...")
 
         # Переименовываем старую таблицу
         await session.execute(text("ALTER TABLE stats RENAME TO stats_old_temp"))
-        logger.debug("Старая таблица переименована в stats_old_temp")
+        logger.debug("Legacy table renamed to stats_old_temp")
 
         # Создаем новую таблицу sources
         await session.execute(text("""
@@ -74,19 +74,19 @@ async def migrate(session: AsyncSession) -> None:
         
         # Создаем индекс для оптимизации запросов
         await session.execute(text("CREATE INDEX IF NOT EXISTS ix_stats_chat_id ON stats(chat_id)"))
-        logger.debug("Новые таблицы созданы")
+        logger.debug("New tables created")
 
         # Переносим данные из старой схемы в новую
         await _migrate_data(session)
 
         # Удаляем временную таблицу
         await session.execute(text("DROP TABLE stats_old_temp"))
-        logger.info("Миграция успешно завершена, временная таблица удалена.")
+        logger.info("Migration completed successfully, temporary table removed.")
 
         await session.commit()
 
     except Exception:
-        logger.exception("Критическая ошибка при миграции")
+        logger.exception("Critical migration error")
         await session.rollback()
         raise
 
@@ -123,11 +123,11 @@ async def _migrate_data(session: AsyncSession) -> None:
             source_id = row[0] if row else None
             
             if source_id is None:
-                logger.error(f"Не удалось получить ID для нового источника {name}")
+                logger.error(f"Failed to get ID for new source {name}")
                 continue
                 
             source_map[name] = source_id
-            logger.debug(f"Добавлен новый источник: {name}")
+            logger.debug(f"New source added: {name}")
 
     # Переносим данные статистики
     rows = await session.execute(
@@ -140,7 +140,7 @@ async def _migrate_data(session: AsyncSession) -> None:
     for chat_id, user_id, source, count in rows:
         source_id = source_map.get(source)
         if not source_id:
-            logger.error(f"Не найден source_id для {source}, пропускаем запись")
+            logger.error(f"source_id not found for {source}, skipping record")
             continue
 
         # Проверяем дубликаты
@@ -153,7 +153,7 @@ async def _migrate_data(session: AsyncSession) -> None:
         )
         
         if existing.first():
-            logger.debug(f"Запись уже существует: chat {chat_id}, user {user_id}, source {source}")
+            logger.debug(f"Record already exists: chat {chat_id}, user {user_id}, source {source}")
             continue
 
         # Вставляем новую запись
@@ -173,4 +173,4 @@ async def _migrate_data(session: AsyncSession) -> None:
         )
         migrated_count += 1
 
-    logger.info(f"Перенесено {migrated_count} записей статистики")
+    logger.info(f"Migrated {migrated_count} statistics records")

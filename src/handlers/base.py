@@ -46,4 +46,4 @@ class BaseHandler(ABC):
             try:
                 path.unlink(missing_ok=True)
             except Exception as exc:
-                logger.error("Ошибка удаления %s: %s", path, exc)
+                logger.error("Failed to delete %s: %s", path, exc)

@@ -17,7 +17,7 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 if not shutil.which("ffmpeg"):
-    logger.warning("FFmpeg не найден. Некоторые функции могут не работать.")
+    logger.warning("FFmpeg not found. Some features may not work.")
 
 
 async def main() -> None:

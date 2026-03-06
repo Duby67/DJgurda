@@ -49,7 +49,7 @@ class PhotoMixin(BaseMixin):
             async with aiohttp.ClientSession() as session:
                 async with session.get(image_url, headers=headers, timeout=10) as response:
                     if response.status != 200:
-                        logger.error(f"Ошибка скачивания {image_url}: HTTP {response.status}")
+                        logger.error(f"Failed to download {image_url}: HTTP {response.status}")
                         return False
                     
                     # Сохраняем изображение
@@ -57,13 +57,13 @@ class PhotoMixin(BaseMixin):
                         await f.write(await response.read())
                         
         except Exception as exc:
-            logger.exception("Ошибка при скачивании изображения: %s", exc)
+            logger.exception("Failed to download image: %s", exc)
             return False
 
         # Проверяем размер файла
         file_size = dest_path.stat().st_size
         if file_size > size_limit:
-            logger.warning(f"Фото слишком большое ({file_size} байт). Удаляем.")
+            logger.warning(f"Photo is too large ({file_size} bytes). Removing.")
             dest_path.unlink(missing_ok=True)
             return False
             

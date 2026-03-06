@@ -66,5 +66,5 @@ def emoji(key: str) -> str:
         return f'<tg-emoji emoji-id="{custom_id}">{fallback}</tg-emoji>'
     else:
         # Логируем использование резервного варианта
-        logger.debug(f"Для ключа '{key}' используется стандартный эмодзи: {fallback}")
+        logger.debug(f"Fallback emoji is used for key '{key}': {fallback}")
         return fallback

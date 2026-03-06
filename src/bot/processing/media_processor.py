@@ -57,7 +57,7 @@ async def process_block(
                         quote=raw_url
                     )
                 )
-            logger.info(f"Блок {idx}: ошибка загрузки file_info")
+            logger.info(f"Block {idx}: failed to load file_info")
             return False
         
         # Строим подпись для медиа
@@ -125,7 +125,7 @@ async def process_block(
                 else:
                     await message.answer(file_info['caption_text'])
 
-            logger.info(f"Блок {idx} успешно отправлен")
+            logger.info(f"Block {idx} sent successfully")
             if message.from_user:
                 await update_stats(message.chat.id, message.from_user.id, handler.source_name)
             return True
@@ -140,7 +140,7 @@ async def process_block(
                         quote=raw_url
                     )
                 )
-            logger.exception(f"Ошибка при отправке контента для {raw_url}")
+            logger.exception(f"Failed to send content for {raw_url}")
             return False
         
         finally:
@@ -158,5 +158,5 @@ async def process_block(
                     quote=raw_url
                 )
             )
-        logger.exception("Необработанная ошибка при обработке блока %s: %s", idx, exc)
+        logger.exception("Unhandled error while processing block %s: %s", idx, exc)
         return False

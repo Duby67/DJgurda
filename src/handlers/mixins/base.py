@@ -40,7 +40,7 @@ class BaseMixin:
         super().__init__(*args, **kwargs)
         self.temp_dir = PROJECT_TEMP_DIR / self.__class__.__name__
         self.temp_dir.mkdir(parents=True, exist_ok=True)
-        logger.debug(f"Временная директория для {self.__class__.__name__}: {self.temp_dir}")
+        logger.debug(f"Temporary directory for {self.__class__.__name__}: {self.temp_dir}")
 
     def _generate_unique_path(self, identifier: str, suffix: str = "") -> Path:
         """
@@ -78,5 +78,5 @@ class BaseMixin:
             max_sec: Максимальная задержка в секундах
         """
         delay = random.uniform(min_sec, max_sec)
-        logger.debug(f"Ожидание {delay:.2f} секунд")
+        logger.debug(f"Waiting {delay:.2f} seconds")
         await asyncio.sleep(delay)

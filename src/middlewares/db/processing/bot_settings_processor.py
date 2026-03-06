@@ -30,11 +30,11 @@ async def _get_setting(chat_id: int, column: str, default: bool) -> bool:
         async with AsyncSessionLocal() as session:
             settings = await session.get(BotSettings, chat_id)
             if settings is None:
-                logger.debug(f"{column} для chat {chat_id}: запись не найдена")
+                logger.debug(f"{column} for chat {chat_id}: record not found")
                 return default
             return getattr(settings, column)
     except Exception:
-        logger.exception(f"Ошибка в _get_setting({column}) для chat {chat_id}")
+        logger.exception(f"Error in _get_setting({column}) for chat {chat_id}")
         return default
 
 
@@ -58,12 +58,12 @@ async def _set_setting(chat_id: int, column: str, value: bool) -> None:
                     settings = BotSettings(chat_id=chat_id)
                     setattr(settings, column, value)
                     session.add(settings)
-                    logger.info(f"Создана запись для chat {chat_id} с {column}={value}")
+                    logger.info(f"Created record for chat {chat_id} with {column}={value}")
                 else:
                     setattr(settings, column, value)
-                    logger.info(f"Обновлена {column} для chat {chat_id}: {value}")
+                    logger.info(f"Updated {column} for chat {chat_id}: {value}")
     except Exception:
-        logger.exception(f"Ошибка в _set_setting({column}) для chat {chat_id}")
+        logger.exception(f"Error in _set_setting({column}) for chat {chat_id}")
         raise
 
 
@@ -81,7 +81,7 @@ async def get_chats_with_notifications_enabled() -> list[int]:
             )
             return [row[0] for row in result.all()]
     except Exception:
-        logger.exception("Ошибка получения списка чатов с уведомлениями")
+        logger.exception("Failed to get list of chats with notifications")
         return []
 
 

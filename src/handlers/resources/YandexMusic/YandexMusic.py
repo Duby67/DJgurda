@@ -21,7 +21,7 @@ class YandexMusicHandler(BaseHandler, AudioMixin):
     def __init__(self) -> None:
         super().__init__()
         if not YANDEX_MUSIC_TOKEN:
-            logger.error("YANDEX_MUSIC_TOKEN не задан. Обработчик Яндекс.Музыки не будет работать.")
+            logger.error("YANDEX_MUSIC_TOKEN is not set. Yandex Music handler will not work.")
         self.token = YANDEX_MUSIC_TOKEN
         self._client = None
         self._lock = asyncio.Lock()
@@ -54,7 +54,7 @@ class YandexMusicHandler(BaseHandler, AudioMixin):
     async def process(self, url: str, context: str, resolved_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
         target_url = resolved_url or url
         if not self.token:
-            logger.error("Пропуск обработки: токен Яндекс.Музыки отсутствует")
+            logger.error("Skipping processing: Yandex Music token is missing")
             return None
 
         file_path = None
@@ -62,7 +62,7 @@ class YandexMusicHandler(BaseHandler, AudioMixin):
         try:
             track_match = re.search(r'/track/(\d+)', target_url)
             if not track_match:
-                logger.error("Не удалось извлечь ID трека")
+                logger.error("Failed to extract track ID")
                 return None
             track_id = track_match.group(1)
 
@@ -70,13 +70,13 @@ class YandexMusicHandler(BaseHandler, AudioMixin):
                 client = await self._get_client()
                 tracks = await asyncio.to_thread(client.tracks, [track_id])
                 if not tracks:
-                    logger.error(f"Трек {track_id} не найден")
+                    logger.error(f"Track {track_id} not found")
                     return None
                 track = tracks[0]
 
                 download_info = await asyncio.to_thread(track.get_download_info)
                 if not download_info:
-                    logger.error("Нет информации для скачивания")
+                    logger.error("No download information available")
                     return None
 
                 download_info.sort(key=lambda x: x.bitrate_in_kbps, reverse=True)
@@ -99,7 +99,7 @@ class YandexMusicHandler(BaseHandler, AudioMixin):
             if track.cover_uri:
                 cover_path = await self._get_cover_file(track.cover_uri)
 
-            logger.info(f"Файл сохранен: {file_path}")
+            logger.info(f"File saved: {file_path}")
             return {
                 'type': 'audio',
                 'source_name': self.source_name,
@@ -111,7 +111,7 @@ class YandexMusicHandler(BaseHandler, AudioMixin):
                 'context': context,
             }
         except Exception as exc:
-            logger.exception("Ошибка при скачивании трека: %s", exc)
+            logger.exception("Failed to download track: %s", exc)
             if file_path and file_path.exists():
                 file_path.unlink(missing_ok=True)
             if cover_path and cover_path.exists():

@@ -29,11 +29,11 @@ async def handle_media_message(message: Message) -> None:
     
     blocks = split_into_blocks(text)
     if not blocks:
-        logger.debug("Сообщение не содержит ссылок")
+        logger.debug("Message does not contain links")
         return
 
     if not message.from_user:
-        logger.debug("Сообщение без from_user пропущено")
+        logger.debug("Message without from_user skipped")
         return
 
     user_link = get_user_link(message.from_user)
@@ -43,7 +43,7 @@ async def handle_media_message(message: Message) -> None:
         resolved_url = await resolve_url(raw_url)
         handler = service_manager.get_handler(resolved_url)
         if not handler:
-            logger.warning(f"Не найден обработчик для разрешённого URL: {resolved_url}")
+            logger.warning(f"No handler found for resolved URL: {resolved_url}")
             if await get_errors_enabled(message.chat.id):
                 await message.answer(
                     f"{EMOJI_ERROR} Неподдерживаемый источник: {resolved_url}",
@@ -73,13 +73,13 @@ async def handle_media_message(message: Message) -> None:
         if res is True:
             success_count += 1
         elif isinstance(res, Exception):
-            logger.error(f"Необработанное исключение в задаче: {res}")
+            logger.error(f"Unhandled exception in task: {res}")
     
     if success_count == len(blocks):
         try:
             await message.delete()
-            logger.info("Исходное сообщение удалено")
+            logger.info("Original message deleted")
         except Exception as exc:
-            logger.warning("Не удалось удалить сообщение: %s", exc)
+            logger.warning("Failed to delete message: %s", exc)
     else:
-        logger.info("Не все блоки завершились успешно")
+        logger.info("Not all blocks completed successfully")

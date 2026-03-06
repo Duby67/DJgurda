@@ -22,7 +22,7 @@ class ServiceManager:
         """
         active_handler_classes = (TikTokHandler,)
         self.handlers: List[BaseHandler] = [handler_cls() for handler_cls in active_handler_classes]
-        logger.info(f"Зарегистрировано обработчиков: {len(self.handlers)}")
+        logger.info(f"Registered handlers: {len(self.handlers)}")
 
     def get_handler(self, url: str) -> Optional[BaseHandler]:
         """
@@ -36,7 +36,7 @@ class ServiceManager:
         """
         for handler in self.handlers:
             if handler.pattern.search(url):
-                logger.debug(f"Найден обработчик для {url}: {handler.source_name}")
+                logger.debug(f"Handler found for {url}: {handler.source_name}")
                 return handler
-        logger.debug(f"Не найден обработчик для URL: {url}")
+        logger.debug(f"No handler found for URL: {url}")
         return None

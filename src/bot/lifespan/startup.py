@@ -26,21 +26,21 @@ async def on_startup(bot: Bot) -> None:
             for file_path in temp_dir.glob("**/*"):
                 if file_path.is_file() and (now - file_path.stat().st_mtime) > MAX_AGE_SECONDS:
                     file_path.unlink()
-                    logger.debug(f"Удалён устаревший файл: {file_path}")
+                    logger.debug(f"Removed expired file: {file_path}")
 
         # Установка времени запуска
         utc_time = datetime.now(timezone.utc)
         moscow_tz = ZoneInfo("Europe/Moscow")
         bot.start_time = utc_time.astimezone(moscow_tz)
         
-        logger.info("Бот запущен")
+        logger.info("Bot started")
         message_text = f"{EMOJI_SUCCESS} Бот успешно запущен и готов к работе!"
 
         # Уведомление администратору
         try:
             await bot.send_message(chat_id=ADMIN_ID, text=message_text)
         except Exception as exc:
-            logger.error("Не удалось отправить уведомление о запуске админу: %s", exc)
+            logger.error("Failed to send startup notification to admin: %s", exc)
 
         # Рассылка уведомлений
         chats = await get_chats_with_notifications_enabled()
@@ -50,8 +50,8 @@ async def on_startup(bot: Bot) -> None:
             try:
                 await bot.send_message(chat_id=chat_id, text=message_text)
             except Exception as exc:
-                logger.error("Не удалось отправить уведомление о запуске в чат %s: %s", chat_id, exc)
+                logger.error("Failed to send startup notification to chat %s: %s", chat_id, exc)
 
     except Exception:
-        logger.exception("Ошибка при запуске бота")
+        logger.exception("Error during bot startup")
         raise

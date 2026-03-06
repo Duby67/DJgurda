@@ -37,7 +37,7 @@ async def resolve_url(initial_url: str, timeout: int = 10) -> str:
                     timeout=aiohttp.ClientTimeout(total=timeout)
                 ) as resp:
                     final_url = str(resp.url)
-                    logger.debug(f"URL разрешен через HEAD: {initial_url} -> {final_url}")
+                    logger.debug(f"URL resolved via HEAD: {initial_url} -> {final_url}")
                     return final_url
                 
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
@@ -49,10 +49,10 @@ async def resolve_url(initial_url: str, timeout: int = 10) -> str:
                     timeout=aiohttp.ClientTimeout(total=timeout)
                 ) as resp:
                     final_url = str(resp.url)
-                    logger.debug(f"URL разрешен через GET: {initial_url} -> {final_url}")
+                    logger.debug(f"URL resolved via GET: {initial_url} -> {final_url}")
                     return final_url
                 
     except Exception as e:
-        logger.warning(f"Ошибка получения полной ссылки {initial_url}: {e}")
+        logger.warning(f"Failed to resolve final URL {initial_url}: {e}")
         # Возвращаем исходный URL как резервный вариант
         return initial_url

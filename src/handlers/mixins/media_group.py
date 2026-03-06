@@ -66,7 +66,7 @@ class MediaGroupMixin(BaseMixin):
             with yt_dlp.YoutubeDL(merged_opts) as ydl:
                 info = await asyncio.to_thread(ydl.extract_info, url, download=True)
                 if not info:
-                    logger.error("Не удалось получить информацию о медиа-группе")
+                    logger.error("Failed to get media group information")
                     return None
 
                 # Обрабатываем несколько файлов (плейлист или мультиформат)
@@ -93,7 +93,7 @@ class MediaGroupMixin(BaseMixin):
                                     'info': entry
                                 })
                             else:
-                                logger.warning(f"Файл {file_path} превышает лимит ({file_size} > {size_limit}), удаляем")
+                                logger.warning(f"File {file_path} exceeds size limit ({file_size} > {size_limit}), removing")
                                 file_path.unlink(missing_ok=True)
                 else:
                     # Обрабатываем один файл
@@ -104,7 +104,7 @@ class MediaGroupMixin(BaseMixin):
                         if candidates:
                             file_path = candidates[0]
                         else:
-                            logger.error(f"Файл не найден: {file_path}")
+                            logger.error(f"File not found: {file_path}")
                             return None
 
                     file_paths_to_cleanup.append(file_path)
@@ -125,17 +125,17 @@ class MediaGroupMixin(BaseMixin):
                             'info': info
                         })
                     else:
-                        logger.warning(f"Файл {file_path} превышает лимит, удаляем")
+                        logger.warning(f"File {file_path} exceeds size limit, removing")
                         file_path.unlink(missing_ok=True)
 
                 if not downloaded_files:
-                    logger.error("Не удалось скачать ни одного файла")
+                    logger.error("Failed to download any files")
                     return None
 
                 return downloaded_files
 
         except Exception as exc:
-            logger.exception("Ошибка при скачивании медиа-группы: %s", exc)
+            logger.exception("Failed to download media group: %s", exc)
             # Очищаем временные файлы при ошибке
             for file_path in file_paths_to_cleanup:
                 if file_path.exists():

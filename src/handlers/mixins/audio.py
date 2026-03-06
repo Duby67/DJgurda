@@ -34,14 +34,14 @@ class AudioMixin(BaseMixin):
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as response:
                     if response.status != 200:
-                        logger.error(f"Ошибка скачивания {url}: HTTP {response.status}")
+                        logger.error(f"Failed to download {url}: HTTP {response.status}")
                         return False
                     
                     async with aiofiles.open(dest_path, 'wb') as f:
                         await f.write(await response.read())
             return True
         except Exception as exc:
-            logger.exception("Ошибка при скачивании %s: %s", url, exc)
+            logger.exception("Download error for %s: %s", url, exc)
             return False
 
     async def _download_audio(
@@ -73,7 +73,7 @@ class AudioMixin(BaseMixin):
         # Проверяем размер файла
         file_size = dest_path.stat().st_size
         if file_size > size_limit:
-            logger.warning(f"Аудио слишком большое ({file_size} байт). Удаляем.")
+            logger.warning(f"Audio file is too large ({file_size} bytes). Removing.")
             dest_path.unlink(missing_ok=True)
             return False
             
@@ -108,7 +108,7 @@ class AudioMixin(BaseMixin):
         # Проверяем размер файла
         file_size = dest_path.stat().st_size
         if file_size > size_limit:
-            logger.warning(f"Обложка слишком большая ({file_size} байт). Удаляем.")
+            logger.warning(f"Cover image is too large ({file_size} bytes). Removing.")
             dest_path.unlink(missing_ok=True)
             return False
             

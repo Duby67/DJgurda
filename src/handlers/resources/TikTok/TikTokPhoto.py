@@ -64,7 +64,7 @@ class TikTokPhoto(PhotoMixin, MediaGroupMixin):
         )
 
         if not media_list:
-            logger.error("Не удалось скачать медиа из поста TikTok")
+            logger.error("Failed to download media from TikTok post")
             return None
 
         # Разделяем на фото и аудио

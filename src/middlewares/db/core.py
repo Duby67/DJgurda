@@ -39,17 +39,17 @@ async def init_db() -> None:
         # Создаем все таблицы на основе моделей
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        logger.info("Таблицы базы данных созданы")
+        logger.info("Database tables created")
 
         # Применяем миграции
         async with AsyncSessionLocal() as session:
             async with session.begin():
                 await migrate(session)
 
-        logger.info("База данных инициализирована успешно")
+        logger.info("Database initialized successfully")
         
     except Exception:
-        logger.exception("Ошибка инициализации базы данных")
+        logger.exception("Database initialization error")
         raise
 
 async def close_db() -> None:
@@ -57,4 +57,4 @@ async def close_db() -> None:
     Корректно закрывает соединения с базой данных.
     """
     await engine.dispose()
-    logger.info("Соединения с базой данных закрыты")
+    logger.info("Database connections closed")
