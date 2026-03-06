@@ -1,3 +1,4 @@
+"""Модуль `main`."""
 import shutil
 import asyncio
 import logging
@@ -21,6 +22,7 @@ if not shutil.which("ffmpeg"):
 
 
 async def main() -> None:
+    """Функция `main`."""
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     

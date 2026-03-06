@@ -1,3 +1,4 @@
+"""Модуль `startup`."""
 import time
 import logging
 

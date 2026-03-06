@@ -1,3 +1,4 @@
+"""Модуль `link_extractor`."""
 import re
 import html
 

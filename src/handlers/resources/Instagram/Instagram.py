@@ -1,3 +1,4 @@
+"""Модуль `Instagram`."""
 import re
 
 from typing import Optional, Dict, Any
@@ -6,19 +7,23 @@ from src.handlers.base import BaseHandler
 from src.handlers.mixins import VideoMixin
 
 class InstagramHandler(BaseHandler, VideoMixin):
+    """Класс `InstagramHandler`."""
     PATTERN = re.compile(
     r'https?://(?:www\.|m\.)?instagram\.com/(?:p|reel|tv)/[\w-]+/?'
     )
 
     @property
     def pattern(self) -> re.Pattern:
+        """Функция `pattern`."""
         return self.PATTERN
 
     @property
     def source_name(self) -> str:
+        """Функция `source_name`."""
         return "Instagram"
 
     async def process(self, url: str, context: str, resolved_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Функция `process`."""
         target_url = resolved_url or url
         shortcode_match = re.search(r'/(reel|p|tv)/([a-zA-Z0-9_-]+)', target_url)
         video_id = shortcode_match.group(2) if shortcode_match else self._extract_video_id(target_url)

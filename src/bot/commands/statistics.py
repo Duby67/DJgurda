@@ -1,3 +1,4 @@
+"""Модуль `statistics`."""
 import logging
 
 from aiogram import Router
@@ -15,6 +16,7 @@ MEDALS = [EMOJI_FIRSTPLACE, EMOJI_SECONDPLACE, EMOJI_THIRDPLACE]
 
 @router.message(Command("statistics"))
 async def status_command(message: Message) -> None:
+    """Функция `status_command`."""
     user = message.from_user
     user_id = user.id if user else 0
     username = user.username if user and user.username else "unknown"

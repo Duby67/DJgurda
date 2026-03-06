@@ -1,3 +1,4 @@
+"""Модуль `media_processor`."""
 import logging
 import asyncio
 

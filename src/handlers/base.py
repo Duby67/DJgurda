@@ -1,3 +1,4 @@
+"""Модуль `base`."""
 import re
 import logging
 
@@ -9,18 +10,22 @@ logger = logging.getLogger(__name__)
 
 
 class BaseHandler(ABC):
+    """Класс `BaseHandler`."""
     @property
     @abstractmethod
     def pattern(self) -> re.Pattern:
+        """Функция `pattern`."""
         pass
 
     @property
     @abstractmethod
     def source_name(self) -> str:
+        """Функция `source_name`."""
         pass
 
     @abstractmethod
     async def process(self, url: str, context: str, resolved_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Функция `process`."""
         pass
 
     def _collect_paths_for_cleanup(self, file_info: Dict[str, Any]) -> Iterable[Path]:
@@ -42,6 +47,7 @@ class BaseHandler(ABC):
                 yield audio_path
 
     def cleanup(self, file_info: Dict[str, Any]) -> None:
+        """Функция `cleanup`."""
         for path in set(self._collect_paths_for_cleanup(file_info)):
             try:
                 path.unlink(missing_ok=True)

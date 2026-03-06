@@ -1,3 +1,4 @@
+"""Модуль `media_router`."""
 import logging
 import asyncio
 
@@ -20,6 +21,7 @@ service_manager = ServiceManager()
 
 @router.message(F.text | F.caption)
 async def handle_media_message(message: Message) -> None:
+    """Функция `handle_media_message`."""
     text = message.text or message.caption
     if not text:
         return

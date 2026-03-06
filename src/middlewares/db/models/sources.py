@@ -10,6 +10,7 @@ from sqlalchemy.orm import relationship
 from .base import Base
 
 class Source(Base):
+    """Класс `Source`."""
     __tablename__ = 'sources'
 
     id = Column(Integer, primary_key=True)

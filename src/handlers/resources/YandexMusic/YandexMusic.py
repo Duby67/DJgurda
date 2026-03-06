@@ -1,3 +1,4 @@
+"""Модуль `YandexMusic`."""
 import re
 import uuid
 import logging
@@ -14,11 +15,13 @@ from src.handlers.mixins import AudioMixin
 logger = logging.getLogger(__name__)
 
 class YandexMusicHandler(BaseHandler, AudioMixin):
+    """Класс `YandexMusicHandler`."""
     PATTERN = re.compile(
     r'https?://(?:music\.yandex\.(?:ru|by|kz|ua)/|yandex\.ru/music/)\S+'
     )
 
     def __init__(self) -> None:
+        """Функция `__init__`."""
         super().__init__()
         if not YANDEX_MUSIC_TOKEN:
             logger.error("YANDEX_MUSIC_TOKEN is not set. Yandex Music handler will not work.")
@@ -27,21 +30,26 @@ class YandexMusicHandler(BaseHandler, AudioMixin):
         self._lock = asyncio.Lock()
 
     async def _get_client(self) -> Client:
+        """Функция `_get_client`."""
         if self._client is None:
             def init_client():
+                """Функция `init_client`."""
                 return Client(self.token).init()
             self._client = await asyncio.to_thread(init_client)
         return self._client
 
     @property
     def pattern(self) -> re.Pattern:
+        """Функция `pattern`."""
         return self.PATTERN
 
     @property
     def source_name(self) -> str:
+        """Функция `source_name`."""
         return "Yandex.Music"
 
     async def _get_cover_file(self, cover_uri: str) -> Optional[Path]:
+        """Функция `_get_cover_file`."""
         if not cover_uri:
             return None
         cover_url = f"https://{cover_uri.replace('%%', '400x400')}"
@@ -52,6 +60,7 @@ class YandexMusicHandler(BaseHandler, AudioMixin):
         return None
 
     async def process(self, url: str, context: str, resolved_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Функция `process`."""
         target_url = resolved_url or url
         if not self.token:
             logger.error("Skipping processing: Yandex Music token is missing")

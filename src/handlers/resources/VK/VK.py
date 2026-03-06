@@ -1,3 +1,4 @@
+"""Модуль `VK`."""
 import re
 import yt_dlp
 import logging
@@ -12,16 +13,19 @@ from src.handlers.mixins import VideoMixin
 logger = logging.getLogger(__name__)
 
 class VKHandler(BaseHandler, VideoMixin):
+    """Класс `VKHandler`."""
     PATTERN = re.compile(
         r'https?://(?:www\.|m\.)?(?:vk\.com|vk\.ru|vk\.cc)/(?:video|audio|wall|clip)[\w\-]+'
     )
 
     @property
     def pattern(self) -> re.Pattern:
+        """Функция `pattern`."""
         return self.PATTERN
 
     @property
     def source_name(self) -> str:
+        """Функция `source_name`."""
         return "VK"
 
     async def _download_audio_ytdlp(
@@ -31,6 +35,7 @@ class VKHandler(BaseHandler, VideoMixin):
         size_limit: Optional[int] = None
     ) -> Optional[Dict[str, Any]]:
         
+        """Функция `_download_audio_ytdlp`."""
         if size_limit is None:
             size_limit = getattr(self, 'audio_limit', 50 * 1024 * 1024)
 
@@ -111,6 +116,7 @@ class VKHandler(BaseHandler, VideoMixin):
             return None
 
     async def process(self, url: str, context: str, resolved_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Функция `process`."""
         target_url = resolved_url or url
         video_id = self._extract_video_id(target_url)
 

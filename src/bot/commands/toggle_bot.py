@@ -1,3 +1,4 @@
+"""Модуль `toggle_bot`."""
 import logging
 
 from aiogram import Router
@@ -13,22 +14,26 @@ logger = logging.getLogger(__name__)
 
 @router.message(Command("start"))
 async def cmd_start_bot(message: Message) -> None:
+    """Функция `cmd_start_bot`."""
     await _change_bot_state(message, "start", True)
 
 
 @router.message(Command("stop"))
 async def cmd_stop_bot(message: Message) -> None:
+    """Функция `cmd_stop_bot`."""
     await _change_bot_state(message, "stop", False)
 
 
 @router.message(Command("toggle_bot"))
 async def cmd_toggle_bot(message: Message) -> None:
+    """Функция `cmd_toggle_bot`."""
     current = await get_bot_enabled(message.chat.id)
     new_state = not current
     await _change_bot_state(message, "toggle_bot", new_state)
 
 
 async def _change_bot_state(message: Message, command: str, new_state: bool) -> None:
+    """Функция `_change_bot_state`."""
     chat_id = message.chat.id
     user = message.from_user
     user_id = user.id if user else 0

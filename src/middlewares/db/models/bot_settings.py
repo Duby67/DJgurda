@@ -12,6 +12,7 @@ from sqlalchemy import Column, Integer, Boolean, Index
 from .base import Base
 
 class BotSettings(Base):
+    """Класс `BotSettings`."""
     __tablename__ = 'bot_settings'
 
     chat_id = Column(Integer, primary_key=True)
