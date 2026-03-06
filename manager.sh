@@ -23,6 +23,7 @@ LOG_FILE="/tmp/djgurda_deploy_${ENV}.log"
         DB_DIR="$HOME/bot_prod/data/db"
         COOKIES_DIR="$HOME/bot_prod/data/cookies"
         LOGS_DIR="$HOME/bot_prod/logs"
+
     elif [ "$ENV" == "dev" ]; then
         BOT_DIR="$HOME/bot_dev" 
         CONTAINER_NAME="DJgurda-dev"
@@ -31,6 +32,7 @@ LOG_FILE="/tmp/djgurda_deploy_${ENV}.log"
         DB_DIR="$HOME/bot_dev/data/db"
         COOKIES_DIR="$HOME/bot_dev/data/cookies"
         LOGS_DIR="$HOME/bot_dev/logs"
+        
     else
         echo "Invalid environment: $ENV"
         exit 1
