@@ -101,18 +101,26 @@ class TikTokProfile(PhotoMixin):
         # Формируем текст для caption
         lines = []
         if profile_info['nickname']:
-            lines.append(f"<b>{profile_info['nickname']}</b>")
-        if profile_info['unique_id']:
-            lines.append(f"@{profile_info['unique_id']}")
+            # Делаем имя ссылкой на профиль
+            profile_link = f"https://www.tiktok.com/@{profile_info['unique_id']}"
+            lines.append(f'<a href="{profile_link}"><b>{profile_info["nickname"]}</b></a>')
+        else:
+            # Если имени нет, используем ник как ссылку
+            profile_link = f"https://www.tiktok.com/@{profile_info['unique_id']}"
+            lines.append(f'<a href="{profile_link}"><b>@{profile_info["unique_id"]}</b></a>')
+
+        # Описание (signature) если есть
         if profile_info['signature']:
-            # Обрезаем слишком длинную подпись
             signature = profile_info['signature'][:200] + "…" if len(profile_info['signature']) > 200 else profile_info['signature']
             lines.append(f"<i>{signature}</i>")
+
         lines.append("")
         lines.append(f"👥 Подписчиков: {profile_info['follower_count']:,}")
         lines.append(f"👤 Подписок: {profile_info['following_count']:,}")
         lines.append(f"❤️ Лайков: {profile_info['heart_count']:,}")
         lines.append(f"🎥 Видео: {profile_info['video_count']:,}")
+
+        caption = "\n".join(lines)
 
         caption = "\n".join(lines)
 
