@@ -58,6 +58,10 @@ python -m src.main
 - `src/middlewares/db/*` - модели, миграции и DB-операции.
 - `.github/workflows/*` и `manager.sh` - CI/CD и деплой.
 
+## Схема расположения файлов (сервер и контейнер)
+Подробная схема вынесена в отдельный файл:
+- [`DEPLOY_LAYOUT.md`](./DEPLOY_LAYOUT.md)
+
 ## Текущее ограничение
 В runtime зарегистрирован только `TikTokHandler`.  
 Другие handlers присутствуют в коде, но не подключены в `ServiceManager`.
