@@ -51,4 +51,3 @@ INSTAGRAM_TEST_CASES: Final[tuple[dict[str, str], ...]] = (
         "description": "Ссылка на Instagram Stories.",
     },
 )
-

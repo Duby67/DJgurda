@@ -1,7 +1,7 @@
-"""Локальный smoke-тест для проверки TikTokHandler на 3 типах контента.
+"""Локальный smoke-тест для проверки YouTubeHandler на 2 типах контента.
 
 Сценарий:
-1. Разрешает короткий URL через resolve_url.
+1. Разрешает URL через resolve_url.
 2. Ищет обработчик через ServiceManager.
 3. Вызывает handler.process(...) и проверяет ожидаемый тип результата.
 4. Очищает временные файлы через handler.cleanup(...).
@@ -17,8 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-# test/TikTok/test_tiktok_handlers_local.py -> project root это parents[2]
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# test/handlers/YouTube/test_youtube_handlers_local.py -> project root это parents[3]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -34,9 +34,9 @@ os.environ.setdefault(
 )
 
 from src.handlers.manager import ServiceManager
-from src.handlers.resources import TikTokHandler
+from src.handlers.resources import YouTubeHandler
 from src.utils.url import resolve_url
-from TikTok_urls import TIKTOK_TEST_CASES
+from YouTube_urls import YOUTUBE_TEST_CASES
 
 
 @dataclass(frozen=True)
@@ -67,11 +67,11 @@ DEFAULT_CASES = tuple(
         expected_type=case["expected_type"],
         description=case["description"],
     )
-    for case in TIKTOK_TEST_CASES
+    for case in YOUTUBE_TEST_CASES
 )
 
 
-async def run_case(case: TestCase, timeout_sec: int) -> TestResult:
+async def run_case(case: TestCase, timeout_sec: int, classify_only: bool) -> TestResult:
     """Запускает один тест-кейс и возвращает результат."""
     service_manager = ServiceManager()
     resolved_url = await resolve_url(case.url)
@@ -85,12 +85,30 @@ async def run_case(case: TestCase, timeout_sec: int) -> TestResult:
             message="обработчик не найден для resolved URL",
         )
 
-    if not isinstance(handler, TikTokHandler):
+    if not isinstance(handler, YouTubeHandler):
         return TestResult(
             case=case,
             resolved_url=resolved_url,
             ok=False,
-            message=f"ожидался TikTokHandler, получен: {handler.__class__.__name__}",
+            message=f"ожидался YouTubeHandler, получен: {handler.__class__.__name__}",
+        )
+
+    if classify_only:
+        actual_type = handler._detect_content_type(resolved_url)  # type: ignore[attr-defined]
+        if actual_type != case.expected_type:
+            return TestResult(
+                case=case,
+                resolved_url=resolved_url,
+                ok=False,
+                message=f"ошибка классификации: ожидался type={case.expected_type}, получен type={actual_type}",
+                actual_type=actual_type,
+            )
+        return TestResult(
+            case=case,
+            resolved_url=resolved_url,
+            ok=True,
+            message="успешно (режим classify-only)",
+            actual_type=actual_type,
         )
 
     file_info: Optional[dict[str, Any]] = None
@@ -144,9 +162,9 @@ async def run_case(case: TestCase, timeout_sec: int) -> TestResult:
     )
 
 
-async def run_all(timeout_sec: int) -> int:
+async def run_all(timeout_sec: int, classify_only: bool) -> int:
     """Выполняет все тест-кейсы и возвращает код завершения."""
-    print("=== TikTokHandler local smoke ===")
+    print("=== YouTubeHandler local smoke ===")
     print(f"project_root: {PROJECT_ROOT}")
     print("")
 
@@ -154,7 +172,7 @@ async def run_all(timeout_sec: int) -> int:
     for case in DEFAULT_CASES:
         print(f"[RUN] {case.name}: {case.url}")
         print(f"  description: {case.description}")
-        result = await run_case(case, timeout_sec=timeout_sec)
+        result = await run_case(case, timeout_sec=timeout_sec, classify_only=classify_only)
         results.append(result)
         status = "OK" if result.ok else "FAIL"
         print(f"  status: {status}")
@@ -176,7 +194,7 @@ async def run_all(timeout_sec: int) -> int:
 def parse_args() -> argparse.Namespace:
     """Парсит аргументы CLI."""
     parser = argparse.ArgumentParser(
-        description="Локальный smoke-тест для TikTokHandler (video/profile/media_group)."
+        description="Локальный smoke-тест для YouTubeHandler (shorts/channel)."
     )
     parser.add_argument(
         "--timeout",
@@ -184,13 +202,18 @@ def parse_args() -> argparse.Namespace:
         default=180,
         help="Таймаут на один кейс в секундах (по умолчанию: 180).",
     )
+    parser.add_argument(
+        "--classify-only",
+        action="store_true",
+        help="Проверять только классификацию URL без скачивания контента.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     """Точка входа."""
     args = parse_args()
-    return asyncio.run(run_all(timeout_sec=args.timeout))
+    return asyncio.run(run_all(timeout_sec=args.timeout, classify_only=args.classify_only))
 
 
 if __name__ == "__main__":

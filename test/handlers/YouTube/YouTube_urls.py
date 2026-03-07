@@ -31,4 +31,3 @@ YOUTUBE_TEST_CASES: Final[tuple[dict[str, str], ...]] = (
         "description": "Профиль/страница канала YouTube (@handle).",
     },
 )
-

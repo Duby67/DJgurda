@@ -1,4 +1,4 @@
-"""Локальный smoke-тест для проверки YouTubeHandler на 2 типах контента.
+"""Локальный smoke-тест для проверки InstagramHandler на 4 типах контента.
 
 Сценарий:
 1. Разрешает URL через resolve_url.
@@ -17,8 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-# test/YouTube/test_youtube_handlers_local.py -> project root это parents[2]
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# test/handlers/Instagram/test_instagram_handlers_local.py -> project root это parents[3]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -34,9 +34,9 @@ os.environ.setdefault(
 )
 
 from src.handlers.manager import ServiceManager
-from src.handlers.resources import YouTubeHandler
+from src.handlers.resources import InstagramHandler
 from src.utils.url import resolve_url
-from source_urls import YOUTUBE_TEST_CASES
+from Instagram_urls import INSTAGRAM_TEST_CASES
 
 
 @dataclass(frozen=True)
@@ -67,7 +67,7 @@ DEFAULT_CASES = tuple(
         expected_type=case["expected_type"],
         description=case["description"],
     )
-    for case in YOUTUBE_TEST_CASES
+    for case in INSTAGRAM_TEST_CASES
 )
 
 
@@ -85,12 +85,12 @@ async def run_case(case: TestCase, timeout_sec: int, classify_only: bool) -> Tes
             message="обработчик не найден для resolved URL",
         )
 
-    if not isinstance(handler, YouTubeHandler):
+    if not isinstance(handler, InstagramHandler):
         return TestResult(
             case=case,
             resolved_url=resolved_url,
             ok=False,
-            message=f"ожидался YouTubeHandler, получен: {handler.__class__.__name__}",
+            message=f"ожидался InstagramHandler, получен: {handler.__class__.__name__}",
         )
 
     if classify_only:
@@ -164,7 +164,7 @@ async def run_case(case: TestCase, timeout_sec: int, classify_only: bool) -> Tes
 
 async def run_all(timeout_sec: int, classify_only: bool) -> int:
     """Выполняет все тест-кейсы и возвращает код завершения."""
-    print("=== YouTubeHandler local smoke ===")
+    print("=== InstagramHandler local smoke ===")
     print(f"project_root: {PROJECT_ROOT}")
     print("")
 
@@ -194,7 +194,7 @@ async def run_all(timeout_sec: int, classify_only: bool) -> int:
 def parse_args() -> argparse.Namespace:
     """Парсит аргументы CLI."""
     parser = argparse.ArgumentParser(
-        description="Локальный smoke-тест для YouTubeHandler (shorts/channel)."
+        description="Локальный smoke-тест для InstagramHandler (reels/media_group/stories/profile)."
     )
     parser.add_argument(
         "--timeout",
