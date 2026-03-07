@@ -1,0 +1,27 @@
+# Нормализация текстовых файлов в репозитории.
+* text=auto
+
+# Единый стиль окончаний строк для исходников и документации.
+*.py text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+*.env text eol=lf
+*.sh text eol=lf
+Dockerfile text eol=lf
+
+# Явно помечаем бинарные форматы.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.7z binary
+*.db binary
+*.sqlite binary
