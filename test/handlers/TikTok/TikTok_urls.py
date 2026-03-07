@@ -11,7 +11,7 @@ from typing import Final
 
 # Кейс: короткая ссылка на обычный TikTok-видеопост.
 # Ожидаем, что обработчик вернет type='video'.
-VIDEO_URL: Final[str] = "https://www.tiktok.com/t/ZP8Qt8vYy/"
+VIDEO_URL: Final[str] = "https://www.tiktok.com/t/ZP8XA8HA8/"
 
 # Кейс: ссылка на профиль автора.
 # Ожидаем, что обработчик вернет type='profile'.
@@ -42,4 +42,3 @@ TIKTOK_TEST_CASES: Final[tuple[dict[str, str], ...]] = (
         "description": "Фото/слайдшоу-пост TikTok с фоновой музыкой.",
     },
 )
-

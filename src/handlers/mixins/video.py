@@ -20,13 +20,25 @@ class VideoMixin(BaseMixin):
     """
     Миксин для загрузки и обработки видео через yt-dlp.
     """
+
+    @staticmethod
+    def _is_format_unavailable_error(exc: Exception) -> bool:
+        """
+        Проверяет, относится ли ошибка к недоступному запрошенному формату.
+        """
+        message = str(exc).lower()
+        return (
+            "requested format is not available" in message
+            or "format is not available" in message
+        )
     
     async def _download_video(
         self,
         url: str,
         ydl_opts: Dict[str, Any],
         video_id: Optional[str] = None,
-        size_limit: Optional[int] = None
+        size_limit: Optional[int] = None,
+        allow_format_fallback: bool = True,
     ) -> Optional[Dict[str, Any]]:
         """
         Скачивает видео через yt-dlp.
@@ -36,6 +48,7 @@ class VideoMixin(BaseMixin):
             ydl_opts: Опции для yt-dlp
             video_id: Идентификатор видео (опционально)
             size_limit: Лимит размера файла в байтах
+            allow_format_fallback: Разрешает retry с format='best' при ошибке формата
             
         Возвращает:
             Словарь с путями к файлу и миниатюре, либо None при ошибке
@@ -105,6 +118,22 @@ class VideoMixin(BaseMixin):
                 }
 
         except Exception as exc:
+            if allow_format_fallback and self._is_format_unavailable_error(exc):
+                current_format = ydl_opts.get("format")
+                if isinstance(current_format, str) and current_format.strip() != "best":
+                    logger.warning(
+                        "Requested format unavailable for %s; retrying with fallback format=best",
+                        url,
+                    )
+                    fallback_opts = {**ydl_opts, "format": "best"}
+                    return await self._download_video(
+                        url=url,
+                        ydl_opts=fallback_opts,
+                        video_id=video_id,
+                        size_limit=size_limit,
+                        allow_format_fallback=False,
+                    )
+
             logger.exception("Failed to download video: %s", exc)
             # Очищаем временные файлы при ошибке
             if file_path and file_path.exists():
