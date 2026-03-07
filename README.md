@@ -105,6 +105,19 @@ python scripts/release_sync.py --tag v1.2.0
 python scripts/release_sync.py --tag v1.2.0 --write
 ```
 
+## Процедура выпуска версии
+1. Убедиться, что все текущие изменения закоммичены.
+2. Убедиться, что актуальный `dev` запушен в `origin/dev`.
+3. Перейти в `main` и выполнить merge `dev`.
+4. Повысить версию в `src/__init__.py` по схеме `major.minor.patch` (каждое число 0..9):
+   - если `patch < 9`: увеличить `patch`;
+   - если `patch == 9`: `patch = 0`, увеличить `minor`;
+   - если при переносе `minor == 9`: `minor = 0`, увеличить `major`.
+5. Создать новый tag `vX.Y.Z` и проверить соответствие `__version__ == X.Y.Z`.
+6. Обновить `RELEASE_NOTES.md` на основе выполненных задач.
+7. Удалить выполненные задачи из активного backlog `IMPROVEMENTS.md`.
+8. После этого выполнить финальный commit/push.
+
 ## Текущее ограничение
 В runtime зарегистрирован только `TikTokHandler`.  
 Другие handlers присутствуют в коде, но не подключены в `ServiceManager`.
