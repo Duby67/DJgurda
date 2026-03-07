@@ -1,4 +1,6 @@
 
+local/
+
 venv/
 env/
 .env
@@ -6,6 +8,7 @@ env/
 
 __pycache__/
 *.pyc
+.pytest*
 
 .vscode/
 .idea/

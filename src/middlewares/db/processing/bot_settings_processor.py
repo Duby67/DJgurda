@@ -108,4 +108,4 @@ async def get_errors_enabled(chat_id: int) -> bool:
 
 async def get_notifications_enabled(chat_id: int) -> bool:
     """Проверяет, включены ли уведомления в чате."""
-    return await _get_setting(chat_id, "notifications_enabled", True)
+    return await _get_setting(chat_id, "notifications_enabled", False)

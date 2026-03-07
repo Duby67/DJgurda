@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 
 from src.config import DB_PATH
 from .models.base import Base
-from .migration import migrate
 
 logger = logging.getLogger(__name__)
 
@@ -33,18 +32,13 @@ AsyncSessionLocal = async_sessionmaker(
 
 async def init_db() -> None:
     """
-    Инициализирует базу данных: создает таблицы и применяет миграции.
+    Инициализирует базу данных: создает таблицы на основе актуальных моделей.
     """
     try:
         # Создаем все таблицы на основе моделей
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database tables created")
-
-        # Применяем миграции
-        async with AsyncSessionLocal() as session:
-            async with session.begin():
-                await migrate(session)
 
         logger.info("Database initialized successfully")
         
