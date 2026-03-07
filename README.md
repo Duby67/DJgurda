@@ -63,12 +63,13 @@
    - `YANDEX_MUSIC_TOKEN`
 
    Опционально для YouTube cookies:
-   - `YOUTUBE_COOKIES_ENABLED` (`true/false`, по умолчанию `false`)
-   - `YOUTUBE_COOKIES_PATH` (обязателен только при `YOUTUBE_COOKIES_ENABLED=true`)
+   - `YOUTUBE_COOKIES_ENABLED` (`true/false`, по умолчанию `true`)
+   - `YOUTUBE_COOKIES_PATH` (опционально; если не задан, cookies не будут применены)
 
    Важное замечание:
    - Если `youtube_cookies.txt` является заглушкой (пустой или без валидных cookie-строк), YouTube handler автоматически игнорирует этот файл.
-   - По умолчанию cookies не используются.
+   - По умолчанию handler пытается использовать валидный cookies-файл (если он доступен).
+   - Для принудительного отключения cookies установи `YOUTUBE_COOKIES_ENABLED=false`.
 
    Шаблон:
    - `env.example` (скопируй в `.env` и подставь значения).

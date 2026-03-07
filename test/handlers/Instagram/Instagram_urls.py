@@ -15,7 +15,7 @@ PROFILE_URL: Final[str] = "https://www.instagram.com/instagram/"
 
 # Кейс: Reels-публикация Instagram.
 # Ожидаем, что обработчик вернет type='reels'.
-REELS_URL: Final[str] = "https://www.instagram.com/reel/C2s3v86L3sM/"
+REELS_URL: Final[str] = "https://www.instagram.com/reel/DVYtOptkY_z/?igsh=YzNpdjJxNzkwaWJv"
 
 # Кейс: carousel-пост Instagram.
 # Ожидаем, что обработчик вернет type='media_group'.

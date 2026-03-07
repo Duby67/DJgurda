@@ -40,7 +40,12 @@ def _looks_like_placeholder(path: Path) -> bool:
 
 def build_youtube_cookie_opts() -> Dict[str, Any]:
     """
-    Возвращает `cookiefile` для yt-dlp только при явном включении и валидном файле.
+    Возвращает `cookiefile` для yt-dlp в безопасном auto-режиме.
+
+    Поведение:
+    - `YOUTUBE_COOKIES_ENABLED=false` -> cookies принудительно отключены;
+    - `YOUTUBE_COOKIES_ENABLED=true` -> используется валидный файл cookies;
+    - отсутствующий/пустой/заглушечный файл автоматически игнорируется.
     """
     if not YOUTUBE_COOKIES_ENABLED:
         return {}
@@ -61,4 +66,3 @@ def build_youtube_cookie_opts() -> Dict[str, Any]:
         return {}
 
     return {"cookiefile": str(YOUTUBE_COOKIES)}
-

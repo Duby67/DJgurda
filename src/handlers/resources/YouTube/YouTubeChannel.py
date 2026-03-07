@@ -4,6 +4,7 @@
 
 import html
 from typing import Any, Dict, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 from src.handlers.mixins import MetadataMixin, PhotoMixin
 from .cookies import build_youtube_cookie_opts
@@ -87,6 +88,54 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
 
         return self._format_count(info.get("playlist_count"))
 
+    def _build_videos_tab_url(self, channel_url: str) -> str:
+        """
+        Возвращает URL вкладки `/videos` для канала.
+        """
+        parts = urlsplit(channel_url)
+        path_parts = [part for part in parts.path.split("/") if part]
+        if not path_parts:
+            return channel_url
+
+        tab_names = {"videos", "featured", "streams", "shorts", "playlists", "community", "about"}
+        if path_parts[-1].lower() in tab_names:
+            path_parts[-1] = "videos"
+        else:
+            path_parts.append("videos")
+
+        videos_path = "/" + "/".join(path_parts)
+        return urlunsplit((parts.scheme, parts.netloc, videos_path, "", ""))
+
+    async def _extract_channel_metadata(
+        self,
+        channel_url: str,
+        ydl_opts: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Извлекает метаданные канала с приоритетом данных из вкладки `/videos`.
+        """
+        videos_url = self._build_videos_tab_url(channel_url)
+        videos_info = await self._extract_metadata(videos_url, ydl_opts)
+
+        if videos_url == channel_url:
+            return videos_info
+
+        base_info = await self._extract_metadata(channel_url, ydl_opts)
+        if not videos_info and not base_info:
+            return None
+        if videos_info and not base_info:
+            return videos_info
+        if base_info and not videos_info:
+            return base_info
+
+        # Берем за основу профильные данные канала и явно переносим счетчики из /videos.
+        merged_info = dict(base_info or {})
+        for key in ("channel_video_count", "video_count", "playlist_count"):
+            value = videos_info.get(key) if isinstance(videos_info, dict) else None
+            if value not in (None, "", 0, "0"):
+                merged_info[key] = value
+        return merged_info
+
     async def _process_youtube_channel(
         self,
         url: str,
@@ -100,13 +149,13 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
             "extract_flat": True,
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android", "web", "ios"],
+                    "player_client": ["android", "tv_embedded", "ios", "web"],
                 }
             },
         }
         ydl_opts.update(build_youtube_cookie_opts())
 
-        info = await self._extract_metadata(url, ydl_opts)
+        info = await self._extract_channel_metadata(url, ydl_opts)
         if not info:
             return None
 

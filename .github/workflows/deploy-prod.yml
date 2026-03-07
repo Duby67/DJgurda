@@ -104,7 +104,6 @@ jobs:
             echo "BOT_DB_PATH=/app/src/data/db/bot.db" >> .env
             echo "BOT_TOKEN=${{ secrets.BOT_TOKEN_PROD }}" >> .env
             echo "YANDEX_MUSIC_TOKEN=${{ secrets.YANDEX_MUSIC_TOKEN }}" >> .env
-            echo "YOUTUBE_COOKIES_PATH=/app/src/data/cookies/youtube_cookies.txt" >> .env
 
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ steps.repo_meta.outputs.owner_lc }} --password-stdin
             docker pull ghcr.io/${{ steps.repo_meta.outputs.repo_lc }}:latest

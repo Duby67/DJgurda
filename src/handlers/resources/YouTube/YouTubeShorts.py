@@ -35,7 +35,8 @@ class YouTubeShorts(VideoMixin):
             "noplaylist": True,
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android", "web", "ios"],
+                    # Сначала мобильные/embedded-клиенты, чтобы снизить риск bot-check на web-клиенте.
+                    "player_client": ["android", "tv_embedded", "ios", "web"],
                 }
             },
         }

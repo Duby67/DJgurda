@@ -45,3 +45,32 @@ def test_playlist_count_is_used_as_fallback() -> None:
 
     assert handler._extract_total_videos_count(info) == "2"
 
+
+def test_build_videos_tab_url_from_channel_id() -> None:
+    """
+    Для channel-id URL должен строиться путь на вкладку videos.
+    """
+    handler = YouTubeHandler()
+    url = "https://www.youtube.com/channel/UCALIGDpGpOmezPu0xujHzqA"
+
+    assert handler._build_videos_tab_url(url) == "https://www.youtube.com/channel/UCALIGDpGpOmezPu0xujHzqA/videos"
+
+
+def test_build_videos_tab_url_from_handle_root() -> None:
+    """
+    Для handle-страницы должен добавляться суффикс /videos.
+    """
+    handler = YouTubeHandler()
+    url = "https://www.youtube.com/@IDIM20247"
+
+    assert handler._build_videos_tab_url(url) == "https://www.youtube.com/@IDIM20247/videos"
+
+
+def test_build_videos_tab_url_replaces_other_tab() -> None:
+    """
+    Для вкладок типа /about должен подставляться /videos.
+    """
+    handler = YouTubeHandler()
+    url = "https://www.youtube.com/@IDIM20247/about"
+
+    assert handler._build_videos_tab_url(url) == "https://www.youtube.com/@IDIM20247/videos"

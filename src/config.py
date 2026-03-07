@@ -59,12 +59,6 @@ ADMIN_ID = _require_int_env("ADMIN_ID")
 BOT_TOKEN = _require_env("BOT_TOKEN")
 YANDEX_MUSIC_TOKEN = _require_env("YANDEX_MUSIC_TOKEN")
 
-YOUTUBE_COOKIES_ENABLED = _read_bool_env("YOUTUBE_COOKIES_ENABLED", default=False)
+YOUTUBE_COOKIES_ENABLED = _read_bool_env("YOUTUBE_COOKIES_ENABLED", default=True)
 YOUTUBE_COOKIES_PATH = os.getenv("YOUTUBE_COOKIES_PATH", "").strip()
 YOUTUBE_COOKIES = Path(YOUTUBE_COOKIES_PATH).resolve() if YOUTUBE_COOKIES_PATH else None
-
-if YOUTUBE_COOKIES_ENABLED:
-    if not YOUTUBE_COOKIES_PATH:
-        raise ValueError("YOUTUBE_COOKIES_ENABLED=true требует заданный YOUTUBE_COOKIES_PATH.")
-    if YOUTUBE_COOKIES is None or not YOUTUBE_COOKIES.exists():
-        raise ValueError("Файл YOUTUBE_COOKIES не найден.")
