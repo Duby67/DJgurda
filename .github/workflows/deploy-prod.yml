@@ -32,16 +32,24 @@ jobs:
           echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
           echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
 
+      - name: Validate release sync (when tag exists on HEAD)
+        run: |
+          HEAD_TAG="$(git tag --points-at HEAD | head -n1 || true)"
+          if [ -z "$HEAD_TAG" ]; then
+            echo "No tag on HEAD. Skip strict release sync check."
+          else
+            echo "Release tag on HEAD: $HEAD_TAG"
+            python scripts/release_sync.py --tag "$HEAD_TAG"
+          fi
+
       - name: Generate version
         id: version
         run: |
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
-          if [ -n "$LATEST_TAG" ]; then
-              VERSION="$LATEST_TAG"
+          HEAD_TAG="$(git tag --points-at HEAD | head -n1 || true)"
+          if [ -n "$HEAD_TAG" ]; then
+            VERSION="$HEAD_TAG"
           else
-              SHORT_HASH=$(git rev-parse --short HEAD)
-              DATE=$(date +'%Y-%m-%d')
-              VERSION="${SHORT_HASH} от ${DATE}"
+            VERSION="$(python -c 'from src import __version__; print(__version__)')"
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
           echo "Generated version: ${VERSION}"

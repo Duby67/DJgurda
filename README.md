@@ -87,6 +87,24 @@ python -m src.main
 ## Release Notes
 - [`RELEASE_NOTES.md`](./RELEASE_NOTES.md)
 
+## Релизная синхронизация версии
+- Источник версии в коде: `src/__init__.py` (`__version__`).
+- Для релиза в `prod` рекомендуется ставить tag на тот же commit (например, `v1.2.0`).
+- Скрипт проверки/подготовки релиза:
+  - проверяет соответствие `__version__` и tag;
+  - проверяет наличие секции в `RELEASE_NOTES.md`;
+  - проверяет/обновляет метку ревизии backlog в `IMPROVEMENTS.md`.
+
+Проверка (без изменений файлов):
+```bash
+python scripts/release_sync.py --tag v1.2.0
+```
+
+Автодобавление шаблона в `RELEASE_NOTES.md` и обновление ревизии в `IMPROVEMENTS.md`:
+```bash
+python scripts/release_sync.py --tag v1.2.0 --write
+```
+
 ## Текущее ограничение
 В runtime зарегистрирован только `TikTokHandler`.  
 Другие handlers присутствуют в коде, но не подключены в `ServiceManager`.
