@@ -37,6 +37,24 @@ def _remove_hashtags(text: str) -> str:
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
     return cleaned
 
+
+def _build_safe_title(file_info: Dict[str, Any], source: str) -> str | None:
+    """
+    Возвращает безопасный заголовок для подписи.
+
+    Для TikTok гарантирует fallback, если после очистки хэштегов заголовок пустой
+    или исходный title отсутствует/некорректный.
+    """
+    raw_title = file_info.get('title')
+    if not isinstance(raw_title, str):
+        return EMPTY_TITLE_FALLBACK if source == "TikTok" else None
+
+    clean_title = _remove_hashtags(raw_title)
+    if clean_title:
+        return clean_title
+
+    return EMPTY_TITLE_FALLBACK if source == "TikTok" else None
+
 def build_caption(
     user_context: str,
     file_info: Dict[str, Any],
@@ -65,20 +83,18 @@ def build_caption(
         safe_context = html.escape(user_context)
         lines.append(safe_context)
         
-    # Для контента с заголовком добавляем информацию о названии и авторе.
-    if file_info['type'] in {'video', 'photo', 'media_group'} and file_info.get('title'):
-        lines.append("")  # Пустая строка для разделения
-        raw_title = str(file_info['title'])
-        clean_title = _remove_hashtags(raw_title)
-        if not clean_title:
-            clean_title = EMPTY_TITLE_FALLBACK
-        safe_title = html.escape(clean_title)
-        uploader = str(file_info.get('uploader') or "").strip()
-        if uploader:
-            safe_uploader = html.escape(uploader)
-            lines.append(f"{EMOJI_VIDEO} {safe_title} — {safe_uploader}")
-        else:
-            lines.append(f"{EMOJI_VIDEO} {safe_title}")
+    # Для медиа-контента добавляем информацию о названии и авторе.
+    if file_info['type'] in {'video', 'photo', 'media_group'}:
+        safe_title_value = _build_safe_title(file_info, source)
+        if safe_title_value:
+            lines.append("")  # Пустая строка для разделения
+            safe_title = html.escape(safe_title_value)
+            uploader = str(file_info.get('uploader') or "").strip()
+            if uploader:
+                safe_uploader = html.escape(uploader)
+                lines.append(f"{EMOJI_VIDEO} {safe_title} — {safe_uploader}")
+            else:
+                lines.append(f"{EMOJI_VIDEO} {safe_title}")
         
     # Добавляем информацию об источнике и пользователе
     lines.append("")
