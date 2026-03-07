@@ -102,10 +102,17 @@ async def process_block(
                 # выглядело продолжением одного сценария просмотра.
                 if 'audio' in file_info:
                     audio = FSInputFile(file_info['audio']['file_path'])
+                    audio_thumbnail_path = file_info['audio'].get('thumbnail_path')
+                    audio_thumbnail = (
+                        FSInputFile(audio_thumbnail_path)
+                        if audio_thumbnail_path and hasattr(audio_thumbnail_path, "exists") and audio_thumbnail_path.exists()
+                        else None
+                    )
                     await message.answer_audio(
                         audio=audio,
                         title=file_info['audio']['title'],
                         performer=file_info['audio']['performer'],
+                        thumbnail=audio_thumbnail,
                         caption=None
                     )
 

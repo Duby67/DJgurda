@@ -53,6 +53,59 @@ class TikTokPhoto(PhotoMixin, AudioMixin, MediaGroupMixin):
             'performer': track_author.strip(),
         }
 
+    @staticmethod
+    def _extract_first_http_url(value: Any) -> Optional[str]:
+        """
+        Пытается извлечь первый HTTP(S)-URL из произвольной структуры.
+        """
+        if isinstance(value, str):
+            return value if value.startswith(('http://', 'https://')) else None
+
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                found = TikTokPhoto._extract_first_http_url(item)
+                if found:
+                    return found
+            return None
+
+        if isinstance(value, dict):
+            preferred_keys = (
+                'url', 'src', 'cover', 'cover_url', 'cover_hd',
+                'origin_cover', 'thumbnail', 'thumb'
+            )
+            for key in preferred_keys:
+                if key in value:
+                    found = TikTokPhoto._extract_first_http_url(value.get(key))
+                    if found:
+                        return found
+            for nested_value in value.values():
+                found = TikTokPhoto._extract_first_http_url(nested_value)
+                if found:
+                    return found
+            return None
+
+        return None
+
+    def _extract_music_cover_url_from_tikwm(self, media_data: Dict[str, Any]) -> Optional[str]:
+        """
+        Извлекает URL обложки трека из payload TikWM.
+        """
+        if not isinstance(media_data, dict):
+            return None
+
+        candidates = [
+            media_data.get('music_info'),
+            media_data.get('music_cover'),
+            media_data.get('cover'),
+            media_data.get('origin_cover'),
+            media_data.get('ai_dynamic_cover'),
+        ]
+        for candidate in candidates:
+            found = self._extract_first_http_url(candidate)
+            if found:
+                return found
+        return None
+
     def _extract_music_metadata_from_info(self, info: Dict[str, Any]) -> Dict[str, str]:
         """
         Извлекает название трека и исполнителя из данных yt-dlp.
@@ -87,6 +140,26 @@ class TikTokPhoto(PhotoMixin, AudioMixin, MediaGroupMixin):
             'title': track_title.strip(),
             'performer': track_author.strip(),
         }
+
+    def _extract_music_cover_url_from_info(self, info: Dict[str, Any]) -> Optional[str]:
+        """
+        Извлекает URL обложки трека из данных yt-dlp.
+        """
+        if not isinstance(info, dict):
+            return None
+
+        candidates = [
+            info.get('thumbnail'),
+            info.get('thumbnails'),
+            info.get('cover'),
+            info.get('album_art'),
+            info.get('artwork_url'),
+        ]
+        for candidate in candidates:
+            found = self._extract_first_http_url(candidate)
+            if found:
+                return found
+        return None
 
     async def _fetch_tikwm_payload(self, target_url: str) -> Optional[Dict[str, Any]]:
         """
@@ -206,11 +279,23 @@ class TikTokPhoto(PhotoMixin, AudioMixin, MediaGroupMixin):
                 suffix=self._suffix_from_url(music_url, ".m4a"),
             )
             if await self._download_audio(music_url, audio_path, size_limit=self.audio_limit):
-                result['audio'] = {
+                audio_info: Dict[str, Any] = {
                     'file_path': audio_path,
                     'title': music_meta['title'],
                     'performer': music_meta['performer'],
                 }
+                music_cover_url = self._extract_music_cover_url_from_tikwm(media_data)
+                if music_cover_url:
+                    cover_path = self._generate_unique_path(
+                        f"{photo_id}_audio_cover",
+                        suffix=self._suffix_from_url(music_cover_url, ".jpg"),
+                    )
+                    if await self._download_thumbnail(music_cover_url, cover_path, size_limit=self.photo_limit):
+                        audio_info['thumbnail_path'] = cover_path
+                    else:
+                        logger.warning("Failed to download TikTok music cover for %s", target_url)
+
+                result['audio'] = audio_info
             else:
                 logger.warning("Failed to download TikTok music for %s", target_url)
 
@@ -339,10 +424,25 @@ class TikTokPhoto(PhotoMixin, AudioMixin, MediaGroupMixin):
             if audios:
                 music_meta = self._extract_music_metadata_from_info(first_info)
                 audio_file = audios[0]['file_path']
-                result['audio'] = {
+                audio_info: Dict[str, Any] = {
                     'file_path': audio_file,
                     'title': music_meta['title'],
                     'performer': music_meta['performer'],
                 }
+                audio_source_info = audios[0].get('info', {})
+                if not isinstance(audio_source_info, dict):
+                    audio_source_info = first_info
+                music_cover_url = self._extract_music_cover_url_from_info(audio_source_info)
+                if music_cover_url:
+                    cover_path = self._generate_unique_path(
+                        f"{photo_id}_audio_cover",
+                        suffix=self._suffix_from_url(music_cover_url, ".jpg"),
+                    )
+                    if await self._download_thumbnail(music_cover_url, cover_path, size_limit=self.photo_limit):
+                        audio_info['thumbnail_path'] = cover_path
+                    else:
+                        logger.warning("Failed to download ytdlp music cover for %s", target_url)
+
+                result['audio'] = audio_info
                 
             return result
