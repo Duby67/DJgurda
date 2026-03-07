@@ -6,7 +6,7 @@
 
 ## Метаданные backlog
 
-- Последняя ревизия backlog: 2026-03-07 | version/tag: v1.2.1
+- Последняя ревизия backlog: 2026-03-08 | version/tag: v1.2.2
 
 ## Приоритет P0 (критично)
 
@@ -91,7 +91,7 @@
 
 ### 7. Ошибки и отказоустойчивость
 
-- Статус (2026-03-07): в работе (частично: добавлена нормализация TikTok URL по `_r`/`_t`).
+- Статус (2026-03-08): в работе (частично: закрыты задачи по TikTok/YouTube/Instagram и добавлен COUB video pipeline).
 - Проблема: ошибки видны в логах, но нет агрегированной картины по типам и частоте.
 - Действие:
   - Нормализовать TikTok URL перед обработкой: удалять трекинговые query-параметры (`_r`, `_t`), не затрагивая остальные параметры. ✅ Выполнено.
@@ -113,6 +113,8 @@
   - Для Instagram profile добавить устойчивый fallback: при сбое `yt-dlp` extractor пробовать `web_profile_info` API по username и использовать канонический profile URL c завершающим `/`. ✅ Выполнено (`src/handlers/resources/Instagram/InstagramProfile.py`, `test/handlers/Instagram/test_instagram_profile_helpers.py`).
   - Для Instagram `media_group` исправить обработку каруселей: удалять `img_index` из URL, сохранять несколько фото/видео без перезаписи файлов и поддерживать дополнительные аудиофайлы (`audios`) в общем pipeline отправки/cleanup. ✅ Выполнено (`src/handlers/resources/Instagram/InstagramMediaGroup.py`, `src/handlers/mixins/media_group.py`, `src/bot/processing/media_processor.py`, `src/handlers/base.py`, `test/handlers/Instagram/test_instagram_media_group_helpers.py`, `test/handlers/test_cleanup_helpers.py`).
   - Для Instagram handlers добавить безопасный auto-режим cookies (`INSTAGRAM_COOKIES_ENABLED/INSTAGRAM_COOKIES_PATH`) и подключить его в stories/reels/media_group/profile; для stories добавить явный warning про возможную необходимость авторизации. ✅ Выполнено (`src/config.py`, `src/handlers/resources/Instagram/cookies.py`, `src/handlers/resources/Instagram/InstagramStories.py`, `src/handlers/resources/Instagram/InstagramReels.py`, `src/handlers/resources/Instagram/InstagramMediaGroup.py`, `src/handlers/resources/Instagram/InstagramProfile.py`, `test/handlers/Instagram/test_instagram_cookies_helpers.py`).
+  - Добавить runtime-поддержку COUB (`https://coub.com/view/<id>`) через единый pipeline handlers, включая регистрацию в `ServiceManager` и smoke-проверки по шаблону `test/handlers/<Source>`. ✅ Выполнено (`src/handlers/manager.py`, `src/handlers/resources/Coub/*`, `test/handlers/Coub/test_coub_handlers_local.py`, `test/handlers/Coub/Coub_urls.py`).
+  - Для COUB video реализовать каскад источников `segments -> share -> file_versions/ytdlp`, валидацию `permalink == requested_id`, приоритет no-watermark пути через `segments` и fallback-деградацию без падения отправки. ✅ Выполнено (`src/handlers/resources/Coub/CoubVideo.py`).
   - Собирать `exceptions_per_hour`, `error_rate`, `handler_failure_rate`.
   - Вести топ ошибок по типу/источнику:
     - `ValueError`, `TelegramTimeoutError`, ошибки БД, ошибки загрузки контента.
