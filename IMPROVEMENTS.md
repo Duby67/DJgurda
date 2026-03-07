@@ -6,7 +6,7 @@
 
 ## Метаданные backlog
 
-- Последняя ревизия backlog: 2026-03-07 | version/tag: project-audit-structure-pass
+- Последняя ревизия backlog: 2026-03-07 | version/tag: v1.2.1
 
 ## Приоритет P0 (критично)
 

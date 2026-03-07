@@ -16,6 +16,22 @@
   - Нет / Да (описание)
 ```
 
+## 2026-03-07 | version/tag: v1.2.1 | env: prod
+
+- Что изменилось:
+  - Версия бота повышена с `1.2.0` до `1.2.1`.
+  - Для YouTube cookies внедрен безопасный режим: использование только при `YOUTUBE_COOKIES_ENABLED=true`, заглушечные файлы автоматически игнорируются.
+  - Улучшена обработка YouTube/Instagram interstitial URL, включая относительные `continue/u` ссылки.
+  - Для YouTube channel исправлен расчет `🎬 Видео`: приоритет отдан `channel_video_count`/`video_count`, `playlist_count` оставлен как fallback.
+  - Для деплоя в `manager.sh` добавлена graceful-остановка контейнера перед удалением, чтобы `on_shutdown` успевал отправить уведомление о выключении.
+- Важно для деплоя:
+  - Локальный release-проход делался в ветке `dev`; перед финальным релизом в `main` требуется синхронизация `dev` с `origin/dev` и стандартный merge-flow.
+  - При использовании YouTube cookies убедись, что выставлены оба параметра: `YOUTUBE_COOKIES_ENABLED=true` и корректный `YOUTUBE_COOKIES_PATH`.
+- Breaking changes:
+  - Нет.
+- Ручные действия после релиза:
+  - Проверить `.env` на наличие `YOUTUBE_COOKIES_ENABLED` (по умолчанию `false`).
+
 ## 2026-03-07 | version/tag: infra-local-update | env: both
 
 - Что изменилось:
