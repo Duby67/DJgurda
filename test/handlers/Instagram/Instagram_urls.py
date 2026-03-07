@@ -19,11 +19,11 @@ REELS_URL: Final[str] = "https://www.instagram.com/reel/C2s3v86L3sM/"
 
 # Кейс: carousel-пост Instagram.
 # Ожидаем, что обработчик вернет type='media_group'.
-MEDIA_GROUP_URL: Final[str] = "https://www.instagram.com/p/C2s3R9DrQjL/"
+MEDIA_GROUP_URL: Final[str] = "https://www.instagram.com/p/DVk2sEcDPwp/?img_index=1&igsh=MTlwMWg5cXZ3cWt0bg=="
 
 # Кейс: Stories-ссылка Instagram.
 # Ожидаем, что обработчик вернет type='stories'.
-STORIES_URL: Final[str] = "https://www.instagram.com/stories/instagram/3283285557542675306/"
+STORIES_URL: Final[str] = "https://www.instagram.com/stories/elvirasharma/3847664882045214989?utm_source=ig_story_item_share&igsh=MXN6Ynp0NGNlaDhkbA=="
 
 # Кейс: interstitial-ссылка l.instagram.com с параметром `u`.
 # Ожидаем, что resolve_url распакует ее до profile URL.

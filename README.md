@@ -51,6 +51,10 @@
    # python -m pip install -r requirements-dev.txt
    ```
 
+   Важно:
+   - Зависимости проекта устанавливаются в проектный `venv`, а не в системный Python.
+   - Для локальных запусков и проверок используй активированный `venv` или явный путь `.\venv\Scripts\python.exe`.
+
 3. Настройка `.env` (обязательные переменные валидируются в `src/config.py`):
    - `BOT_DB_PATH`
    - `BOT_VERSION`
