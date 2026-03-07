@@ -2,13 +2,15 @@
 Обработчик видео-контента COUB.
 """
 
+import asyncio
 import aiohttp
 import logging
 import re
-from typing import Any, Dict, Optional
 
-import yt_dlp
-from yt_dlp.postprocessor.ffmpeg import FFmpegPostProcessor
+from pathlib import Path
+from shutil import which
+from typing import Any, Dict, Iterable, Optional, Tuple
+from urllib.parse import urlsplit
 
 from src.handlers.mixins import VideoMixin
 
@@ -21,69 +23,515 @@ class CoubVideo(VideoMixin):
     """
 
     COUB_ID_PATTERN = re.compile(r"/view/([A-Za-z0-9]+)")
-    COUB_API_URL_TEMPLATE = "https://coub.com/api/v2/coubs/{coub_id}.json"
-    COUB_SHARE_URL_KEYS = ("share", "default")
+    COUB_METADATA_API_URL_TEMPLATE = "https://coub.com/api/v2/coubs/{coub_id}.json"
+    COUB_SEGMENTS_API_URL_TEMPLATE = "https://coub.com/api/v2/coubs/{coub_id}/segments"
+    VIDEO_EXTENSIONS = frozenset({".mp4", ".m4v", ".mov", ".webm"})
+    AUDIO_EXTENSIONS = frozenset({".mp3", ".m4a", ".aac", ".ogg", ".opus", ".wav"})
+    IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif"})
 
-    @staticmethod
-    def _is_ytdlp_ffmpeg_available() -> bool:
+    async def _fetch_json_payload(self, url: str) -> Optional[Dict[str, Any]]:
         """
-        Проверяет, доступен ли ffmpeg для yt-dlp.
+        Запрашивает JSON payload по URL.
         """
-        try:
-            with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
-                return bool(FFmpegPostProcessor(ydl).available)
-        except Exception as exc:
-            logger.debug("ffmpeg availability check failed: %s", exc)
-            return False
-
-    async def _fetch_coub_api_payload(self, coub_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Запрашивает JSON метаданные COUB по id.
-        """
-        api_url = self.COUB_API_URL_TEMPLATE.format(coub_id=coub_id)
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json, text/plain, */*",
+        }
         try:
             timeout = aiohttp.ClientTimeout(total=15)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(api_url) as response:
+            async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+                async with session.get(url) as response:
                     if response.status != 200:
-                        logger.warning("COUB API HTTP %s for %s", response.status, api_url)
+                        logger.warning("COUB API HTTP %s for %s", response.status, url)
                         return None
                     payload = await response.json(content_type=None)
                     if not isinstance(payload, dict):
-                        logger.warning("COUB API returned invalid payload for %s", api_url)
+                        logger.warning("COUB API returned invalid payload for %s", url)
                         return None
                     return payload
         except Exception as exc:
-            logger.warning("COUB API request failed for %s: %s", api_url, exc)
+            logger.warning("COUB API request failed for %s: %s", url, exc)
             return None
 
     @staticmethod
-    def _extract_share_video_url(payload: Dict[str, Any]) -> Optional[str]:
+    def _first_http_url(value: Any) -> Optional[str]:
         """
-        Извлекает URL готового share-видео (со звуком) из payload COUB API.
+        Возвращает первый HTTP(S) URL из произвольной структуры.
         """
-        file_versions = payload.get("file_versions")
-        if not isinstance(file_versions, dict):
+        if isinstance(value, str):
+            return value if value.startswith(("http://", "https://")) else None
+
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                found = CoubVideo._first_http_url(item)
+                if found:
+                    return found
             return None
-        share = file_versions.get(CoubVideo.COUB_SHARE_URL_KEYS[0])
-        if not isinstance(share, dict):
+
+        if isinstance(value, dict):
+            for nested in value.values():
+                found = CoubVideo._first_http_url(nested)
+                if found:
+                    return found
             return None
-        share_url = share.get(CoubVideo.COUB_SHARE_URL_KEYS[1])
-        if isinstance(share_url, str) and share_url.startswith(("http://", "https://")):
-            return share_url
+
         return None
 
     @staticmethod
-    def _extract_uploader_from_payload(payload: Dict[str, Any]) -> str:
+    def _collect_http_urls(value: Any) -> Iterable[str]:
         """
-        Возвращает имя автора из payload COUB API.
+        Итерирует все HTTP(S) URL из произвольной структуры.
         """
-        channel = payload.get("channel")
+        if isinstance(value, str):
+            if value.startswith(("http://", "https://")):
+                yield value
+            return
+
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                yield from CoubVideo._collect_http_urls(item)
+            return
+
+        if isinstance(value, dict):
+            for nested in value.values():
+                yield from CoubVideo._collect_http_urls(nested)
+
+    @staticmethod
+    def _deduplicate_urls(urls: Iterable[str]) -> list[str]:
+        """
+        Убирает дубликаты URL с сохранением порядка.
+        """
+        unique_urls: list[str] = []
+        seen: set[str] = set()
+        for raw_url in urls:
+            candidate = raw_url.strip()
+            if not candidate or candidate in seen:
+                continue
+            seen.add(candidate)
+            unique_urls.append(candidate)
+        return unique_urls
+
+    @staticmethod
+    def _is_valid_media_url(url: str) -> bool:
+        """
+        Проверяет, что URL выглядит как валидный медиа-URL, а не заглушка.
+        """
+        lowered = url.lower()
+        if "/missing/missing.png" in lowered:
+            return False
+        return lowered.startswith(("http://", "https://"))
+
+    def _classify_media_url(self, url: str) -> Optional[str]:
+        """
+        Классифицирует URL как video/audio/None.
+        """
+        if not self._is_valid_media_url(url):
+            return None
+
+        path = urlsplit(url).path.lower()
+        ext = Path(path).suffix.lower()
+
+        if ext in self.IMAGE_EXTENSIONS:
+            return None
+        if ext in self.VIDEO_EXTENSIONS:
+            return "video"
+        if ext in self.AUDIO_EXTENSIONS:
+            return "audio"
+
+        # Нечеткая классификация для URL без расширения.
+        if "audio" in path:
+            return "audio"
+        if "video" in path and "screen" not in path and "image" not in path:
+            return "video"
+        return None
+
+    @staticmethod
+    def _score_url(url: str) -> int:
+        """
+        Возвращает эвристику качества URL по его имени.
+        """
+        lowered = url.lower()
+        score = 0
+        if "high" in lowered or "big" in lowered or "hd" in lowered:
+            score += 40
+        if "med" in lowered or "medium" in lowered:
+            score += 20
+        if "low" in lowered:
+            score += 10
+        if "muted" in lowered:
+            score -= 5
+        return score
+
+    def _pick_best_url(self, urls: Iterable[str]) -> Optional[str]:
+        """
+        Выбирает лучший URL по эвристике качества.
+        """
+        valid_urls = [url for url in urls if self._is_valid_media_url(url)]
+        if not valid_urls:
+            return None
+        return max(valid_urls, key=self._score_url)
+
+    @staticmethod
+    def _nested_get(data: Dict[str, Any], *keys: str) -> Any:
+        """
+        Безопасно получает вложенное значение из словаря.
+        """
+        current: Any = data
+        for key in keys:
+            if not isinstance(current, dict):
+                return None
+            current = current.get(key)
+        return current
+
+    def _extract_metadata_source_urls(self, metadata: Dict[str, Any]) -> Dict[str, list[str] | Optional[str]]:
+        """
+        Извлекает source URL из metadata COUB.
+        """
+        file_versions = metadata.get("file_versions")
+        if not isinstance(file_versions, dict):
+            file_versions = {}
+
+        video_urls_raw: list[str] = []
+        audio_urls_raw: list[str] = []
+
+        video_candidates = (
+            self._nested_get(file_versions, "html5", "video", "high", "url"),
+            self._nested_get(file_versions, "html5", "video", "med", "url"),
+            self._nested_get(file_versions, "iphone", "url"),
+            self._nested_get(file_versions, "mobile", "video"),
+            self._nested_get(file_versions, "mobile", "video_url"),
+        )
+        for candidate in video_candidates:
+            found = self._first_http_url(candidate)
+            if isinstance(found, str):
+                video_urls_raw.append(found)
+
+        audio_candidates = (
+            self._nested_get(file_versions, "html5", "audio", "high", "url"),
+            self._nested_get(file_versions, "html5", "audio", "med", "url"),
+            self._nested_get(file_versions, "mobile", "audio_url"),
+            self._nested_get(file_versions, "mobile", "audio"),
+            metadata.get("audio_file_url"),
+        )
+        for candidate in audio_candidates:
+            if isinstance(candidate, list):
+                for item in candidate:
+                    found = self._first_http_url(item)
+                    if isinstance(found, str):
+                        audio_urls_raw.append(found)
+                continue
+
+            found = self._first_http_url(candidate)
+            if isinstance(found, str):
+                audio_urls_raw.append(found)
+
+        share_url = self._first_http_url(self._nested_get(file_versions, "share", "default"))
+
+        return {
+            "video_urls": self._deduplicate_urls(video_urls_raw),
+            "audio_urls": self._deduplicate_urls(audio_urls_raw),
+            "share_url": share_url if isinstance(share_url, str) else None,
+        }
+
+    def _extract_segment_source_urls(self, segments_payload: Dict[str, Any]) -> Tuple[list[str], list[str]]:
+        """
+        Извлекает video/audio URL из payload endpoint /segments.
+        """
+        segments = segments_payload.get("segments")
+        if not isinstance(segments, list):
+            return [], []
+
+        raw_urls: list[str] = []
+        for segment_item in segments:
+            raw_urls.extend(self._collect_http_urls(segment_item))
+
+        video_urls: list[str] = []
+        audio_urls: list[str] = []
+        for candidate_url in self._deduplicate_urls(raw_urls):
+            media_type = self._classify_media_url(candidate_url)
+            if media_type == "video":
+                video_urls.append(candidate_url)
+            elif media_type == "audio":
+                audio_urls.append(candidate_url)
+
+        return self._deduplicate_urls(video_urls), self._deduplicate_urls(audio_urls)
+
+    @staticmethod
+    def _url_suffix(url: str, default_suffix: str) -> str:
+        """
+        Возвращает расширение файла по URL.
+        """
+        suffix = Path(urlsplit(url).path).suffix.lower()
+        return suffix if suffix else default_suffix
+
+    async def _download_url_to_file(self, source_url: str, target_path: Path) -> bool:
+        """
+        Скачивает бинарный файл по прямому URL.
+        """
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            )
+        }
+        try:
+            timeout = aiohttp.ClientTimeout(total=90)
+            async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+                async with session.get(source_url) as response:
+                    if response.status != 200:
+                        logger.warning("Direct media download HTTP %s for %s", response.status, source_url)
+                        return False
+                    with target_path.open("wb") as file_obj:
+                        async for chunk in response.content.iter_chunked(256 * 1024):
+                            if not chunk:
+                                continue
+                            file_obj.write(chunk)
+            return target_path.exists() and target_path.stat().st_size > 0
+        except Exception as exc:
+            logger.warning("Direct media download failed for %s: %s", source_url, exc)
+            return False
+
+    async def _mux_video_and_audio(self, video_path: Path, audio_path: Path, output_path: Path) -> bool:
+        """
+        Объединяет видео и аудио в MP4 без перекодирования, где это возможно.
+        """
+        ffmpeg_path = which("ffmpeg")
+        if not ffmpeg_path:
+            return False
+
+        audio_suffix = audio_path.suffix.lower()
+        copy_audio = audio_suffix in {".aac", ".m4a"}
+
+        command = [
+            ffmpeg_path,
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            str(video_path),
+            "-i",
+            str(audio_path),
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
+            "-c:v",
+            "copy",
+            "-shortest",
+            "-movflags",
+            "+faststart",
+        ]
+        if copy_audio:
+            command.extend(["-c:a", "copy"])
+        else:
+            command.extend(["-c:a", "aac", "-b:a", "192k"])
+        command.append(str(output_path))
+
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await process.communicate()
+
+        if process.returncode != 0:
+            logger.warning(
+                "ffmpeg mux failed for %s + %s: %s",
+                video_path,
+                audio_path,
+                (stderr.decode(errors="ignore").strip() if stderr else "unknown error"),
+            )
+            return False
+        return output_path.exists() and output_path.stat().st_size > 0
+
+    async def _build_video_with_audio(
+        self,
+        *,
+        video_url: str,
+        audio_url: str,
+        video_id: str,
+    ) -> Optional[Path]:
+        """
+        Скачивает video/audio по прямым URL и собирает единый MP4.
+        """
+        video_tmp = self._generate_unique_path(f"{video_id}_video", suffix=self._url_suffix(video_url, ".mp4"))
+        audio_tmp = self._generate_unique_path(f"{video_id}_audio", suffix=self._url_suffix(audio_url, ".m4a"))
+        output_path = self._generate_unique_path(video_id, suffix=".mp4")
+
+        try:
+            if not await self._download_url_to_file(video_url, video_tmp):
+                return None
+            if not await self._download_url_to_file(audio_url, audio_tmp):
+                return None
+            if not await self._mux_video_and_audio(video_tmp, audio_tmp, output_path):
+                return None
+            if output_path.stat().st_size > self.video_limit:
+                logger.warning("COUB merged video is too large (%s bytes)", output_path.stat().st_size)
+                output_path.unlink(missing_ok=True)
+                return None
+            return output_path
+        finally:
+            video_tmp.unlink(missing_ok=True)
+            audio_tmp.unlink(missing_ok=True)
+
+    @staticmethod
+    def _build_file_info(
+        *,
+        file_path: Path,
+        title: str,
+        uploader: str,
+        original_url: str,
+        context: str,
+    ) -> Dict[str, Any]:
+        """
+        Формирует итоговый file_info для pipeline отправки.
+        """
+        return {
+            "type": "video",
+            "source_name": "COUB",
+            "file_path": file_path,
+            "thumbnail_path": None,
+            "title": title,
+            "uploader": uploader,
+            "original_url": original_url,
+            "context": context,
+        }
+
+    @staticmethod
+    def _extract_uploader(metadata: Dict[str, Any]) -> str:
+        """
+        Возвращает имя автора из metadata COUB.
+        """
+        channel = metadata.get("channel")
         if isinstance(channel, dict):
-            channel_title = channel.get("title")
-            if isinstance(channel_title, str) and channel_title.strip():
-                return channel_title.strip()
+            title = channel.get("title")
+            if isinstance(title, str) and title.strip():
+                return title.strip()
+
+        uploader = metadata.get("uploader")
+        if isinstance(uploader, str) and uploader.strip():
+            return uploader.strip()
+
         return "Unknown"
+
+    async def _try_source_segments(
+        self,
+        *,
+        coub_id: str,
+        metadata_urls: Dict[str, list[str] | Optional[str]],
+    ) -> Optional[Path]:
+        """
+        SOURCE A: segments (приоритетный путь для минимизации watermark).
+        """
+        segments_url = self.COUB_SEGMENTS_API_URL_TEMPLATE.format(coub_id=coub_id)
+        segments_payload = await self._fetch_json_payload(segments_url)
+        if not segments_payload:
+            return None
+
+        segment_video_urls, segment_audio_urls = self._extract_segment_source_urls(segments_payload)
+        if not segment_video_urls:
+            logger.info("COUB segments source has no usable video for %s", coub_id)
+            return None
+
+        best_video_url = self._pick_best_url(segment_video_urls)
+        best_audio_url = self._pick_best_url(segment_audio_urls)
+        if not best_audio_url:
+            best_audio_url = self._pick_best_url(metadata_urls.get("audio_urls", []))
+
+        if not best_video_url or not best_audio_url:
+            logger.info("COUB segments source is incomplete for %s (video/audio pair not found)", coub_id)
+            return None
+
+        if not which("ffmpeg"):
+            logger.warning("ffmpeg is not available; COUB segments source cannot be muxed for %s", coub_id)
+            return None
+
+        return await self._build_video_with_audio(
+            video_url=best_video_url,
+            audio_url=best_audio_url,
+            video_id=f"{coub_id}_segments",
+        )
+
+    async def _try_source_share(
+        self,
+        *,
+        coub_id: str,
+        metadata_urls: Dict[str, list[str] | Optional[str]],
+    ) -> Optional[Path]:
+        """
+        SOURCE B: file_versions.share.default.
+        """
+        share_url = metadata_urls.get("share_url")
+        if not isinstance(share_url, str) or not self._is_valid_media_url(share_url):
+            return None
+
+        result = await self._download_video(
+            share_url,
+            {
+                "format": "best[ext=mp4]/best",
+                "writethumbnail": False,
+                "noplaylist": True,
+            },
+            video_id=f"{coub_id}_share",
+        )
+        if not result:
+            return None
+        return result["file_path"]
+
+    async def _try_source_file_versions(
+        self,
+        *,
+        coub_id: str,
+        metadata_urls: Dict[str, list[str] | Optional[str]],
+    ) -> Optional[Path]:
+        """
+        SOURCE C: html5/mobile/iphone + fallback на текущий ytdlp-style.
+        """
+        video_urls = [url for url in metadata_urls.get("video_urls", []) if isinstance(url, str)]
+        audio_urls = [url for url in metadata_urls.get("audio_urls", []) if isinstance(url, str)]
+
+        if video_urls and audio_urls and which("ffmpeg"):
+            ordered_video_urls = sorted(video_urls, key=self._score_url, reverse=True)
+            ordered_audio_urls = sorted(audio_urls, key=self._score_url, reverse=True)
+
+            for video_url in ordered_video_urls:
+                for audio_url in ordered_audio_urls:
+                    merged_path = await self._build_video_with_audio(
+                        video_url=video_url,
+                        audio_url=audio_url,
+                        video_id=f"{coub_id}_fallback",
+                    )
+                    if merged_path:
+                        return merged_path
+
+        # Последний fallback: текущий ytdlp-style по основной ссылке COUB.
+        has_ffmpeg = bool(which("ffmpeg"))
+        ydl_result = await self._download_video(
+            f"https://www.coub.com/view/{coub_id}",
+            {
+                "format": (
+                    "html5-video-high+html5-audio-high/"
+                    "html5-video-high+html5-audio-med/"
+                    "bestvideo+bestaudio/best"
+                    if has_ffmpeg
+                    else "best[ext=mp4]/best"
+                ),
+                "writethumbnail": False,
+                "noplaylist": True,
+                "merge_output_format": "mp4",
+            },
+            video_id=f"{coub_id}_ytdlp",
+        )
+        if ydl_result:
+            return ydl_result["file_path"]
+
+        return None
 
     async def _process_coub_video(
         self,
@@ -97,72 +545,67 @@ class CoubVideo(VideoMixin):
         coub_match = self.COUB_ID_PATTERN.search(url)
         coub_id = coub_match.group(1) if coub_match else self._extract_video_id(url)
 
-        # Предпочтительный путь: собираем "чистое" видео и аудио в единый mp4.
-        # Это дает звук и, как правило, вариант без watermark.
-        primary_result = None
-        if self._is_ytdlp_ffmpeg_available():
-            primary_opts = {
-                "format": (
-                    "html5-video-high+html5-audio-high/"
-                    "html5-video-high+html5-audio-med/"
-                    "html5-video-med+html5-audio-high/"
-                    "bestvideo+bestaudio/best"
-                ),
-                "writethumbnail": True,
-                "noplaylist": True,
-                "merge_output_format": "mp4",
-            }
-            primary_result = await self._download_video(url, primary_opts, video_id=coub_id)
-        else:
-            logger.warning(
-                "ffmpeg is not available; COUB no-watermark merge path may be unavailable for %s",
-                url,
-            )
-
-        result = primary_result
-        payload: Optional[Dict[str, Any]] = None
-
-        # Fallback: берем share-видео напрямую из COUB API.
-        # Этот путь устойчивый для звука, но может содержать watermark.
-        if not result:
-            payload = await self._fetch_coub_api_payload(coub_id)
-            share_url = self._extract_share_video_url(payload or {})
-            if share_url:
-                fallback_opts = {
-                    "format": "best[ext=mp4]/best",
-                    "writethumbnail": False,
-                    "noplaylist": True,
-                }
-                result = await self._download_video(
-                    share_url,
-                    fallback_opts,
-                    video_id=f"{coub_id}_share",
-                )
-            else:
-                logger.warning("COUB share URL is not available for %s", url)
-
-        if not result:
+        metadata_url = self.COUB_METADATA_API_URL_TEMPLATE.format(coub_id=coub_id)
+        metadata = await self._fetch_json_payload(metadata_url)
+        if not metadata:
+            logger.error("COUB metadata is unavailable for %s", coub_id)
             return None
 
-        info = result["info"]
-        title = info.get("title")
-        uploader = info.get("uploader") or info.get("channel")
+        permalink = metadata.get("permalink")
+        if not isinstance(permalink, str) or permalink.lower() != coub_id.lower():
+            logger.error(
+                "COUB permalink mismatch detected: requested=%s, returned=%s",
+                coub_id,
+                permalink,
+            )
+            return None
 
-        if (not isinstance(title, str) or not title.strip()) and payload:
-            payload_title = payload.get("title")
-            if isinstance(payload_title, str) and payload_title.strip():
-                title = payload_title.strip()
+        title_raw = metadata.get("title")
+        title = title_raw.strip() if isinstance(title_raw, str) and title_raw.strip() else "COUB Video"
+        uploader = self._extract_uploader(metadata)
+        metadata_urls = self._extract_metadata_source_urls(metadata)
 
-        if (not isinstance(uploader, str) or not uploader.strip()) and payload:
-            uploader = self._extract_uploader_from_payload(payload)
+        # SOURCE A: segments (приоритет no-watermark).
+        file_path = await self._try_source_segments(
+            coub_id=coub_id,
+            metadata_urls=metadata_urls,
+        )
+        if file_path:
+            return self._build_file_info(
+                file_path=file_path,
+                title=title,
+                uploader=uploader,
+                original_url=original_url,
+                context=context,
+            )
 
-        return {
-            "type": "video",
-            "source_name": "COUB",
-            "file_path": result["file_path"],
-            "thumbnail_path": result["thumbnail_path"],
-            "title": title if isinstance(title, str) and title.strip() else "COUB Video",
-            "uploader": uploader if isinstance(uploader, str) and uploader.strip() else "Unknown",
-            "original_url": original_url,
-            "context": context,
-        }
+        # SOURCE B: share.
+        file_path = await self._try_source_share(
+            coub_id=coub_id,
+            metadata_urls=metadata_urls,
+        )
+        if file_path:
+            return self._build_file_info(
+                file_path=file_path,
+                title=title,
+                uploader=uploader,
+                original_url=original_url,
+                context=context,
+            )
+
+        # SOURCE C: file_versions/html5/mobile/iphone + ytdlp-style fallback.
+        file_path = await self._try_source_file_versions(
+            coub_id=coub_id,
+            metadata_urls=metadata_urls,
+        )
+        if file_path:
+            return self._build_file_info(
+                file_path=file_path,
+                title=title,
+                uploader=uploader,
+                original_url=original_url,
+                context=context,
+            )
+
+        logger.error("COUB download pipeline exhausted for %s: no usable source found", coub_id)
+        return None
