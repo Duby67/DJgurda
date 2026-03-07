@@ -71,6 +71,22 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
 
         return "\n".join(lines)
 
+    def _extract_total_videos_count(self, info: Dict[str, Any]) -> Optional[str]:
+        """
+        Возвращает общее количество видео на канале.
+
+        Приоритет:
+        1) channel_video_count / video_count (общее число видео)
+        2) playlist_count (резервный вариант, может быть неточным)
+        """
+        primary_count = self._format_count(
+            info.get("channel_video_count") or info.get("video_count")
+        )
+        if primary_count:
+            return primary_count
+
+        return self._format_count(info.get("playlist_count"))
+
     async def _process_youtube_channel(
         self,
         url: str,
@@ -115,9 +131,7 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
         subscriber_count = self._format_count(
             info.get("channel_follower_count") or info.get("follower_count")
         )
-        video_count = self._format_count(
-            info.get("playlist_count") or info.get("channel_video_count")
-        )
+        video_count = self._extract_total_videos_count(info)
 
         avatar_url = self._pick_thumbnail_url(
             info,
