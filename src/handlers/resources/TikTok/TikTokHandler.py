@@ -5,12 +5,16 @@
 """
 
 import re
+import logging
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from typing import Optional, Dict, Any
 
 from .TikTokVideo import TikTokVideo
 from .TikTokPhoto import TikTokPhoto
 from .TikTokProfile import TikTokProfile
 from src.handlers.base import BaseHandler
+
+logger = logging.getLogger(__name__)
 
 class TikTokHandler(BaseHandler, TikTokVideo, TikTokPhoto, TikTokProfile):
     """
@@ -23,6 +27,7 @@ class TikTokHandler(BaseHandler, TikTokVideo, TikTokPhoto, TikTokProfile):
     PATTERN = re.compile(
         r'https?://(?:www\.|m\.)?(?:tiktok\.com|vt\.tiktok\.com|vm\.tiktok\.com)\S+'
     )
+    TRACKING_QUERY_PARAMS = frozenset({"_r", "_t"})
 
     @property
     def pattern(self) -> re.Pattern:
@@ -33,6 +38,33 @@ class TikTokHandler(BaseHandler, TikTokVideo, TikTokPhoto, TikTokProfile):
     def source_name(self) -> str:
         """Возвращает название источника."""
         return "TikTok"
+
+    def _normalize_tiktok_url(self, url: str) -> str:
+        """
+        Удаляет трекинговые query-параметры TikTok, не затрагивая остальные.
+        """
+        parts = urlsplit(url)
+        if not parts.query:
+            return url
+
+        query_items = parse_qsl(parts.query, keep_blank_values=True)
+        filtered_items = [
+            (key, value)
+            for key, value in query_items
+            if key not in self.TRACKING_QUERY_PARAMS
+        ]
+
+        if len(filtered_items) == len(query_items):
+            return url
+
+        normalized_query = urlencode(filtered_items, doseq=True)
+        return urlunsplit((
+            parts.scheme,
+            parts.netloc,
+            parts.path,
+            normalized_query,
+            parts.fragment,
+        ))
 
     async def process(self, url: str, context: str, resolved_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
@@ -47,6 +79,10 @@ class TikTokHandler(BaseHandler, TikTokVideo, TikTokPhoto, TikTokProfile):
             Словарь с информацией о контенте или None при ошибке
         """
         target_url = resolved_url or url
+        normalized_url = self._normalize_tiktok_url(target_url)
+        if normalized_url != target_url:
+            logger.debug("Normalized TikTok URL: %s -> %s", target_url, normalized_url)
+        target_url = normalized_url
         
         # Определяем тип контента по пути URL
         if '/photo/' in target_url:
