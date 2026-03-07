@@ -1,2 +1,7 @@
-"""Модуль `__init__`."""
-from .YouTube import YouTubeHandler
+"""
+Пакет обработчика YouTube.
+"""
+
+from .YouTubeHandler import YouTubeHandler
+
+__all__ = ["YouTubeHandler"]

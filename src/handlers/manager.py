@@ -6,7 +6,7 @@ import logging
 from typing import List, Optional
 
 from .base import BaseHandler
-from src.handlers.resources import TikTokHandler
+from src.handlers.resources import TikTokHandler, YouTubeHandler, InstagramHandler
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,11 @@ class ServiceManager:
         """
         Инициализирует менеджер с зарегистрированными обработчиками.
         """
-        active_handler_classes = (TikTokHandler,)
+        active_handler_classes = (
+            TikTokHandler,
+            YouTubeHandler,
+            InstagramHandler,
+        )
         self.handlers: List[BaseHandler] = [handler_cls() for handler_cls in active_handler_classes]
         logger.info(f"Registered handlers: {len(self.handlers)}")
 

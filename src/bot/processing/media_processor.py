@@ -65,8 +65,10 @@ async def process_block(
         caption = build_caption(user_context, file_info, user_link, raw_url, handler)
 
         try:
+            content_type = file_info.get('type')
+
             # Обрабатываем разные типы медиа
-            if file_info['type'] == 'video':
+            if content_type in {'video', 'shorts', 'reels'}:
                 video = FSInputFile(file_info['file_path'])
                 thumb = (
                     FSInputFile(file_info['thumbnail_path']) 
@@ -79,7 +81,20 @@ async def process_block(
                     thumbnail=thumb,
                     supports_streaming=True
                 )                
-            elif file_info['type'] == 'audio':
+            elif content_type == 'stories':
+                story_media_type = file_info.get('story_media_type', 'video')
+                if story_media_type == 'photo':
+                    photo = FSInputFile(file_info['file_path'])
+                    await message.answer_photo(photo=photo, caption=caption)
+                else:
+                    video = FSInputFile(file_info['file_path'])
+                    await message.answer_video(
+                        video=video,
+                        caption=caption,
+                        supports_streaming=True
+                    )
+
+            elif content_type == 'audio':
                 audio = FSInputFile(file_info['file_path'])
                 thumb = (
                     FSInputFile(file_info['thumbnail_path']) 
@@ -93,11 +108,11 @@ async def process_block(
                     thumbnail=thumb,
                     caption=caption
                 )
-            elif file_info['type'] == 'photo':
+            elif content_type == 'photo':
                 photo = FSInputFile(file_info['file_path'])
                 await message.answer_photo(photo=photo, caption=caption)
                 
-            elif file_info['type'] == 'media_group':
+            elif content_type == 'media_group':
                 # Сначала отправляем аудио без подписи, чтобы сообщение с альбомом
                 # выглядело продолжением одного сценария просмотра.
                 if 'audio' in file_info:
@@ -121,13 +136,20 @@ async def process_block(
                 for f in file_info['files']:
                     if f['type'] == 'photo':
                         media.append(types.InputMediaPhoto(media=FSInputFile(f['file_path'])))
+                    elif f['type'] == 'video':
+                        media.append(types.InputMediaVideo(media=FSInputFile(f['file_path'])))
                 
                 if media:
                     if len(media) == 1:
-                        await message.answer_photo(
-                            photo=media[0].media,
-                            caption=caption
-                        )
+                        item = media[0]
+                        if isinstance(item, types.InputMediaPhoto):
+                            await message.answer_photo(photo=item.media, caption=caption)
+                        else:
+                            await message.answer_video(
+                                video=item.media,
+                                caption=caption,
+                                supports_streaming=True,
+                            )
                     else:
                         # У Telegram нет "общей" подписи альбома.
                         # Подпись ставится к одному элементу группы, поэтому
@@ -135,12 +157,15 @@ async def process_block(
                         media[0].caption = caption
                         await message.answer_media_group(media=media)
                  
-            elif file_info['type'] == 'profile':
+            elif content_type in {'profile', 'channel'}:
+                profile_caption = file_info.get('caption_text') or caption
                 if file_info['file_path'] and file_info['file_path'].exists():
                     photo = FSInputFile(file_info['file_path'])
-                    await message.answer_photo(photo=photo, caption=file_info['caption_text'])
+                    await message.answer_photo(photo=photo, caption=profile_caption)
                 else:
-                    await message.answer(file_info['caption_text'])
+                    await message.answer(profile_caption)
+            else:
+                raise ValueError(f"Unsupported file_info type: {content_type}")
 
             logger.info(f"Block {idx} sent successfully")
             if message.from_user:

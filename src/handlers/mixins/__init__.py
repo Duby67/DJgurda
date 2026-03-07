@@ -9,10 +9,12 @@ from .video import VideoMixin
 from .photo import PhotoMixin
 from .audio import AudioMixin
 from .media_group import MediaGroupMixin
+from .metadata import MetadataMixin
 
 __all__ = [
     'VideoMixin', 
     'PhotoMixin', 
     'AudioMixin', 
-    'MediaGroupMixin'
+    'MediaGroupMixin',
+    'MetadataMixin',
 ]

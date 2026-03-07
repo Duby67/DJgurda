@@ -14,7 +14,7 @@ from src.utils.Emoji import emoji, EMOJI_ERROR, EMOJI_VIDEO, EMOJI_ARROW
 
 # Паттерн для поиска хэштегов
 HASHTAG_PATTERN = re.compile(r'#\w+')
-EMPTY_TITLE_FALLBACK = "Контент из TikTok"
+TITLE_ELIGIBLE_TYPES = frozenset({"video", "photo", "media_group", "shorts", "reels", "stories"})
 
 
 class SourceHandler(Protocol):
@@ -42,18 +42,20 @@ def _build_safe_title(file_info: Dict[str, Any], source: str) -> str | None:
     """
     Возвращает безопасный заголовок для подписи.
 
-    Для TikTok гарантирует fallback, если после очистки хэштегов заголовок пустой
-    или исходный title отсутствует/некорректный.
+    Для всех источников гарантирует fallback, если после очистки хэштегов
+    заголовок пустой или исходный title отсутствует/некорректный.
     """
+    fallback_title = f"Контент из {source}" if source else "Контент"
+
     raw_title = file_info.get('title')
     if not isinstance(raw_title, str):
-        return EMPTY_TITLE_FALLBACK if source == "TikTok" else None
+        return fallback_title
 
     clean_title = _remove_hashtags(raw_title)
     if clean_title:
         return clean_title
 
-    return EMPTY_TITLE_FALLBACK if source == "TikTok" else None
+    return fallback_title
 
 def build_caption(
     user_context: str,
@@ -84,7 +86,7 @@ def build_caption(
         lines.append(safe_context)
         
     # Для медиа-контента добавляем информацию о названии и авторе.
-    if file_info['type'] in {'video', 'photo', 'media_group'}:
+    if file_info['type'] in TITLE_ELIGIBLE_TYPES:
         safe_title_value = _build_safe_title(file_info, source)
         if safe_title_value:
             lines.append("")  # Пустая строка для разделения

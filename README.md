@@ -1,7 +1,12 @@
 # DJgurda Bot
 
 Асинхронный Telegram-бот для обработки медиа-ссылок в чатах.  
-Текущий рабочий контур ориентирован на TikTok (видео, фото/слайдшоу, профили), с сохранением статистики по чатам и пользователям.
+Текущий рабочий контур поддерживает:
+- TikTok (`video`, `profile`, `media_group`)
+- YouTube (`shorts`, `channel`)
+- Instagram (`reels`, `media_group`, `stories`, `profile`)
+
+Бот сохраняет статистику по чатам и пользователям.
 
 ## Продуктовое допущение (mobile-first)
 
@@ -26,7 +31,10 @@
 
 - `docs/` не используется как поддерживаемый источник актуального контекста.
 - `tests/` / `test/` на текущем этапе в основном считаются legacy-зоной и не являются источником истины.
-- Исключение: для локальной проверки работоспособности handlers используй прототип `test/TikTok/test_tiktok_handlers_local.py` + `test/TikTok/TikTok_urls.py`.
+- Исключение: для локальной проверки handlers используй smoke-скрипты:
+  - `test/TikTok/test_tiktok_handlers_local.py` + `test/TikTok/TikTok_urls.py`
+  - `test/YouTube/test_youtube_handlers_local.py` + `test/YouTube/urls.py`
+  - `test/Instagram/test_instagram_handlers_local.py` + `test/Instagram/urls.py`
 - При возврате к этим областям в будущем их нужно явно заново договорить и обновить в `.github/ai_context.md`.
 
 ## Быстрый запуск
@@ -142,8 +150,8 @@ python scripts/release_sync.py --tag v1.2.0 --write
 
 ## Текущее ограничение
 
-В runtime зарегистрирован только `TikTokHandler`.  
-Другие handlers присутствуют в коде, но не подключены в `ServiceManager`.
+В runtime зарегистрированы `TikTokHandler`, `YouTubeHandler`, `InstagramHandler`.  
+`YandexMusic` и `VK` handlers присутствуют в коде, но пока не подключены в `ServiceManager`.
 
 ## База данных
 

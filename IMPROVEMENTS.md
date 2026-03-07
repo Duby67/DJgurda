@@ -6,7 +6,7 @@
 
 ## Метаданные backlog
 
-- Последняя ревизия backlog: 2026-03-07 | version/tag: infra-local-update
+- Последняя ревизия backlog: 2026-03-07 | version/tag: handlers-youtube-instagram
 
 ## Приоритет P0 (критично)
 
@@ -34,10 +34,11 @@
 
 ### 3. Стратегия по неактивным handlers
 
-- Статус (2026-03-07): открыто.
-- Проблема: в коде есть YouTube/Instagram/YandexMusic/VK handlers, но в runtime подключен только TikTok.
+- Статус (2026-03-07): частично выполнено.
+- Проблема: в коде есть YouTube/Instagram/YandexMusic/VK handlers; после подключения YouTube/Instagram в runtime остаются неактивными YandexMusic/VK.
 - Действие:
-  - Выбрать подход: поэтапное включение или архивирование неиспользуемых обработчиков.
+  - Подключить готовые обработчики YouTube/Instagram в `ServiceManager` с минимальным риском для текущего TikTok pipeline. ✅ Выполнено.
+  - Выбрать подход: поэтапное включение или архивирование оставшихся неиспользуемых обработчиков.
   - Для включаемых источников добавить критерии readiness и чеклист.
 - Результат: меньше технического долга и понятный roadmap по источникам.
 
@@ -211,8 +212,9 @@
   - Добавить локальный интеграционный сценарий проверки `TikTokHandler` на реальных ссылках (`video`, `profile`, `media_group`) с явным отчетом по результатам. ✅ Выполнено (`test/TikTok/test_tiktok_handlers_local.py`, проверка 3/3 успешна).
   - Реорганизовать прототип в `test/TikTok`: вынести тестовые URL в отдельный файл `TikTok_urls` с комментариями и использовать его как источник данных для smoke-теста handlers. ✅ Выполнено (`test/TikTok/TikTok_urls.py`).
   - Зафиксировать в `README.md` и `.github/ai_context.md`, что для будущих проверок работоспособности handlers используется прототип: `test/TikTok/test_tiktok_handlers_local.py` + `test/TikTok/TikTok_urls.py`. ✅ Выполнено.
-  - Добавить отдельный файл `test/YouTube/YouTube_urls.py` с тестовыми ссылками YouTube (профиль канала и shorts) как заготовку для будущего smoke-прототипа YouTubeHandler. ✅ Выполнено.
-  - Добавить отдельный файл `test/Instagram/Instagram_urls.py` с URL-заглушками для типов контента (`profile`, `reels`, `media_group`, `stories`) как заготовку под будущий smoke-прототип InstagramHandler. ✅ Выполнено.
+  - Добавить отдельный smoke-тест `test/YouTube/test_youtube_handlers_local.py` и источник ссылок `test/YouTube/urls.py` для кейсов `shorts`/`channel`. ✅ Выполнено.
+  - Добавить отдельный smoke-тест `test/Instagram/test_instagram_handlers_local.py` и источник ссылок `test/Instagram/urls.py` для кейсов `reels`/`media_group`/`stories`/`profile`. ✅ Выполнено.
+  - Добавить режим `--classify-only` в YouTube/Instagram smoke-скрипты для офлайн-проверки классификации URL без сетевого скачивания. ✅ Выполнено.
   - Провести аудит fallback для TikTok caption после очистки хэштегов и гарантировать корректный fallback даже при пустом/невалидном title. ✅ Выполнено.
   - Запускать эти тесты в CI для `dev`.
 - Результат: снижение регрессий при развитии функционала.

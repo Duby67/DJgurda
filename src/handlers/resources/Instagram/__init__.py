@@ -1,2 +1,7 @@
-"""Модуль `__init__`."""
-from .Instagram import InstagramHandler
+"""
+Пакет обработчика Instagram.
+"""
+
+from .InstagramHandler import InstagramHandler
+
+__all__ = ["InstagramHandler"]
