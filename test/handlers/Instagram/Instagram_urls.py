@@ -25,12 +25,40 @@ MEDIA_GROUP_URL: Final[str] = "https://www.instagram.com/p/C2s3R9DrQjL/"
 # Ожидаем, что обработчик вернет type='stories'.
 STORIES_URL: Final[str] = "https://www.instagram.com/stories/instagram/3283285557542675306/"
 
+# Кейс: interstitial-ссылка l.instagram.com с параметром `u`.
+# Ожидаем, что resolve_url распакует ее до profile URL.
+WRAPPED_PROFILE_URL: Final[str] = (
+    "https://l.instagram.com/?"
+    "u=https%3A%2F%2Fwww.instagram.com%2Finstagram%2F"
+    "&e=AT0"
+)
+
+# Кейс: interstitial-ссылка l.instagram.com с относительным `u`.
+# Ожидаем распаковку в абсолютный profile URL.
+WRAPPED_PROFILE_RELATIVE_URL: Final[str] = (
+    "https://l.instagram.com/?"
+    "u=%2Finstagram%2F"
+    "&e=AT0"
+)
+
 INSTAGRAM_TEST_CASES: Final[tuple[dict[str, str], ...]] = (
     {
         "name": "profile",
         "url": PROFILE_URL,
         "expected_type": "profile",
         "description": "Профиль Instagram (@username).",
+    },
+    {
+        "name": "profile_wrapped",
+        "url": WRAPPED_PROFILE_URL,
+        "expected_type": "profile",
+        "description": "Interstitial l.instagram.com должен распаковываться в профиль.",
+    },
+    {
+        "name": "profile_wrapped_relative",
+        "url": WRAPPED_PROFILE_RELATIVE_URL,
+        "expected_type": "profile",
+        "description": "Interstitial l.instagram.com с относительным u.",
     },
     {
         "name": "reels",
