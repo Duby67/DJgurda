@@ -33,6 +33,16 @@ class TikTokPhoto(PhotoMixin, MediaGroupMixin):
             Словарь с информацией о медиа или None при ошибке
         """
         target_url = resolved_url or url
+        download_url = target_url
+        if '/photo/' in download_url:
+            # yt-dlp для TikTok ожидает canonical URL с сегментом /video/.
+            download_url = re.sub(
+                r'^https?://(?:m\.)?tiktok\.com',
+                'https://www.tiktok.com',
+                download_url,
+                count=1
+            ).replace('/photo/', '/video/', 1)
+            logger.debug("Normalized TikTok photo URL for yt-dlp: %s -> %s", target_url, download_url)
         
         # Извлекаем ID из URL
         photo_id_match = re.search(r'/(\d+)[?/]?', target_url)
@@ -57,7 +67,7 @@ class TikTokPhoto(PhotoMixin, MediaGroupMixin):
 
         # Скачиваем все медиа
         media_list = await self._download_media_group(
-            target_url,
+            download_url,
             ydl_opts,
             group_id=photo_id,
             size_limit=self.photo_limit
