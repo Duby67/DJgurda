@@ -98,18 +98,8 @@ async def process_block(
                 await message.answer_photo(photo=photo, caption=caption)
                 
             elif file_info['type'] == 'media_group':
-                # Отправляем группу медиа
-                media = []
-                for f in file_info['files']:
-                    if f['type'] == 'photo':
-                        media.append(types.InputMediaPhoto(media=FSInputFile(f['file_path'])))
-                
-                if media:
-                    # Добавляем подпись к последнему медиа в группе
-                    media[-1].caption = caption
-                    await message.answer_media_group(media=media)
-
-                # Отдельно отправляем аудио, если есть
+                # Сначала отправляем аудио без подписи, чтобы сообщение с альбомом
+                # выглядело продолжением одного сценария просмотра.
                 if 'audio' in file_info:
                     audio = FSInputFile(file_info['audio']['file_path'])
                     await message.answer_audio(
@@ -118,7 +108,24 @@ async def process_block(
                         performer=file_info['audio']['performer'],
                         caption=None
                     )
+
+                # Затем отправляем группу медиа с подписью.
+                media = []
+                for f in file_info['files']:
+                    if f['type'] == 'photo':
+                        media.append(types.InputMediaPhoto(media=FSInputFile(f['file_path'])))
                 
+                if media:
+                    if len(media) == 1:
+                        await message.answer_photo(
+                            photo=media[0].media,
+                            caption=caption
+                        )
+                    else:
+                        # Добавляем подпись к последнему медиа в группе.
+                        media[-1].caption = caption
+                        await message.answer_media_group(media=media)
+                 
             elif file_info['type'] == 'profile':
                 if file_info['file_path'] and file_info['file_path'].exists():
                     photo = FSInputFile(file_info['file_path'])
