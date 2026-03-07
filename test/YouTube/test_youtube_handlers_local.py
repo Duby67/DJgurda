@@ -36,7 +36,7 @@ os.environ.setdefault(
 from src.handlers.manager import ServiceManager
 from src.handlers.resources import YouTubeHandler
 from src.utils.url import resolve_url
-from urls import YOUTUBE_TEST_CASES
+from source_urls import YOUTUBE_TEST_CASES
 
 
 @dataclass(frozen=True)

@@ -1,6 +1,6 @@
-"""Совместимый импорт тестовых URL Instagram из нового файла `urls.py`."""
+"""Совместимый импорт тестовых URL Instagram из файла `source_urls.py`."""
 
-from urls import (
+from source_urls import (
     INSTAGRAM_TEST_CASES,
     MEDIA_GROUP_URL,
     PROFILE_URL,

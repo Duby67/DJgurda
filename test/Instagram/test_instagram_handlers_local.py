@@ -36,7 +36,7 @@ os.environ.setdefault(
 from src.handlers.manager import ServiceManager
 from src.handlers.resources import InstagramHandler
 from src.utils.url import resolve_url
-from urls import INSTAGRAM_TEST_CASES
+from source_urls import INSTAGRAM_TEST_CASES
 
 
 @dataclass(frozen=True)

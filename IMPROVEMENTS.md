@@ -6,7 +6,7 @@
 
 ## Метаданные backlog
 
-- Последняя ревизия backlog: 2026-03-07 | version/tag: handlers-youtube-instagram
+- Последняя ревизия backlog: 2026-03-07 | version/tag: handlers-test-guideline
 
 ## Приоритет P0 (критично)
 
@@ -212,8 +212,10 @@
   - Добавить локальный интеграционный сценарий проверки `TikTokHandler` на реальных ссылках (`video`, `profile`, `media_group`) с явным отчетом по результатам. ✅ Выполнено (`test/TikTok/test_tiktok_handlers_local.py`, проверка 3/3 успешна).
   - Реорганизовать прототип в `test/TikTok`: вынести тестовые URL в отдельный файл `TikTok_urls` с комментариями и использовать его как источник данных для smoke-теста handlers. ✅ Выполнено (`test/TikTok/TikTok_urls.py`).
   - Зафиксировать в `README.md` и `.github/ai_context.md`, что для будущих проверок работоспособности handlers используется прототип: `test/TikTok/test_tiktok_handlers_local.py` + `test/TikTok/TikTok_urls.py`. ✅ Выполнено.
-  - Добавить отдельный smoke-тест `test/YouTube/test_youtube_handlers_local.py` и источник ссылок `test/YouTube/urls.py` для кейсов `shorts`/`channel`. ✅ Выполнено.
-  - Добавить отдельный smoke-тест `test/Instagram/test_instagram_handlers_local.py` и источник ссылок `test/Instagram/urls.py` для кейсов `reels`/`media_group`/`stories`/`profile`. ✅ Выполнено.
+  - Добавить отдельный smoke-тест `test/YouTube/test_youtube_handlers_local.py` и источник ссылок `test/YouTube/source_urls.py` для кейсов `shorts`/`channel`. ✅ Выполнено.
+  - Добавить отдельный smoke-тест `test/Instagram/test_instagram_handlers_local.py` и источник ссылок `test/Instagram/source_urls.py` для кейсов `reels`/`media_group`/`stories`/`profile`. ✅ Выполнено.
+  - Зафиксировать единое правило именования источника тестовых ссылок как `source_urls.py` для новых smoke-тестов handlers. ✅ Выполнено.
+  - Добавить в markdown-документацию правило-шаблон для будущих handler smoke-тестов (структура теста и обязательные шаги). ✅ Выполнено.
   - Добавить режим `--classify-only` в YouTube/Instagram smoke-скрипты для офлайн-проверки классификации URL без сетевого скачивания. ✅ Выполнено.
   - Провести аудит fallback для TikTok caption после очистки хэштегов и гарантировать корректный fallback даже при пустом/невалидном title. ✅ Выполнено.
   - Запускать эти тесты в CI для `dev`.
