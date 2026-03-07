@@ -7,5 +7,6 @@
 from .TikTok import TikTokHandler
 from .YouTube import YouTubeHandler
 from .Instagram import InstagramHandler
+from .Coub import CoubHandler
 
-__all__ = ["TikTokHandler", "YouTubeHandler", "InstagramHandler"]
+__all__ = ["TikTokHandler", "YouTubeHandler", "InstagramHandler", "CoubHandler"]

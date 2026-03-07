@@ -6,7 +6,7 @@ import logging
 from typing import List, Optional
 
 from .base import BaseHandler
-from src.handlers.resources import TikTokHandler, YouTubeHandler, InstagramHandler
+from src.handlers.resources import CoubHandler, InstagramHandler, TikTokHandler, YouTubeHandler
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,7 @@ class ServiceManager:
             TikTokHandler,
             YouTubeHandler,
             InstagramHandler,
+            CoubHandler,
         )
         self.handlers: List[BaseHandler] = [handler_cls() for handler_cls in active_handler_classes]
         logger.info(f"Registered handlers: {len(self.handlers)}")

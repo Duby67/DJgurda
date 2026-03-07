@@ -6,6 +6,7 @@
 - TikTok (`video`, `profile`, `media_group`)
 - YouTube (`shorts`, `channel`)
 - Instagram (`reels`, `media_group`, `stories`, `profile`)
+- COUB (`video`)
 
 Бот сохраняет статистику по чатам и пользователям.
 
@@ -174,7 +175,7 @@ python scripts/release_sync.py --tag v1.2.0 --write
 
 ## Текущее ограничение
 
-В runtime зарегистрированы `TikTokHandler`, `YouTubeHandler`, `InstagramHandler`.  
+В runtime зарегистрированы `TikTokHandler`, `YouTubeHandler`, `InstagramHandler`, `CoubHandler`.  
 `YandexMusic` и `VK` handlers присутствуют в коде, но пока не подключены в `ServiceManager`.
 
 ## База данных
