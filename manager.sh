@@ -219,8 +219,20 @@ prepare_runtime_dirs() {
 
 stop_and_remove_container() {
     if docker ps -a --format '{{.Names}}' | grep -Fxq "$CONTAINER_NAME"; then
-        log "INFO" "Stopping and removing container: ${CONTAINER_NAME}"
-        docker rm -f "$CONTAINER_NAME" >/dev/null
+        local is_running
+        is_running="$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo false)"
+
+        if [ "$is_running" = "true" ]; then
+            log "INFO" "Stopping container gracefully: ${CONTAINER_NAME}"
+            if ! docker stop --time 25 "$CONTAINER_NAME" >/dev/null; then
+                log "WARN" "Graceful stop failed for ${CONTAINER_NAME}, forcing removal"
+            fi
+        fi
+
+        log "INFO" "Removing container: ${CONTAINER_NAME}"
+        if ! docker rm "$CONTAINER_NAME" >/dev/null 2>&1; then
+            docker rm -f "$CONTAINER_NAME" >/dev/null
+        fi
     else
         log "INFO" "Container ${CONTAINER_NAME} not found, skipping stop"
     fi
