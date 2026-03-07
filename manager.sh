@@ -11,10 +11,29 @@ fi
 ENVIRONMENT="$1"
 SCRIPT_START_TS="$(date +%s)"
 CURRENT_STEP="init"
-LOG_FILE="/tmp/djgurda_deploy_${ENVIRONMENT}.log"
+
+# Ранний валидатор окружения до инициализации логирования.
+case "$ENVIRONMENT" in
+    prod|dev) ;;
+    *)
+        echo "Некорректное окружение: ${ENVIRONMENT}. Используй prod или dev."
+        exit 1
+        ;;
+esac
+
+BOT_DIR="$HOME/bot_${ENVIRONMENT}"
+LOGS_DIR="${BOT_DIR}/logs"
+LOG_FILE="${LOGS_DIR}/manager.log"
+if ! mkdir -p "$LOGS_DIR"; then
+    echo "Не удалось создать каталог логов: ${LOGS_DIR}"
+    echo "Проверь права на ${BOT_DIR} и владельца директории."
+    exit 1
+fi
+RUN_UID="$(id -u)"
+RUN_GID="$(id -g)"
 
 # Настраиваем единый вывод в консоль и в лог-файл.
-exec > >(tee "$LOG_FILE") 2>&1
+exec > >(tee -a "$LOG_FILE") 2>&1
 
 REQUIRED_ENV_KEYS=(
     "ADMIN_ID"
@@ -65,13 +84,11 @@ run_step() {
 configure_environment() {
     case "$ENVIRONMENT" in
         prod)
-            BOT_DIR="$HOME/bot_prod"
             CONTAINER_NAME="DJgurda-prod"
             IMAGE="ghcr.io/duby67/djgurda:latest"
             RESTART_POLICY="always"
             ;;
         dev)
-            BOT_DIR="$HOME/bot_dev"
             CONTAINER_NAME="DJgurda-dev"
             IMAGE="ghcr.io/duby67/djgurda:dev-latest"
             # Для dev контейнер не должен автоперезапускаться.
@@ -84,7 +101,7 @@ configure_environment() {
 
     DB_DIR="${BOT_DIR}/data/db"
     COOKIES_DIR="${BOT_DIR}/data/cookies"
-    LOGS_DIR="${BOT_DIR}/logs"
+    TEMP_DIR="${BOT_DIR}/data/temp_files"
     COOKIES_FILE="${COOKIES_DIR}/youtube_cookies.txt"
     ENV_FILE="${BOT_DIR}/.env"
 }
@@ -141,11 +158,12 @@ preflight() {
     log "INFO" "Environment: ${ENVIRONMENT}"
     log "INFO" "Container: ${CONTAINER_NAME}"
     log "INFO" "Image: ${IMAGE}"
+    log "INFO" "Run user (uid:gid): ${RUN_UID}:${RUN_GID}"
     log "INFO" "Restart policy: ${RESTART_POLICY}"
 }
 
 prepare_runtime_dirs() {
-    mkdir -p "$DB_DIR" "$COOKIES_DIR" "$LOGS_DIR"
+    mkdir -p "$DB_DIR" "$COOKIES_DIR" "$LOGS_DIR" "$TEMP_DIR"
 
     if [ ! -f "$COOKIES_FILE" ]; then
         touch "$COOKIES_FILE"
@@ -178,10 +196,12 @@ start_container() {
     log "INFO" "Starting container from image: ${IMAGE}"
     container_id="$(docker run -d \
         --name "$CONTAINER_NAME" \
+        --user "${RUN_UID}:${RUN_GID}" \
         --restart "$RESTART_POLICY" \
         --env-file "$ENV_FILE" \
         -v "$DB_DIR":/app/src/data/db \
         -v "$COOKIES_DIR":/app/src/data/cookies:ro \
+        -v "$TEMP_DIR":/app/src/data/temp_files \
         -v "$LOGS_DIR":/app/logs \
         "$IMAGE")"
 

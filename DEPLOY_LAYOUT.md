@@ -45,6 +45,7 @@
 ```text
 <server>/data/db      -> /app/src/data/db
 <server>/data/cookies -> /app/src/data/cookies:ro
+<server>/data/temp_files -> /app/src/data/temp_files
 <server>/logs         -> /app/logs
 ```
 
