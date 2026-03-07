@@ -20,7 +20,6 @@
 - `README.md` и `.github/ai_context.md` - канонические документы.
 - Контекст всегда проверяется по коду в `src/`.
 - При любом обращении к `README.md` агент обязан дополнительно проверить `.github/ai_context.md` и `IMPROVEMENTS.md`.
-- Markdown-файлы ведутся в едином стиле markdownlint (правила в `.markdownlint.json`, исключения в `.markdownlintignore`).
 
 ## Важный статус по структуре
 
@@ -35,7 +34,7 @@
 - Python 3.11+
 - FFmpeg в `PATH`
 
-1. Установка:
+2. Установка:
 
 ```bash
 python -m venv venv
@@ -47,7 +46,7 @@ python -m pip install -r requirements.txt
 # python -m pip install -r requirements-dev.txt
 ```
 
-1. Настройка `.env` (обязательные переменные валидируются в `src/config.py`):
+3. Настройка `.env` (обязательные переменные валидируются в `src/config.py`):
 
 - `BOT_DB_PATH`
 - `BOT_VERSION`
@@ -67,7 +66,7 @@ python -m pip install -r requirements.txt
 - `BOT_DB_PATH=/app/src/data/db/bot.db`
 - `YOUTUBE_COOKIES_PATH=/app/src/data/cookies/youtube_cookies.txt`
 
-1. Старт:
+4. Старт:
 
 ```bash
 python -m src.main
