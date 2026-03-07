@@ -62,21 +62,28 @@
 
 ## Стадии деплоя в `manager.sh`
 Скрипт выполняет деплой в фиксированном порядке с логами по шагам:
-1. `preflight`:
+1. `acquire-lock`:
+   - ожидание глобального lock-файла (`$HOME/.cache/djgurda/deploy.lock`);
+   - предотвращает параллельный деплой из cron/CI/manual для dev/prod.
+2. `preflight`:
    - проверка `docker` в `PATH`;
+   - проверка `flock` и доступности docker daemon;
    - проверка каталога окружения и `.env`;
+   - проверка freeze-файлов:
+     - глобальный: `$HOME/.bot_deploy.freeze`;
+     - окружения: `$HOME/bot_{env}/.deploy.freeze`;
    - проверка обязательных ключей;
    - проверка ожидаемых контейнерных путей (`BOT_DB_PATH`, `YOUTUBE_COOKIES_PATH`).
-2. `prepare-runtime`:
+3. `prepare-runtime`:
    - создание runtime-директорий (`db`, `cookies`, `logs`);
    - проверка/создание `youtube_cookies.txt`.
-3. `stop-container`:
+4. `stop-container`:
    - остановка и удаление контейнера целевого окружения.
-4. `cleanup-cache`:
+5. `cleanup-cache`:
    - очистка локального кэша деплой-каталога;
    - `docker system prune -f`.
-5. `start-container`:
+6. `start-container`:
    - запуск контейнера с нужным образом, томами и restart policy;
    - проверка факта старта контейнера через `docker ps`.
-6. `summary`:
+7. `summary`:
    - итоговая сводка с окружением, контейнером, образом, лог-файлом и длительностью.

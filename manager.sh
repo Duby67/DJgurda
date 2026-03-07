@@ -11,6 +11,7 @@ fi
 ENVIRONMENT="$1"
 SCRIPT_START_TS="$(date +%s)"
 CURRENT_STEP="init"
+LOCK_HELD=0
 
 # Ранний валидатор окружения до инициализации логирования.
 case "$ENVIRONMENT" in
@@ -71,6 +72,7 @@ on_error() {
 }
 
 trap 'on_error $? $LINENO' ERR
+trap 'release_deploy_lock' EXIT
 
 run_step() {
     local step="$1"
@@ -104,6 +106,33 @@ configure_environment() {
     TEMP_DIR="${BOT_DIR}/data/temp_files"
     COOKIES_FILE="${COOKIES_DIR}/youtube_cookies.txt"
     ENV_FILE="${BOT_DIR}/.env"
+
+    # Защиты от конкурентных запусков и технических окон.
+    LOCK_WAIT_SECONDS="${LOCK_WAIT_SECONDS:-1800}"
+    GLOBAL_LOCK_FILE="${HOME}/.cache/djgurda/deploy.lock"
+    GLOBAL_FREEZE_FILE="${HOME}/.bot_deploy.freeze"
+    ENV_FREEZE_FILE="${BOT_DIR}/.deploy.freeze"
+}
+
+acquire_deploy_lock() {
+    mkdir -p "$(dirname "$GLOBAL_LOCK_FILE")"
+    exec 9>"$GLOBAL_LOCK_FILE"
+
+    log "INFO" "Waiting for deploy lock (timeout: ${LOCK_WAIT_SECONDS}s)"
+    if ! flock -w "$LOCK_WAIT_SECONDS" 9; then
+        fail "Failed to acquire deploy lock in ${LOCK_WAIT_SECONDS}s: ${GLOBAL_LOCK_FILE}"
+    fi
+
+    LOCK_HELD=1
+    log "INFO" "Deploy lock acquired: ${GLOBAL_LOCK_FILE}"
+}
+
+release_deploy_lock() {
+    if [ "$LOCK_HELD" -eq 1 ]; then
+        flock -u 9 || true
+        LOCK_HELD=0
+        log "INFO" "Deploy lock released: ${GLOBAL_LOCK_FILE}"
+    fi
 }
 
 get_env_value() {
@@ -143,6 +172,8 @@ check_expected_container_paths() {
 
 preflight() {
     command -v docker >/dev/null 2>&1 || fail "Preflight failed: docker not found in PATH"
+    command -v flock >/dev/null 2>&1 || fail "Preflight failed: flock not found in PATH"
+    docker info >/dev/null 2>&1 || fail "Preflight failed: docker daemon is unavailable"
 
     if [ ! -d "$BOT_DIR" ]; then
         fail "Preflight failed: environment directory not found: ${BOT_DIR}"
@@ -150,6 +181,14 @@ preflight() {
 
     if [ ! -f "$ENV_FILE" ]; then
         fail "Preflight failed: env file not found: ${ENV_FILE}"
+    fi
+
+    if [ -f "$GLOBAL_FREEZE_FILE" ]; then
+        fail "Preflight failed: deploy freeze is active (${GLOBAL_FREEZE_FILE})"
+    fi
+
+    if [ -f "$ENV_FREEZE_FILE" ]; then
+        fail "Preflight failed: deploy freeze is active for ${ENVIRONMENT} (${ENV_FREEZE_FILE})"
     fi
 
     check_required_env_keys
@@ -234,6 +273,7 @@ print_summary() {
 main() {
     configure_environment
 
+    run_step "acquire-lock" acquire_deploy_lock
     run_step "preflight" preflight
     run_step "prepare-runtime" prepare_runtime_dirs
     run_step "stop-container" stop_and_remove_container
