@@ -48,4 +48,3 @@ Desktop.ini
 # Локальные runtime-артефакты проекта
 src/data/db/
 src/data/temp_files/
-tests/
