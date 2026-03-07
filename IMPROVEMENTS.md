@@ -212,6 +212,7 @@
   - Реорганизовать прототип в `test/TikTok`: вынести тестовые URL в отдельный файл `TikTok_urls` с комментариями и использовать его как источник данных для smoke-теста handlers. ✅ Выполнено (`test/TikTok/TikTok_urls.py`).
   - Зафиксировать в `README.md` и `.github/ai_context.md`, что для будущих проверок работоспособности handlers используется прототип: `test/TikTok/test_tiktok_handlers_local.py` + `test/TikTok/TikTok_urls.py`. ✅ Выполнено.
   - Добавить отдельный файл `test/YouTube/YouTube_urls.py` с тестовыми ссылками YouTube (профиль канала и shorts) как заготовку для будущего smoke-прототипа YouTubeHandler. ✅ Выполнено.
+  - Добавить отдельный файл `test/Instagram/Instagram_urls.py` с URL-заглушками для типов контента (`profile`, `reels`, `media_group`, `stories`) как заготовку под будущий smoke-прототип InstagramHandler. ✅ Выполнено.
   - Провести аудит fallback для TikTok caption после очистки хэштегов и гарантировать корректный fallback даже при пустом/невалидном title. ✅ Выполнено.
   - Запускать эти тесты в CI для `dev`.
 - Результат: снижение регрессий при развитии функционала.
