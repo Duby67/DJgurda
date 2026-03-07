@@ -1,7 +1,9 @@
 # Deploy Layout
 
 ## Схема расположения файлов (сервер и контейнер)
+
 Ниже схема основана на фактических путях из:
+
 - `src/config.py`
 - `src/middlewares/db/core.py`
 - `src/bot/lifespan/startup.py`
@@ -9,7 +11,9 @@
 - `manager.sh`
 
 ## Сервер (VPS)
+
 Для `dev`:
+
 ```text
 /home/<SSH_USER>/
 ├─ manager.sh
@@ -24,11 +28,13 @@
 ```
 
 Для `prod` аналогично:
+
 ```text
 /home/<SSH_USER>/bot_prod/...
 ```
 
 ## Docker контейнер
+
 ```text
 /app
 ├─ src/
@@ -42,6 +48,7 @@
 ```
 
 ## Проброс volume (из `manager.sh`)
+
 ```text
 <server>/data/db      -> /app/src/data/db
 <server>/data/cookies -> /app/src/data/cookies:ro
@@ -50,6 +57,7 @@
 ```
 
 ## Какие модули используют эти пути
+
 - `BOT_DB_PATH`:
   - читается в `src/config.py`
   - используется для SQLAlchemy URL в `src/middlewares/db/core.py`
@@ -61,10 +69,12 @@
   - очищается на startup в `src/bot/lifespan/startup.py`
 
 ## Стадии деплоя в `manager.sh`
+
 `manager.sh` общий для `dev` и `prod`.  
 Любые изменения скрипта должны сохранять рабочий перезапуск обоих окружений, даже если `prod` временно отстает от `dev`.
 
 Скрипт выполняет деплой в фиксированном порядке с логами по шагам:
+
 1. `acquire-lock`:
    - ожидание глобального lock-файла (`$HOME/.cache/djgurda/deploy.lock`);
    - предотвращает параллельный деплой из cron/CI/manual для dev/prod.
