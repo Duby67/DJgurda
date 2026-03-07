@@ -27,10 +27,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set lowercase repository names
+      - name: Compute lowercase repository names
+        id: repo_meta
+        shell: bash
         run: |
-          echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
-          echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+          echo "repo_lc=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
       - name: Validate release sync (when tag exists on HEAD)
         run: |
@@ -58,7 +60,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ env.OWNER_LC }}
+          username: ${{ steps.repo_meta.outputs.owner_lc }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
@@ -67,8 +69,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ env.REPO_LC }}:latest
-            ghcr.io/${{ env.REPO_LC }}:prod-${{ github.sha }}
+            ghcr.io/${{ steps.repo_meta.outputs.repo_lc }}:latest
+            ghcr.io/${{ steps.repo_meta.outputs.repo_lc }}:prod-${{ github.sha }}
           platforms: linux/amd64
 
       - name: Copy manager.sh to server
@@ -104,8 +106,8 @@ jobs:
             echo "YANDEX_MUSIC_TOKEN=${{ secrets.YANDEX_MUSIC_TOKEN }}" >> .env
             echo "YOUTUBE_COOKIES_PATH=/app/src/data/cookies/youtube_cookies.txt" >> .env
 
-            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ env.OWNER_LC }} --password-stdin
-            docker pull ghcr.io/${{ env.REPO_LC }}:latest
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ steps.repo_meta.outputs.owner_lc }} --password-stdin
+            docker pull ghcr.io/${{ steps.repo_meta.outputs.repo_lc }}:latest
 
             chmod +x /home/${{ secrets.SSH_USER }}/manager.sh
             /home/${{ secrets.SSH_USER }}/manager.sh prod
