@@ -71,7 +71,7 @@ DEFAULT_CASES = tuple(
 )
 
 
-async def run_case(case: TestCase, timeout_sec: int, classify_only: bool) -> TestResult:
+async def run_case(case: TestCase, timeout_sec: int) -> TestResult:
     """Запускает один тест-кейс и возвращает результат."""
     service_manager = ServiceManager()
     resolved_url = await resolve_url(case.url)
@@ -91,24 +91,6 @@ async def run_case(case: TestCase, timeout_sec: int, classify_only: bool) -> Tes
             resolved_url=resolved_url,
             ok=False,
             message=f"ожидался InstagramHandler, получен: {handler.__class__.__name__}",
-        )
-
-    if classify_only:
-        actual_type = handler._detect_content_type(resolved_url)  # type: ignore[attr-defined]
-        if actual_type != case.expected_type:
-            return TestResult(
-                case=case,
-                resolved_url=resolved_url,
-                ok=False,
-                message=f"ошибка классификации: ожидался type={case.expected_type}, получен type={actual_type}",
-                actual_type=actual_type,
-            )
-        return TestResult(
-            case=case,
-            resolved_url=resolved_url,
-            ok=True,
-            message="успешно (режим classify-only)",
-            actual_type=actual_type,
         )
 
     file_info: Optional[dict[str, Any]] = None
@@ -162,7 +144,7 @@ async def run_case(case: TestCase, timeout_sec: int, classify_only: bool) -> Tes
     )
 
 
-async def run_all(timeout_sec: int, classify_only: bool) -> int:
+async def run_all(timeout_sec: int) -> int:
     """Выполняет все тест-кейсы и возвращает код завершения."""
     print("=== InstagramHandler local smoke ===")
     print(f"project_root: {PROJECT_ROOT}")
@@ -172,7 +154,7 @@ async def run_all(timeout_sec: int, classify_only: bool) -> int:
     for case in DEFAULT_CASES:
         print(f"[RUN] {case.name}: {case.url}")
         print(f"  description: {case.description}")
-        result = await run_case(case, timeout_sec=timeout_sec, classify_only=classify_only)
+        result = await run_case(case, timeout_sec=timeout_sec)
         results.append(result)
         status = "OK" if result.ok else "FAIL"
         print(f"  status: {status}")
@@ -202,18 +184,13 @@ def parse_args() -> argparse.Namespace:
         default=180,
         help="Таймаут на один кейс в секундах (по умолчанию: 180).",
     )
-    parser.add_argument(
-        "--classify-only",
-        action="store_true",
-        help="Проверять только классификацию URL без скачивания контента.",
-    )
     return parser.parse_args()
 
 
 def main() -> int:
     """Точка входа."""
     args = parse_args()
-    return asyncio.run(run_all(timeout_sec=args.timeout, classify_only=args.classify_only))
+    return asyncio.run(run_all(timeout_sec=args.timeout))
 
 
 if __name__ == "__main__":

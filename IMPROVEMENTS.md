@@ -110,6 +110,7 @@
   - Для YouTube channel извлекать метаданные с приоритетом вкладки `/videos` и переносить счетчики из нее, чтобы избежать ложных значений вида `🎬 Видео: 2` на главной вкладке канала. ✅ Выполнено (`src/handlers/resources/YouTube/YouTubeChannel.py`, `test/handlers/YouTube/test_youtube_channel_video_count.py`).
   - Для деплоя заменить принудительное завершение контейнера (`docker rm -f`) на graceful-остановку (`docker stop --time 25`) с последующим удалением, чтобы `on_shutdown` успевал отправлять сообщение «Бот выключается...». ✅ Выполнено (`manager.sh`).
   - Усилить `on_shutdown`: отправка уведомления администратору не зависит от успешности чтения чатов из БД; ошибки получения чатов и закрытия БД логируются отдельно без срыва отправки уведомления. ✅ Выполнено (`src/bot/lifespan/shutdown.py`).
+  - Для Instagram profile добавить устойчивый fallback: при сбое `yt-dlp` extractor пробовать `web_profile_info` API по username и использовать канонический profile URL c завершающим `/`. ✅ Выполнено (`src/handlers/resources/Instagram/InstagramProfile.py`, `test/handlers/Instagram/test_instagram_profile_helpers.py`).
   - Собирать `exceptions_per_hour`, `error_rate`, `handler_failure_rate`.
   - Вести топ ошибок по типу/источнику:
     - `ValueError`, `TelegramTimeoutError`, ошибки БД, ошибки загрузки контента.
@@ -236,8 +237,8 @@
   - Добавить в markdown-документацию правило-шаблон для будущих handler smoke-тестов (структура теста и обязательные шаги). ✅ Выполнено.
   - Перенести правило `Handler Smoke-Тестов` из `README.md` в `.github/ai_context.md` как контекстное правило для агентов. ✅ Выполнено.
   - Добавить правило эскалации: если скрипт/тулза не запускается из-за ограничений среды (sandbox/права/сеть), запрашивать повышение прав. ✅ Выполнено (`.github/ai_context.md`).
-  - Добавить режим `--classify-only` в YouTube/Instagram smoke-скрипты для офлайн-проверки классификации URL без сетевого скачивания. ✅ Выполнено.
-  - Добавить режим `--classify-only` в `test/handlers/TikTok/test_tiktok_handlers_local.py` для паритета с YouTube/Instagram и офлайн-аудита классификации без сети.
+  - Убрать режим `--classify-only` из smoke-скриптов handlers и запускать их только в полном режиме обработки. ✅ Выполнено (`test/handlers/YouTube/test_youtube_handlers_local.py`, `test/handlers/Instagram/test_instagram_handlers_local.py`).
+  - Зафиксировать правило запуска тестов: любые тесты (`pytest`, smoke-скрипты) выполнять только с повышенными правами после явного запроса пользователю. ✅ Выполнено (`README.md`, `.github/ai_context.md`).
   - Убрать `PytestCollectionWarning` в `test/handlers/*`:
     - переименовать dataclass-модели (`TestCase`, `TestResult`) в имена без префикса `Test` или явно исключить их из сбора pytest.
   - Разделить smoke-скрипты и unit-тесты по разным маскам запуска в CI, чтобы `pytest` не пытался автоматически собирать сценарные CLI-скрипты как тестовые классы.

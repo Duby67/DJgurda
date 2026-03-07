@@ -11,7 +11,7 @@ from typing import Final
 
 # Кейс: профиль Instagram.
 # Ожидаем, что обработчик вернет type='profile'.
-PROFILE_URL: Final[str] = "https://www.instagram.com/instagram/"
+PROFILE_URL: Final[str] = "https://www.instagram.com/photo_by_malyshev?igsh=aGg5bHU3eTNjZ2Zk"
 
 # Кейс: Reels-публикация Instagram.
 # Ожидаем, что обработчик вернет type='reels'.
