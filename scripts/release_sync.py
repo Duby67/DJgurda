@@ -41,6 +41,18 @@ def read_version_from_src() -> str:
     return match.group(1).strip()
 
 
+def find_release_notes_date(tag: str, env: str) -> str | None:
+    text = RELEASE_NOTES.read_text(encoding="utf-8")
+    header_re = re.compile(
+        rf"^##\s+(\d{{4}}-\d{{2}}-\d{{2}})\s+\|\s+version/tag:\s*{re.escape(tag)}\s+\|\s+env:\s*{re.escape(env)}\s*$",
+        re.MULTILINE,
+    )
+    match = header_re.search(text)
+    if not match:
+        return None
+    return match.group(1)
+
+
 def ensure_release_notes_section(tag: str, release_date: str, env: str, write: bool) -> SyncResult:
     text = RELEASE_NOTES.read_text(encoding="utf-8")
     header_re = re.compile(rf"^##\s+\d{{4}}-\d{{2}}-\d{{2}}\s+\|\s+version/tag:\s*{re.escape(tag)}\s+\|\s+env:\s*{re.escape(env)}\s*$", re.MULTILINE)
@@ -122,13 +134,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Синхронизация релизных артефактов по tag")
     parser.add_argument("--tag", required=True, help="Релизный tag (например, v1.2.0 или 1.2.0)")
     parser.add_argument("--env", default="prod", help="Окружение для release notes (по умолчанию: prod)")
-    parser.add_argument("--date", default=str(date.today()), help="Дата релиза YYYY-MM-DD")
+    parser.add_argument(
+        "--date",
+        default=None,
+        help="Дата релиза YYYY-MM-DD (если не указана, берется из RELEASE_NOTES для текущего tag/env, иначе date.today())",
+    )
     parser.add_argument("--write", action="store_true", help="Применить изменения в файлах")
     args = parser.parse_args()
 
     raw_tag = args.tag.strip()
     norm_tag = normalize_tag(raw_tag)
     src_version = read_version_from_src()
+    release_date = args.date or find_release_notes_date(raw_tag, args.env) or str(date.today())
 
     if src_version != norm_tag:
         print(
@@ -139,11 +156,11 @@ def main() -> int:
 
     print(f"OK: src.__version__ == tag ({src_version})")
 
-    notes_result = ensure_release_notes_section(raw_tag, args.date, args.env, args.write)
+    notes_result = ensure_release_notes_section(raw_tag, release_date, args.env, args.write)
     for message in notes_result.messages:
         print(message)
 
-    improvements_result = ensure_improvements_revision(raw_tag, args.date, args.write)
+    improvements_result = ensure_improvements_revision(raw_tag, release_date, args.write)
     for message in improvements_result.messages:
         print(message)
 
