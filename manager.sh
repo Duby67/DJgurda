@@ -45,12 +45,10 @@ REQUIRED_ENV_KEYS=(
     "BOT_DB_PATH"
     "BOT_TOKEN"
     "YANDEX_MUSIC_TOKEN"
-    "YOUTUBE_COOKIES_PATH"
 )
 
 # Ожидаемые пути внутри контейнера (должны совпадать с .env на сервере).
 EXPECTED_BOT_DB_PATH="/app/src/data/db/bot.db"
-EXPECTED_YT_COOKIES_PATH="/app/src/data/cookies/youtube_cookies.txt"
 
 timestamp() {
     date "+%Y-%m-%d %H:%M:%S"
@@ -159,17 +157,11 @@ check_required_env_keys() {
 
 check_expected_container_paths() {
     local env_db_path
-    local env_cookies_path
 
     env_db_path="$(get_env_value "BOT_DB_PATH")"
-    env_cookies_path="$(get_env_value "YOUTUBE_COOKIES_PATH")"
 
     if [ "$env_db_path" != "$EXPECTED_BOT_DB_PATH" ]; then
         fail "Preflight failed: BOT_DB_PATH='${env_db_path}', expected '${EXPECTED_BOT_DB_PATH}'"
-    fi
-
-    if [ "$env_cookies_path" != "$EXPECTED_YT_COOKIES_PATH" ]; then
-        fail "Preflight failed: YOUTUBE_COOKIES_PATH='${env_cookies_path}', expected '${EXPECTED_YT_COOKIES_PATH}'"
     fi
 }
 

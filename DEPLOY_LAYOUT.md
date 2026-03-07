@@ -88,7 +88,7 @@
      - глобальный: `$HOME/.bot_deploy.freeze`;
      - окружения: `$HOME/bot_{env}/.deploy.freeze`;
    - проверка обязательных ключей;
-   - проверка ожидаемых контейнерных путей (`BOT_DB_PATH`, `YOUTUBE_COOKIES_PATH`) для совместимости deploy-контура.
+   - проверка ожидаемого контейнерного пути `BOT_DB_PATH` для совместимости deploy-контура.
 3. `prepare-runtime`:
    - создание runtime-директорий (`db`, `cookies`, `logs`);
    - проверка/создание `youtube_cookies.txt`.

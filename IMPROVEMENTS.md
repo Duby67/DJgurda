@@ -52,7 +52,7 @@
   - Разделить обязательные и условно-обязательные env-переменные.
   - Для неактивных интеграций добавить lazy-проверки только при их использовании.
   - Синхронизировать `manager.sh` с runtime-контрактом YouTube cookies:
-    - при `YOUTUBE_COOKIES_ENABLED=false` не требовать жестко `YOUTUBE_COOKIES_PATH` в preflight;
+    - при `YOUTUBE_COOKIES_ENABLED=false` не требовать жестко `YOUTUBE_COOKIES_PATH` в preflight. ✅ Выполнено (`manager.sh`);
     - не создавать `youtube_cookies.txt` автоматически, если cookies выключены.
 - Результат: проще локальный запуск и меньше ложных падений на старте.
 

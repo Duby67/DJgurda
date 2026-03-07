@@ -79,7 +79,7 @@
 
    Для Docker/deploy используются значения путей внутри контейнера:
    - `BOT_DB_PATH=/app/src/data/db/bot.db`
-   - `YOUTUBE_COOKIES_PATH=/app/src/data/cookies/youtube_cookies.txt`
+   - `YOUTUBE_COOKIES_PATH=/app/src/data/cookies/youtube_cookies.txt` (опционально, только если используешь cookies)
 4. Старт:
 
    ```bash
