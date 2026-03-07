@@ -40,7 +40,9 @@ class TikTokVideo(VideoMixin):
 
         # Опции для yt-dlp
         ydl_opts = {
-            'format': 'best[height<=1080][ext=mp4]/best[height<=1080]',
+            # Для части TikTok-постов метаданные форматов неполные
+            # (например, без height/ext), поэтому оставляем мягкий fallback до `best`.
+            'format': 'best[height<=1080][ext=mp4]/best[height<=1080]/best[ext=mp4]/best',
             'writethumbnail': True,
         }
 
