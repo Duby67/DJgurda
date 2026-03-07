@@ -5,8 +5,8 @@
 import html
 from typing import Any, Dict, Optional
 
-from src.config import YOUTUBE_COOKIES
 from src.handlers.mixins import MetadataMixin, PhotoMixin
+from .cookies import build_youtube_cookie_opts
 
 
 class YouTubeChannel(PhotoMixin, MetadataMixin):
@@ -82,13 +82,13 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
         """
         ydl_opts = {
             "extract_flat": True,
-            "cookiefile": str(YOUTUBE_COOKIES),
             "extractor_args": {
                 "youtube": {
                     "player_client": ["android", "web", "ios"],
                 }
             },
         }
+        ydl_opts.update(build_youtube_cookie_opts())
 
         info = await self._extract_metadata(url, ydl_opts)
         if not info:
@@ -148,4 +148,3 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
             "context": context,
             "caption_text": caption,
         }
-

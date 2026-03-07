@@ -101,6 +101,7 @@
   - Для TikTok video расширить цепочку выбора форматов, чтобы не падать на узком фильтре `height/ext`. ✅ Выполнено (`src/handlers/resources/TikTok/TikTokVideo.py`).
   - Для `resolve_url` добавить распаковку interstitial URL (`consent.youtube.com`, `l.instagram.com`) с поддержкой абсолютных и относительных `continue/u` параметров. ✅ Выполнено (`src/utils/url.py`).
   - Универсализировать `_normalize_unwrapped_candidate`: относительные пути (`/path`) нормализуются через `fallback_origin` текущего interstitial-домена, без хардкода `youtube.com` внутри функции. ✅ Выполнено (`src/utils/url.py`).
+  - Для YouTube cookies убрать безусловное использование `cookiefile`: включать только при `YOUTUBE_COOKIES_ENABLED=true`, а заглушечный/пустой файл автоматически игнорировать с диагностикой в логах. ✅ Выполнено (`src/handlers/resources/YouTube/cookies.py`, `src/handlers/resources/YouTube/YouTubeShorts.py`, `src/handlers/resources/YouTube/YouTubeChannel.py`, `src/config.py`).
   - Собирать `exceptions_per_hour`, `error_rate`, `handler_failure_rate`.
   - Вести топ ошибок по типу/источнику:
     - `ValueError`, `TelegramTimeoutError`, ошибки БД, ошибки загрузки контента.

@@ -5,8 +5,8 @@
 import re
 from typing import Any, Dict, Optional
 
-from src.config import YOUTUBE_COOKIES
 from src.handlers.mixins import VideoMixin
+from .cookies import build_youtube_cookie_opts
 
 
 class YouTubeShorts(VideoMixin):
@@ -33,13 +33,13 @@ class YouTubeShorts(VideoMixin):
             "merge_output_format": "mp4",
             "writethumbnail": True,
             "noplaylist": True,
-            "cookiefile": str(YOUTUBE_COOKIES),
             "extractor_args": {
                 "youtube": {
                     "player_client": ["android", "web", "ios"],
                 }
             },
         }
+        ydl_opts.update(build_youtube_cookie_opts())
         result = await self._download_video(url, ydl_opts, video_id=shorts_id)
         if not result:
             return None
@@ -55,4 +55,3 @@ class YouTubeShorts(VideoMixin):
             "original_url": original_url,
             "context": context,
         }
-

@@ -62,7 +62,9 @@
   - читается в `src/config.py`
   - используется для SQLAlchemy URL в `src/middlewares/db/core.py`
 - `YOUTUBE_COOKIES_PATH`:
-  - валидируется в `src/config.py` (файл должен существовать)
+  - используется только при `YOUTUBE_COOKIES_ENABLED=true`
+  - при отключенном режиме cookies (`YOUTUBE_COOKIES_ENABLED=false`) YouTube handler не передает `cookiefile` в `yt-dlp`
+  - если файл существует, но является заглушкой (пустой/без cookie-строк), handler игнорирует его
 - `PROJECT_TEMP_DIR` (`/app/src/data/temp_files` в контейнере):
   - формируется в `src/config.py`
   - используется миксинами `src/handlers/mixins/*` для скачивания временных файлов
@@ -86,7 +88,7 @@
      - глобальный: `$HOME/.bot_deploy.freeze`;
      - окружения: `$HOME/bot_{env}/.deploy.freeze`;
    - проверка обязательных ключей;
-   - проверка ожидаемых контейнерных путей (`BOT_DB_PATH`, `YOUTUBE_COOKIES_PATH`).
+   - проверка ожидаемых контейнерных путей (`BOT_DB_PATH`, `YOUTUBE_COOKIES_PATH`) для совместимости deploy-контура.
 3. `prepare-runtime`:
    - создание runtime-директорий (`db`, `cookies`, `logs`);
    - проверка/создание `youtube_cookies.txt`.

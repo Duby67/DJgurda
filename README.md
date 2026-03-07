@@ -2,6 +2,7 @@
 
 Асинхронный Telegram-бот для обработки медиа-ссылок в чатах.  
 Текущий рабочий контур поддерживает:
+
 - TikTok (`video`, `profile`, `media_group`)
 - YouTube (`shorts`, `channel`)
 - Instagram (`reels`, `media_group`, `stories`, `profile`)
@@ -56,7 +57,14 @@
    - `ADMIN_ID`
    - `BOT_TOKEN`
    - `YANDEX_MUSIC_TOKEN`
-   - `YOUTUBE_COOKIES_PATH`
+
+   Опционально для YouTube cookies:
+   - `YOUTUBE_COOKIES_ENABLED` (`true/false`, по умолчанию `false`)
+   - `YOUTUBE_COOKIES_PATH` (обязателен только при `YOUTUBE_COOKIES_ENABLED=true`)
+
+   Важное замечание:
+   - Если `youtube_cookies.txt` является заглушкой (пустой или без валидных cookie-строк), YouTube handler автоматически игнорирует этот файл.
+   - По умолчанию cookies не используются.
 
    Шаблон:
    - `env.example` (скопируй в `.env` и подставь значения).

@@ -38,13 +38,33 @@ def _require_int_env(name: str) -> int:
         raise ValueError(f"{name} должен быть числом") from exc
 
 
+def _read_bool_env(name: str, default: bool = False) -> bool:
+    """Читает bool-переменную окружения в формате true/false, 1/0, yes/no, on/off."""
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+
+    raise ValueError(f"{name} должен быть bool-значением (true/false, 1/0, yes/no, on/off)")
+
+
 DB_PATH = _require_env("BOT_DB_PATH")
 BOT_VERSION = _require_env("BOT_VERSION")
 ADMIN_ID = _require_int_env("ADMIN_ID")
 BOT_TOKEN = _require_env("BOT_TOKEN")
 YANDEX_MUSIC_TOKEN = _require_env("YANDEX_MUSIC_TOKEN")
 
-YOUTUBE_COOKIES_PATH = _require_env("YOUTUBE_COOKIES_PATH")
-YOUTUBE_COOKIES = Path(YOUTUBE_COOKIES_PATH).resolve()
-if not YOUTUBE_COOKIES.exists():
-    raise ValueError("Файл YOUTUBE_COOKIES не найден.")
+YOUTUBE_COOKIES_ENABLED = _read_bool_env("YOUTUBE_COOKIES_ENABLED", default=False)
+YOUTUBE_COOKIES_PATH = os.getenv("YOUTUBE_COOKIES_PATH", "").strip()
+YOUTUBE_COOKIES = Path(YOUTUBE_COOKIES_PATH).resolve() if YOUTUBE_COOKIES_PATH else None
+
+if YOUTUBE_COOKIES_ENABLED:
+    if not YOUTUBE_COOKIES_PATH:
+        raise ValueError("YOUTUBE_COOKIES_ENABLED=true требует заданный YOUTUBE_COOKIES_PATH.")
+    if YOUTUBE_COOKIES is None or not YOUTUBE_COOKIES.exists():
+        raise ValueError("Файл YOUTUBE_COOKIES не найден.")
