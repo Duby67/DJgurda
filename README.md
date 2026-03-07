@@ -151,10 +151,17 @@ python scripts/release_sync.py --tag v1.2.0 --write
    - если `patch < 9`: увеличить `patch`;
    - если `patch == 9`: `patch = 0`, увеличить `minor`;
    - если при переносе `minor == 9`: `minor = 0`, увеличить `major`.
-5. Создать новый tag `vX.Y.Z` и проверить соответствие `__version__ == X.Y.Z`.
-6. Обновить `RELEASE_NOTES.md` на основе выполненных задач.
-7. Удалить выполненные задачи из активного backlog `IMPROVEMENTS.md`.
-8. После этого выполнить финальный commit/push.
+5. Подготовить `RELEASE_NOTES.md`:
+   - добавить секцию релиза `vX.Y.Z`;
+   - перенести в нее список реально выполненных задач/изменений.
+6. Выполнить релизную чистку `IMPROVEMENTS.md`:
+   - удалить из активного backlog только те задачи, которые уже отражены в `RELEASE_NOTES.md` этого релиза.
+   - важно: очистка `IMPROVEMENTS.md` делается после фиксации задач в `RELEASE_NOTES.md`.
+7. Прогнать проверку синхронизации:
+   - `python scripts/release_sync.py --tag vX.Y.Z` (или `--write` для автосинхронизации метаданных).
+8. Сделать финальный commit релиза (version + release notes + cleanup backlog).
+9. Создать tag `vX.Y.Z` на этом commit.
+10. Выполнить `git push` ветки и `git push` тега.
 
 ## Текущее ограничение
 
