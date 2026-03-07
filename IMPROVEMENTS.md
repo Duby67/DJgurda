@@ -6,7 +6,7 @@
 
 ## Метаданные backlog
 
-- Последняя ревизия backlog: 2026-03-07 | version/tag: handlers-test-layout
+- Последняя ревизия backlog: 2026-03-07 | version/tag: handlers-url-hardening
 
 ## Приоритет P0 (критично)
 
@@ -97,6 +97,10 @@
   - Для TikTok `media_group` использовать музыкальные метаданные трека (title/performer) в аудио, а информацию о посте возвращать в caption альбома. ✅ Выполнено.
   - Для TikTok `media_group` при отправке аудио пробовать скачивать обложку трека из метаданных (`TikWM`/`yt-dlp`); если обложка недоступна или не скачалась, отправлять аудио без thumbnail. ✅ Выполнено.
   - В caption всегда удалять хэштеги из заголовка контента; если после очистки заголовок пустой, использовать нейтральный fallback-заголовок. ✅ Выполнено.
+  - Для video-обработчиков добавить fallback повторной загрузки с `format=best`, если `yt-dlp` вернул `Requested format is not available`. ✅ Выполнено (`src/handlers/mixins/video.py`).
+  - Для TikTok video расширить цепочку выбора форматов, чтобы не падать на узком фильтре `height/ext`. ✅ Выполнено (`src/handlers/resources/TikTok/TikTokVideo.py`).
+  - Для `resolve_url` добавить распаковку interstitial URL (`consent.youtube.com`, `l.instagram.com`) с поддержкой абсолютных и относительных `continue/u` параметров. ✅ Выполнено (`src/utils/url.py`).
+  - Универсализировать `_normalize_unwrapped_candidate`: относительные пути (`/path`) нормализуются через `fallback_origin` текущего interstitial-домена, без хардкода `youtube.com` внутри функции. ✅ Выполнено (`src/utils/url.py`).
   - Собирать `exceptions_per_hour`, `error_rate`, `handler_failure_rate`.
   - Вести топ ошибок по типу/источнику:
     - `ValueError`, `TelegramTimeoutError`, ошибки БД, ошибки загрузки контента.
@@ -215,7 +219,14 @@
   - Добавить отдельный smoke-тест `test/handlers/YouTube/test_youtube_handlers_local.py` и источник ссылок `test/handlers/YouTube/YouTube_urls.py` для кейсов `shorts`/`channel`. ✅ Выполнено.
   - Добавить отдельный smoke-тест `test/handlers/Instagram/test_instagram_handlers_local.py` и источник ссылок `test/handlers/Instagram/Instagram_urls.py` для кейсов `reels`/`media_group`/`stories`/`profile`. ✅ Выполнено.
   - Зафиксировать единое правило именования источника тестовых ссылок как `<Source>_urls.py` для новых smoke-тестов handlers. ✅ Выполнено.
+  - Перенести структуру локальных smoke-тестов handlers в единый путь `test/handlers/*`. ✅ Выполнено.
+  - Обновить TikTok video smoke-ссылку на кейс `https://www.tiktok.com/t/ZP8XA8HA8/`, который воспроизводил ошибку формата. ✅ Выполнено (`test/handlers/TikTok/TikTok_urls.py`).
+  - Добавить кейсы для interstitial-URL:
+    - YouTube consent (absolute + relative `continue`) ✅ Выполнено (`test/handlers/YouTube/YouTube_urls.py`);
+    - Instagram wrapped (absolute + relative `u`) ✅ Выполнено (`test/handlers/Instagram/Instagram_urls.py`).
   - Добавить в markdown-документацию правило-шаблон для будущих handler smoke-тестов (структура теста и обязательные шаги). ✅ Выполнено.
+  - Перенести правило `Handler Smoke-Тестов` из `README.md` в `.github/ai_context.md` как контекстное правило для агентов. ✅ Выполнено.
+  - Добавить правило эскалации: если скрипт/тулза не запускается из-за ограничений среды (sandbox/права/сеть), запрашивать повышение прав. ✅ Выполнено (`.github/ai_context.md`).
   - Добавить режим `--classify-only` в YouTube/Instagram smoke-скрипты для офлайн-проверки классификации URL без сетевого скачивания. ✅ Выполнено.
   - Провести аудит fallback для TikTok caption после очистки хэштегов и гарантировать корректный fallback даже при пустом/невалидном title. ✅ Выполнено.
   - Запускать эти тесты в CI для `dev`.
