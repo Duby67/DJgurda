@@ -72,13 +72,14 @@ async def update_stats(chat_id: int, user_id: int, source: str) -> None:
         logger.exception(f"Failed to update stats for chat {chat_id}, user {user_id}, source {source}")
 
 
-async def get_chat_stats(chat_id: int, limit: int = 10) -> List[Tuple[int, int, Dict[str, int]]]:
+async def get_chat_stats(chat_id: int, limit: int | None = 10) -> List[Tuple[int, int, Dict[str, int]]]:
     """
     Получает статистику по чату.
     
     Аргументы:
         chat_id: ID чата
-        limit: Максимальное количество пользователей для возврата
+        limit: Максимальное количество пользователей для возврата.
+            Если `None`, возвращает всех пользователей.
         
     Возвращает:
         Список кортежей (user_id, total_count, {source: count})
@@ -111,4 +112,6 @@ async def get_chat_stats(chat_id: int, limit: int = 10) -> List[Tuple[int, int, 
         for user_id, data in user_stats.items()
     ]
     stats_list.sort(key=lambda x: x[1], reverse=True)
+    if limit is None:
+        return stats_list
     return stats_list[:limit]

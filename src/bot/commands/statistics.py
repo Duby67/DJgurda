@@ -1,10 +1,12 @@
 """Модуль `statistics`."""
 import logging
+import html
 
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
+from src.config import STATISTICS_TOP_USERS_LIMIT
 from src.middlewares.db import get_chat_stats
 from src.utils.Emoji import emoji, EMOJI_FIRSTPLACE, EMOJI_SECONDPLACE, EMOJI_THIRDPLACE, EMOJI_STATISTICS
 
@@ -26,14 +28,25 @@ async def status_command(message: Message) -> None:
         username,
     )
     try:
-        stats = await get_chat_stats(message.chat.id, limit=10)
+        stats = await get_chat_stats(message.chat.id, limit=None)
         if not stats:
             await message.answer("В этом чате пока нет статистики.")
             return
 
-        lines = [f"{EMOJI_STATISTICS} <b>Статистика активности</b>\n"]
-        for idx, (user_id, total, sources) in enumerate(stats, start=1):
-            medal = MEDALS[idx-1] if idx <= 3 else f"{idx}."
+        source_totals: dict[str, int] = {}
+        for _, _, sources in stats:
+            for source, count in sources.items():
+                source_totals[source] = source_totals.get(source, 0) + count
+
+        top_source, top_source_count = max(source_totals.items(), key=lambda item: item[1])
+        safe_top_source = html.escape(top_source)
+
+        lines = [
+            f"{EMOJI_STATISTICS} <b>Статистика активности за все время</b>",
+            f"Топ-ресурс: {emoji(top_source)} {safe_top_source} ({top_source_count})\n",
+        ]
+        for idx, (user_id, total, sources) in enumerate(stats[:STATISTICS_TOP_USERS_LIMIT], start=1):
+            medal = MEDALS[idx - 1]
 
             try:
                 chat_member = await message.bot.get_chat_member(message.chat.id, user_id)
@@ -41,11 +54,16 @@ async def status_command(message: Message) -> None:
             except Exception:
                 user_name = f"ID {user_id}"
 
-            line = f"{medal} <b>{user_name}</b>\n"
-            for source, count in sources.items():
+            safe_user_name = html.escape(user_name)
+            user_link = f'<a href="tg://user?id={user_id}">{safe_user_name}</a>'
+
+            line = f"{medal} {user_link}\n"
+            sorted_sources = sorted(sources.items(), key=lambda item: item[1], reverse=True)
+            for source, count in sorted_sources:
                 source_emoji = emoji(source)
-                line += f"   {source_emoji} {count}\n"
-            line += f"   <b>Всего:</b> {total}\n"
+                safe_source = html.escape(source)
+                line += f"   {source_emoji} {safe_source}: {count}\n"
+            line += f"   | <b>ВСЕГО</b>: {total}\n"
             lines.append(line)
 
         await message.answer("\n".join(lines), parse_mode="HTML")
