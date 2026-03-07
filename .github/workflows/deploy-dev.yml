@@ -79,6 +79,7 @@ jobs:
             mkdir -p /home/${{ secrets.SSH_USER }}/bot_dev
             mkdir -p /home/${{ secrets.SSH_USER }}/bot_dev/data/db
             mkdir -p /home/${{ secrets.SSH_USER }}/bot_dev/data/cookies
+            
             touch /home/${{ secrets.SSH_USER }}/bot_dev/data/cookies/youtube_cookies.txt
             cd /home/${{ secrets.SSH_USER }}/bot_dev
 

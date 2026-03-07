@@ -1,19 +1,50 @@
-
+# Локальные секреты и окружение
+.env
+.env.*
 local/
 
+# Виртуальные окружения Python
+.venv/
 venv/
 env/
-.env
-.env_host
 
+# Кеши и артефакты Python/тестов
 __pycache__/
-*.pyc
-.pytest*
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
 
-.vscode/
+# Сборка и упаковка Python
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# IDE и редакторы
 .idea/
+.vscode/
+*.iml
 
+# Локальные логи и временные файлы
 *.log
+*.out
+*.err
+*.pid
+*.pid.lock
+*.tmp
+*.temp
 
-src/data/temp_files/
+# Временные файлы операционных систем
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Локальные runtime-артефакты проекта
 src/data/db/
+src/data/temp_files/

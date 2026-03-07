@@ -1,101 +1,226 @@
 #!/bin/bash
 
-# Выход при ошибках
-set -e  
+# Скрипт должен завершаться при любой нештатной ситуации.
+set -Eeuo pipefail
 
-if [ -z "$1" ]; then
-    echo "Usage: $0 {prod|dev}"
+if [ -z "${1:-}" ]; then
+    echo "Использование: $0 {prod|dev}"
     exit 1
 fi
 
-ENV="$1"
-LOG_FILE="/tmp/djgurda_deploy_${ENV}.log"
+ENVIRONMENT="$1"
+SCRIPT_START_TS="$(date +%s)"
+CURRENT_STEP="init"
+LOG_FILE="/tmp/djgurda_deploy_${ENVIRONMENT}.log"
+
+# Настраиваем единый вывод в консоль и в лог-файл.
+exec > >(tee "$LOG_FILE") 2>&1
+
 REQUIRED_ENV_KEYS=(
-  "ADMIN_ID"
-  "BOT_VERSION"
-  "BOT_DB_PATH"
-  "BOT_TOKEN"
-  "YANDEX_MUSIC_TOKEN"
-  "YOUTUBE_COOKIES_PATH"
+    "ADMIN_ID"
+    "BOT_VERSION"
+    "BOT_DB_PATH"
+    "BOT_TOKEN"
+    "YANDEX_MUSIC_TOKEN"
+    "YOUTUBE_COOKIES_PATH"
 )
 
-{
-    echo "=== DJgurda Deploy Started: $(date) ==="
-    echo "Environment: $ENV"
-    
-    if [ "$ENV" == "prod" ]; then
-        BOT_DIR="$HOME/bot_prod"
-        CONTAINER_NAME="DJgurda-prod"
-        IMAGE="ghcr.io/duby67/djgurda:latest"
-        RESTART="always"
-        DB_DIR="$HOME/bot_prod/data/db"
-        COOKIES_DIR="$HOME/bot_prod/data/cookies"
-        LOGS_DIR="$HOME/bot_prod/logs"
+# Ожидаемые пути внутри контейнера (должны совпадать с .env на сервере).
+EXPECTED_BOT_DB_PATH="/app/src/data/db/bot.db"
+EXPECTED_YT_COOKIES_PATH="/app/src/data/cookies/youtube_cookies.txt"
 
-    elif [ "$ENV" == "dev" ]; then
-        BOT_DIR="$HOME/bot_dev" 
-        CONTAINER_NAME="DJgurda-dev"
-        IMAGE="ghcr.io/duby67/djgurda:dev-latest"
-        RESTART="unless-stopped"
-        DB_DIR="$HOME/bot_dev/data/db"
-        COOKIES_DIR="$HOME/bot_dev/data/cookies"
-        LOGS_DIR="$HOME/bot_dev/logs"
-        
-    else
-        echo "Invalid environment: $ENV"
-        exit 1
-    fi
+timestamp() {
+    date "+%Y-%m-%d %H:%M:%S"
+}
 
-    ENV_FILE="$BOT_DIR/.env"
-    
-    # Проверка существования .env файла
-    if [ ! -f "$ENV_FILE" ]; then
-        echo "ERROR: .env file not found: $ENV_FILE"
-        exit 1
-    fi
-    
-    echo "Validating required environment keys..."
+log() {
+    local level="$1"
+    shift
+    printf "[%s] [%s] [%s] %s\n" "$(timestamp)" "$level" "$CURRENT_STEP" "$*"
+}
+
+fail() {
+    log "ERROR" "$1"
+    exit 1
+}
+
+on_error() {
+    local exit_code="$1"
+    local line_no="$2"
+    log "ERROR" "Step failed at line ${line_no} (exit code: ${exit_code})"
+    exit "$exit_code"
+}
+
+trap 'on_error $? $LINENO' ERR
+
+run_step() {
+    local step="$1"
+    shift
+    CURRENT_STEP="$step"
+    log "INFO" "Step started"
+    "$@"
+    log "INFO" "Step finished successfully"
+}
+
+configure_environment() {
+    case "$ENVIRONMENT" in
+        prod)
+            BOT_DIR="$HOME/bot_prod"
+            CONTAINER_NAME="DJgurda-prod"
+            IMAGE="ghcr.io/duby67/djgurda:latest"
+            RESTART_POLICY="always"
+            ;;
+        dev)
+            BOT_DIR="$HOME/bot_dev"
+            CONTAINER_NAME="DJgurda-dev"
+            IMAGE="ghcr.io/duby67/djgurda:dev-latest"
+            # Для dev контейнер не должен автоперезапускаться.
+            RESTART_POLICY="no"
+            ;;
+        *)
+            fail "Invalid environment: ${ENVIRONMENT}"
+            ;;
+    esac
+
+    DB_DIR="${BOT_DIR}/data/db"
+    COOKIES_DIR="${BOT_DIR}/data/cookies"
+    LOGS_DIR="${BOT_DIR}/logs"
+    COOKIES_FILE="${COOKIES_DIR}/youtube_cookies.txt"
+    ENV_FILE="${BOT_DIR}/.env"
+}
+
+get_env_value() {
+    local key="$1"
+    grep -E "^${key}=" "$ENV_FILE" | tail -n 1 | cut -d '=' -f 2-
+}
+
+check_required_env_keys() {
+    local missing=0
     for key in "${REQUIRED_ENV_KEYS[@]}"; do
-        if ! grep -q "^${key}=" "$ENV_FILE"; then
-            echo "ERROR: Missing required key in $ENV_FILE: ${key}"
-            exit 1
+        if ! grep -Eq "^${key}=.+" "$ENV_FILE"; then
+            log "ERROR" "Missing or empty key in ${ENV_FILE}: ${key}"
+            missing=1
         fi
     done
 
-    echo "Stopping existing container..."
-    docker stop "$CONTAINER_NAME" 2>/dev/null || true
-    docker rm "$CONTAINER_NAME" 2>/dev/null || true
+    if [ "$missing" -ne 0 ]; then
+        fail "Preflight failed: required env keys are invalid"
+    fi
+}
 
-    echo "Cleaning cache..."
-    rm -rf "$BOT_DIR"/.cache 2>/dev/null || true
-    docker system prune -f 2>/dev/null || true
+check_expected_container_paths() {
+    local env_db_path
+    local env_cookies_path
 
-    echo "Creating runtime directories..."
+    env_db_path="$(get_env_value "BOT_DB_PATH")"
+    env_cookies_path="$(get_env_value "YOUTUBE_COOKIES_PATH")"
+
+    if [ "$env_db_path" != "$EXPECTED_BOT_DB_PATH" ]; then
+        fail "Preflight failed: BOT_DB_PATH='${env_db_path}', expected '${EXPECTED_BOT_DB_PATH}'"
+    fi
+
+    if [ "$env_cookies_path" != "$EXPECTED_YT_COOKIES_PATH" ]; then
+        fail "Preflight failed: YOUTUBE_COOKIES_PATH='${env_cookies_path}', expected '${EXPECTED_YT_COOKIES_PATH}'"
+    fi
+}
+
+preflight() {
+    command -v docker >/dev/null 2>&1 || fail "Preflight failed: docker not found in PATH"
+
+    if [ ! -d "$BOT_DIR" ]; then
+        fail "Preflight failed: environment directory not found: ${BOT_DIR}"
+    fi
+
+    if [ ! -f "$ENV_FILE" ]; then
+        fail "Preflight failed: env file not found: ${ENV_FILE}"
+    fi
+
+    check_required_env_keys
+    check_expected_container_paths
+
+    log "INFO" "Environment: ${ENVIRONMENT}"
+    log "INFO" "Container: ${CONTAINER_NAME}"
+    log "INFO" "Image: ${IMAGE}"
+    log "INFO" "Restart policy: ${RESTART_POLICY}"
+}
+
+prepare_runtime_dirs() {
     mkdir -p "$DB_DIR" "$COOKIES_DIR" "$LOGS_DIR"
 
-    if [ ! -f "$COOKIES_DIR/youtube_cookies.txt" ]; then
-        touch "$COOKIES_DIR/youtube_cookies.txt"
-        echo "Created empty cookies file: $COOKIES_DIR/youtube_cookies.txt"
+    if [ ! -f "$COOKIES_FILE" ]; then
+        touch "$COOKIES_FILE"
+        log "INFO" "Created empty cookies file: ${COOKIES_FILE}"
     fi
 
-    if [ ! -s "$COOKIES_DIR/youtube_cookies.txt" ]; then
-        echo "WARNING: youtube_cookies.txt is empty. YouTube extraction may fail."
+    if [ ! -s "$COOKIES_FILE" ]; then
+        log "WARN" "youtube_cookies.txt is empty: YouTube extraction may fail"
     fi
+}
 
-    echo "Starting new container..."
-    docker run -d \
+stop_and_remove_container() {
+    if docker ps -a --format '{{.Names}}' | grep -Fxq "$CONTAINER_NAME"; then
+        log "INFO" "Stopping and removing container: ${CONTAINER_NAME}"
+        docker rm -f "$CONTAINER_NAME" >/dev/null
+    else
+        log "INFO" "Container ${CONTAINER_NAME} not found, skipping stop"
+    fi
+}
+
+cleanup_runtime_cache() {
+    rm -rf "${BOT_DIR}/.cache" 2>/dev/null || true
+    docker system prune -f >/dev/null 2>&1 || true
+}
+
+start_container() {
+    local container_id
+    local container_status
+
+    log "INFO" "Starting container from image: ${IMAGE}"
+    container_id="$(docker run -d \
         --name "$CONTAINER_NAME" \
-        --restart "$RESTART" \
+        --restart "$RESTART_POLICY" \
         --env-file "$ENV_FILE" \
         -v "$DB_DIR":/app/src/data/db \
         -v "$COOKIES_DIR":/app/src/data/cookies:ro \
         -v "$LOGS_DIR":/app/logs \
-        "$IMAGE"
+        "$IMAGE")"
 
-    echo "=== Deploy Completed: $(date) ==="
-    echo "Container: $CONTAINER_NAME"
-    echo "Image: $IMAGE"
-    
-} | tee "$LOG_FILE"
+    log "INFO" "Container created: ${container_id}"
 
-echo "Deploy log: $LOG_FILE"
+    container_status="$(docker ps --filter "name=^/${CONTAINER_NAME}$" --format '{{.Status}}')"
+    if [ -z "$container_status" ]; then
+        fail "Container ${CONTAINER_NAME} is not running after docker run"
+    fi
+
+    log "INFO" "Container status: ${container_status}"
+}
+
+print_summary() {
+    local script_end_ts
+    local duration
+
+    script_end_ts="$(date +%s)"
+    duration="$((script_end_ts - SCRIPT_START_TS))"
+
+    CURRENT_STEP="summary"
+    log "INFO" "Deploy finished successfully"
+    log "INFO" "Environment: ${ENVIRONMENT}"
+    log "INFO" "Container: ${CONTAINER_NAME}"
+    log "INFO" "Image: ${IMAGE}"
+    log "INFO" "Deploy log: ${LOG_FILE}"
+    log "INFO" "Duration: ${duration} sec."
+}
+
+main() {
+    configure_environment
+
+    run_step "preflight" preflight
+    run_step "prepare-runtime" prepare_runtime_dirs
+    run_step "stop-container" stop_and_remove_container
+    run_step "cleanup-cache" cleanup_runtime_cache
+    run_step "start-container" start_container
+
+    print_summary
+}
+
+main "$@"
