@@ -49,6 +49,16 @@ class BaseHandler(ABC):
             if isinstance(audio_thumbnail_path, Path):
                 yield audio_thumbnail_path
 
+        for audio_item in file_info.get("audios", []):
+            if not isinstance(audio_item, dict):
+                continue
+            audio_path = audio_item.get("file_path")
+            if isinstance(audio_path, Path):
+                yield audio_path
+            audio_thumbnail_path = audio_item.get("thumbnail_path")
+            if isinstance(audio_thumbnail_path, Path):
+                yield audio_thumbnail_path
+
     def cleanup(self, file_info: Dict[str, Any]) -> None:
         """Функция `cleanup`."""
         for path in set(self._collect_paths_for_cleanup(file_info)):

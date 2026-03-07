@@ -115,9 +115,18 @@ async def process_block(
             elif content_type == 'media_group':
                 # Сначала отправляем аудио без подписи, чтобы сообщение с альбомом
                 # выглядело продолжением одного сценария просмотра.
-                if 'audio' in file_info:
-                    audio = FSInputFile(file_info['audio']['file_path'])
-                    audio_thumbnail_path = file_info['audio'].get('thumbnail_path')
+                audio_items = []
+                if isinstance(file_info.get('audios'), list):
+                    audio_items.extend(
+                        item for item in file_info['audios']
+                        if isinstance(item, dict) and item.get('file_path')
+                    )
+                elif isinstance(file_info.get('audio'), dict):
+                    audio_items.append(file_info['audio'])
+
+                for audio_item in audio_items:
+                    audio = FSInputFile(audio_item['file_path'])
+                    audio_thumbnail_path = audio_item.get('thumbnail_path')
                     audio_thumbnail = (
                         FSInputFile(audio_thumbnail_path)
                         if audio_thumbnail_path and hasattr(audio_thumbnail_path, "exists") and audio_thumbnail_path.exists()
@@ -125,8 +134,8 @@ async def process_block(
                     )
                     await message.answer_audio(
                         audio=audio,
-                        title=file_info['audio']['title'],
-                        performer=file_info['audio']['performer'],
+                        title=audio_item.get('title', file_info.get('title', 'Audio')),
+                        performer=audio_item.get('performer', file_info.get('uploader', 'Unknown')),
                         thumbnail=audio_thumbnail,
                         caption=None
                     )

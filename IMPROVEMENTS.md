@@ -111,6 +111,7 @@
   - Для деплоя заменить принудительное завершение контейнера (`docker rm -f`) на graceful-остановку (`docker stop --time 25`) с последующим удалением, чтобы `on_shutdown` успевал отправлять сообщение «Бот выключается...». ✅ Выполнено (`manager.sh`).
   - Усилить `on_shutdown`: отправка уведомления администратору не зависит от успешности чтения чатов из БД; ошибки получения чатов и закрытия БД логируются отдельно без срыва отправки уведомления. ✅ Выполнено (`src/bot/lifespan/shutdown.py`).
   - Для Instagram profile добавить устойчивый fallback: при сбое `yt-dlp` extractor пробовать `web_profile_info` API по username и использовать канонический profile URL c завершающим `/`. ✅ Выполнено (`src/handlers/resources/Instagram/InstagramProfile.py`, `test/handlers/Instagram/test_instagram_profile_helpers.py`).
+  - Для Instagram `media_group` исправить обработку каруселей: удалять `img_index` из URL, сохранять несколько фото/видео без перезаписи файлов и поддерживать дополнительные аудиофайлы (`audios`) в общем pipeline отправки/cleanup. ✅ Выполнено (`src/handlers/resources/Instagram/InstagramMediaGroup.py`, `src/handlers/mixins/media_group.py`, `src/bot/processing/media_processor.py`, `src/handlers/base.py`, `test/handlers/Instagram/test_instagram_media_group_helpers.py`, `test/handlers/test_cleanup_helpers.py`).
   - Собирать `exceptions_per_hour`, `error_rate`, `handler_failure_rate`.
   - Вести топ ошибок по типу/источнику:
     - `ValueError`, `TelegramTimeoutError`, ошибки БД, ошибки загрузки контента.

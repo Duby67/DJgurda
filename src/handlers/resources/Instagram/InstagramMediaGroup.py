@@ -3,6 +3,7 @@
 """
 
 import re
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from typing import Any, Dict, Optional
 
 from src.handlers.mixins import MediaGroupMixin
@@ -15,6 +16,20 @@ class InstagramMediaGroup(MediaGroupMixin):
 
     POST_ID_PATTERN = re.compile(r"/p/([A-Za-z0-9_-]+)")
 
+    @staticmethod
+    def _normalize_media_group_url(url: str) -> str:
+        """
+        Убирает параметры, которые фиксируют отдельный слайд и мешают получить всю карусель.
+        """
+        parts = urlsplit(url)
+        filtered_items = [
+            (key, value)
+            for key, value in parse_qsl(parts.query, keep_blank_values=True)
+            if key.lower() != "img_index"
+        ]
+        normalized_query = urlencode(filtered_items, doseq=True)
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, normalized_query, parts.fragment))
+
     async def _process_instagram_media_group(
         self,
         url: str,
@@ -24,6 +39,7 @@ class InstagramMediaGroup(MediaGroupMixin):
         """
         Скачивает медиа-карусель и формирует ответ в формате media_group.
         """
+        normalized_url = self._normalize_media_group_url(url)
         post_match = self.POST_ID_PATTERN.search(url)
         post_id = post_match.group(1) if post_match else self._extract_video_id(url)
 
@@ -35,7 +51,7 @@ class InstagramMediaGroup(MediaGroupMixin):
             "writethumbnail": False,
         }
         media_list = await self._download_media_group(
-            url,
+            normalized_url,
             ydl_opts,
             group_id=post_id,
             size_limit=max(self.video_limit, self.photo_limit),
@@ -51,6 +67,12 @@ class InstagramMediaGroup(MediaGroupMixin):
         if not files:
             return None
 
+        audio_files = [
+            {"file_path": item["file_path"]}
+            for item in media_list
+            if item.get("type") == "audio"
+        ]
+
         first_info = media_list[0].get("info")
         if not isinstance(first_info, dict):
             first_info = {}
@@ -63,7 +85,7 @@ class InstagramMediaGroup(MediaGroupMixin):
             or "Unknown"
         )
 
-        return {
+        result = {
             "type": "media_group",
             "source_name": "Instagram",
             "files": files,
@@ -73,3 +95,15 @@ class InstagramMediaGroup(MediaGroupMixin):
             "context": context,
         }
 
+        if audio_files:
+            # Поддерживаем несколько дополнительных аудиофайлов для карусели.
+            result["audios"] = [
+                {
+                    "file_path": item["file_path"],
+                    "title": title,
+                    "performer": uploader,
+                }
+                for item in audio_files
+            ]
+
+        return result
