@@ -5,8 +5,10 @@
 import aiohttp
 import logging
 import re
-from shutil import which
 from typing import Any, Dict, Optional
+
+import yt_dlp
+from yt_dlp.postprocessor.ffmpeg import FFmpegPostProcessor
 
 from src.handlers.mixins import VideoMixin
 
@@ -21,6 +23,18 @@ class CoubVideo(VideoMixin):
     COUB_ID_PATTERN = re.compile(r"/view/([A-Za-z0-9]+)")
     COUB_API_URL_TEMPLATE = "https://coub.com/api/v2/coubs/{coub_id}.json"
     COUB_SHARE_URL_KEYS = ("share", "default")
+
+    @staticmethod
+    def _is_ytdlp_ffmpeg_available() -> bool:
+        """
+        Проверяет, доступен ли ffmpeg для yt-dlp.
+        """
+        try:
+            with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+                return bool(FFmpegPostProcessor(ydl).available)
+        except Exception as exc:
+            logger.debug("ffmpeg availability check failed: %s", exc)
+            return False
 
     async def _fetch_coub_api_payload(self, coub_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -86,7 +100,7 @@ class CoubVideo(VideoMixin):
         # Предпочтительный путь: собираем "чистое" видео и аудио в единый mp4.
         # Это дает звук и, как правило, вариант без watermark.
         primary_result = None
-        if which("ffmpeg"):
+        if self._is_ytdlp_ffmpeg_available():
             primary_opts = {
                 "format": (
                     "html5-video-high+html5-audio-high/"
@@ -100,7 +114,10 @@ class CoubVideo(VideoMixin):
             }
             primary_result = await self._download_video(url, primary_opts, video_id=coub_id)
         else:
-            logger.warning("ffmpeg is not available; COUB merge mode is skipped for %s", url)
+            logger.warning(
+                "ffmpeg is not available; COUB no-watermark merge path may be unavailable for %s",
+                url,
+            )
 
         result = primary_result
         payload: Optional[Dict[str, Any]] = None
