@@ -30,26 +30,8 @@
 ## Важный статус по структуре
 
 - `docs/` не используется как поддерживаемый источник актуального контекста.
-- `tests/` / `test/` на текущем этапе в основном считаются legacy-зоной и не являются источником истины.
-- Исключение: для локальной проверки handlers используй smoke-скрипты:
-  - `test/handlers/TikTok/test_tiktok_handlers_local.py` + `test/handlers/TikTok/TikTok_urls.py`
-  - `test/handlers/YouTube/test_youtube_handlers_local.py` + `test/handlers/YouTube/YouTube_urls.py`
-  - `test/handlers/Instagram/test_instagram_handlers_local.py` + `test/handlers/Instagram/Instagram_urls.py`
-- При возврате к этим областям в будущем их нужно явно заново договорить и обновить в `.github/ai_context.md`.
-
-## Правило Для Handler Smoke-Тестов
-
-- Один обработчик = одна папка в `test/handlers/<Source>/`.
-- Тестовый скрипт называется `test_<source>_handlers_local.py`.
-- Все тестовые ссылки и ожидаемые типы хранятся только в `<Source>_urls.py` рядом с тестом.
-- В теле теста ссылки не хардкодятся: данные читаются из `<Source>_urls.py`.
-- Базовый сценарий smoke-теста:
-  1. `resolve_url`.
-  2. `ServiceManager.get_handler`.
-  3. `handler.process(...)`.
-  4. Проверка `file_info["type"]` на ожидаемый тип.
-  5. Обязательный `handler.cleanup(file_info)` в `finally`.
-- Для сред без внешней сети поддерживай режим `--classify-only` (проверка только классификации URL без скачивания).
+- `test/` Содержит скрипты для локальной проверки.
+  - `test/handlers/` smoke-скрипты для локальной проверки handlers.
 
 ## Быстрый запуск
 
