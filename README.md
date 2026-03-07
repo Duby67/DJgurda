@@ -20,6 +20,7 @@
 - `README.md` и `.github/ai_context.md` - канонические документы.
 - Контекст всегда проверяется по коду в `src/`.
 - При любом обращении к `README.md` агент обязан дополнительно проверить `.github/ai_context.md` и `IMPROVEMENTS.md`.
+- В пользовательских caption хэштеги из заголовков контента должны удаляться; если заголовок после очистки пустой, используется нейтральный fallback-текст.
 
 ## Важный статус по структуре
 
@@ -30,47 +31,41 @@
 ## Быстрый запуск
 
 1. Требования:
-
-- Python 3.11+
-- FFmpeg в `PATH`
-
+   - Python 3.11+
+   - FFmpeg в `PATH`
 2. Установка:
 
-```bash
-python -m venv venv
-# Windows PowerShell
-.\venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-# при необходимости dev-инструментов:
-# python -m pip install -r requirements-dev.txt
-```
+   ```bash
+   python -m venv venv
+   # Windows PowerShell
+   .\venv\Scripts\Activate.ps1
+   python -m pip install --upgrade pip
+   python -m pip install -r requirements.txt
+   # при необходимости dev-инструментов:
+   # python -m pip install -r requirements-dev.txt
+   ```
 
 3. Настройка `.env` (обязательные переменные валидируются в `src/config.py`):
+   - `BOT_DB_PATH`
+   - `BOT_VERSION`
+   - `ADMIN_ID`
+   - `BOT_TOKEN`
+   - `YANDEX_MUSIC_TOKEN`
+   - `YOUTUBE_COOKIES_PATH`
 
-- `BOT_DB_PATH`
-- `BOT_VERSION`
-- `ADMIN_ID`
-- `BOT_TOKEN`
-- `YANDEX_MUSIC_TOKEN`
-- `YOUTUBE_COOKIES_PATH`
+   Шаблон:
+   - `env.example` (скопируй в `.env` и подставь значения).
+   - Для локальных проверок и тестовых сценариев ориентируйся на `env.example` как на эталонный набор переменных.
+   - Персональный файл `local/.env` не является частью проекта и не должен использоваться как источник проектного контекста.
 
-Шаблон:
-
-- `env.example` (скопируй в `.env` и подставь значения).
-- Для локальных проверок и тестовых сценариев ориентируйся на `env.example` как на эталонный набор переменных.
-- Персональный файл `local/.env` не является частью проекта и не должен использоваться как источник проектного контекста.
-
-Для Docker/deploy используются значения путей внутри контейнера:
-
-- `BOT_DB_PATH=/app/src/data/db/bot.db`
-- `YOUTUBE_COOKIES_PATH=/app/src/data/cookies/youtube_cookies.txt`
-
+   Для Docker/deploy используются значения путей внутри контейнера:
+   - `BOT_DB_PATH=/app/src/data/db/bot.db`
+   - `YOUTUBE_COOKIES_PATH=/app/src/data/cookies/youtube_cookies.txt`
 4. Старт:
 
-```bash
-python -m src.main
-```
+   ```bash
+   python -m src.main
+   ```
 
 ## Локальная среда и прод
 

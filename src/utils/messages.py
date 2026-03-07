@@ -14,6 +14,7 @@ from src.utils.Emoji import emoji, EMOJI_ERROR, EMOJI_VIDEO, EMOJI_ARROW
 
 # Паттерн для поиска хэштегов
 HASHTAG_PATTERN = re.compile(r'#\w+')
+EMPTY_TITLE_FALLBACK = "Контент из TikTok"
 
 
 class SourceHandler(Protocol):
@@ -68,7 +69,9 @@ def build_caption(
     if file_info['type'] in {'video', 'photo', 'media_group'} and file_info.get('title'):
         lines.append("")  # Пустая строка для разделения
         raw_title = str(file_info['title'])
-        clean_title = _remove_hashtags(raw_title) or raw_title
+        clean_title = _remove_hashtags(raw_title)
+        if not clean_title:
+            clean_title = EMPTY_TITLE_FALLBACK
         safe_title = html.escape(clean_title)
         uploader = str(file_info.get('uploader') or "").strip()
         if uploader:
