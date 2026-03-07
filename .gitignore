@@ -12,6 +12,5 @@ __pycache__/
 
 *.log
 
-temp_files/
 src/data/temp_files/
 src/data/db/
