@@ -7,6 +7,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from typing import Any, Dict, Optional
 
 from src.handlers.mixins import MediaGroupMixin
+from .cookies import build_instagram_cookie_opts
 
 
 class InstagramMediaGroup(MediaGroupMixin):
@@ -50,6 +51,7 @@ class InstagramMediaGroup(MediaGroupMixin):
             "noplaylist": False,
             "writethumbnail": False,
         }
+        ydl_opts.update(build_instagram_cookie_opts())
         media_list = await self._download_media_group(
             normalized_url,
             ydl_opts,

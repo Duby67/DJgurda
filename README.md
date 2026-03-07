@@ -72,6 +72,13 @@
    - По умолчанию handler пытается использовать валидный cookies-файл (если он доступен).
    - Для принудительного отключения cookies установи `YOUTUBE_COOKIES_ENABLED=false`.
 
+   Опционально для Instagram cookies:
+   - `INSTAGRAM_COOKIES_ENABLED` (`true/false`, по умолчанию `true`)
+   - `INSTAGRAM_COOKIES_PATH` (опционально; если не задан, cookies не будут применены)
+
+   Важное замечание:
+   - Для части Instagram Stories требуется авторизация; без валидных Instagram cookies возможна ошибка доступа (`You need to log in to access this content`).
+
    Шаблон:
    - `env.example` (скопируй в `.env` и подставь значения).
    - Для локальных проверок и тестовых сценариев ориентируйся на `env.example` как на эталонный набор переменных.

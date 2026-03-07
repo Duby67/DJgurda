@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 import aiohttp
 
 from src.handlers.mixins import MetadataMixin, PhotoMixin
+from .cookies import build_instagram_cookie_opts
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +200,7 @@ class InstagramProfile(PhotoMixin, MetadataMixin):
         ydl_opts = {
             "extract_flat": True,
         }
+        ydl_opts.update(build_instagram_cookie_opts())
 
         info = await self._extract_metadata(canonical_url, ydl_opts)
         if not info and canonical_url != url:

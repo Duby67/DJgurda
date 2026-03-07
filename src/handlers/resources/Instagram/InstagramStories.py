@@ -3,9 +3,13 @@
 """
 
 import re
+import logging
 from typing import Any, Dict, Optional
 
 from src.handlers.mixins import MediaGroupMixin
+from .cookies import build_instagram_cookie_opts
+
+logger = logging.getLogger(__name__)
 
 
 class InstagramStories(MediaGroupMixin):
@@ -35,6 +39,7 @@ class InstagramStories(MediaGroupMixin):
             "noplaylist": True,
             "writethumbnail": False,
         }
+        ydl_opts.update(build_instagram_cookie_opts())
         media_list = await self._download_media_group(
             url,
             ydl_opts,
@@ -42,6 +47,10 @@ class InstagramStories(MediaGroupMixin):
             size_limit=max(self.video_limit, self.photo_limit),
         )
         if not media_list:
+            logger.warning(
+                "Failed to load Instagram stories %s. This content may require valid Instagram cookies.",
+                url,
+            )
             return None
 
         media_items = [item for item in media_list if item.get("type") in {"photo", "video"}]
@@ -78,4 +87,3 @@ class InstagramStories(MediaGroupMixin):
             "original_url": original_url,
             "context": context,
         }
-

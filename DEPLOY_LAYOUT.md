@@ -23,7 +23,8 @@
    │  ├─ db/
    │  │  └─ bot.db                 # SQLite база
    │  └─ cookies/
-   │     └─ youtube_cookies.txt    # cookies для YouTube
+   │     ├─ youtube_cookies.txt    # cookies для YouTube (опционально)
+   │     └─ instagram_cookies.txt  # cookies для Instagram (опционально)
    └─ logs/
 ```
 
@@ -42,7 +43,8 @@
 │     ├─ db/                       # volume mount с сервера
 │     │  └─ bot.db
 │     ├─ cookies/                  # volume mount (read-only)
-│     │  └─ youtube_cookies.txt
+│     │  ├─ youtube_cookies.txt
+│     │  └─ instagram_cookies.txt
 │     └─ temp_files/               # временные файлы внутри контейнера
 └─ logs/                           # volume mount с сервера
 ```
@@ -64,6 +66,10 @@
 - `YOUTUBE_COOKIES_PATH`:
   - используется только при `YOUTUBE_COOKIES_ENABLED=true`
   - при отключенном режиме cookies (`YOUTUBE_COOKIES_ENABLED=false`) YouTube handler не передает `cookiefile` в `yt-dlp`
+  - если файл существует, но является заглушкой (пустой/без cookie-строк), handler игнорирует его
+- `INSTAGRAM_COOKIES_PATH`:
+  - используется только при `INSTAGRAM_COOKIES_ENABLED=true`
+  - при отключенном режиме cookies (`INSTAGRAM_COOKIES_ENABLED=false`) Instagram handler не передает `cookiefile` в `yt-dlp`
   - если файл существует, но является заглушкой (пустой/без cookie-строк), handler игнорирует его
 - `PROJECT_TEMP_DIR` (`/app/src/data/temp_files` в контейнере):
   - формируется в `src/config.py`
