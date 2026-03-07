@@ -64,13 +64,18 @@ def build_caption(
         safe_context = html.escape(user_context)
         lines.append(safe_context)
         
-    # Для видео добавляем информацию о названии и авторах
-    if file_info['type'] == 'video':
+    # Для контента с заголовком добавляем информацию о названии и авторе.
+    if file_info['type'] in {'video', 'photo', 'media_group'} and file_info.get('title'):
         lines.append("")  # Пустая строка для разделения
-        clean_title = _remove_hashtags(file_info['title'])
+        raw_title = str(file_info['title'])
+        clean_title = _remove_hashtags(raw_title) or raw_title
         safe_title = html.escape(clean_title)
-        safe_uploader = html.escape(file_info['uploader'])
-        lines.append(f"{EMOJI_VIDEO} {safe_title} — {safe_uploader}")
+        uploader = str(file_info.get('uploader') or "").strip()
+        if uploader:
+            safe_uploader = html.escape(uploader)
+            lines.append(f"{EMOJI_VIDEO} {safe_title} — {safe_uploader}")
+        else:
+            lines.append(f"{EMOJI_VIDEO} {safe_title}")
         
     # Добавляем информацию об источнике и пользователе
     lines.append("")

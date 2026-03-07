@@ -20,6 +20,8 @@ class TikTokPhoto(PhotoMixin, AudioMixin, MediaGroupMixin):
     """
     TIKWM_API_URL = "https://www.tikwm.com/api/"
     TIKWM_TIMEOUT = 20
+    DEFAULT_BACKGROUND_TRACK_TITLE = "Фоновая музыка TikTok"
+    DEFAULT_BACKGROUND_TRACK_PERFORMER = "TikTok"
 
     @staticmethod
     def _suffix_from_url(media_url: str, default_suffix: str) -> str:
@@ -30,6 +32,61 @@ class TikTokPhoto(PhotoMixin, AudioMixin, MediaGroupMixin):
         if not suffix or len(suffix) > 5:
             return default_suffix
         return suffix
+
+    def _extract_music_metadata_from_tikwm(self, media_data: Dict[str, Any]) -> Dict[str, str]:
+        """
+        Извлекает название трека и исполнителя из payload TikWM.
+        """
+        music_info = media_data.get('music_info') if isinstance(media_data, dict) else None
+        music_info = music_info if isinstance(music_info, dict) else {}
+
+        track_title = music_info.get('title')
+        track_author = music_info.get('author')
+
+        if not isinstance(track_title, str) or not track_title.strip():
+            track_title = self.DEFAULT_BACKGROUND_TRACK_TITLE
+        if not isinstance(track_author, str) or not track_author.strip():
+            track_author = self.DEFAULT_BACKGROUND_TRACK_PERFORMER
+
+        return {
+            'title': track_title.strip(),
+            'performer': track_author.strip(),
+        }
+
+    def _extract_music_metadata_from_info(self, info: Dict[str, Any]) -> Dict[str, str]:
+        """
+        Извлекает название трека и исполнителя из данных yt-dlp.
+        """
+        if not isinstance(info, dict):
+            return {
+                'title': self.DEFAULT_BACKGROUND_TRACK_TITLE,
+                'performer': self.DEFAULT_BACKGROUND_TRACK_PERFORMER,
+            }
+
+        track_title = info.get('track')
+        track_author = None
+
+        artists = info.get('artists')
+        if isinstance(artists, list):
+            for artist in artists:
+                if isinstance(artist, str) and artist.strip():
+                    track_author = artist.strip()
+                    break
+
+        if not track_author:
+            artist = info.get('artist')
+            if isinstance(artist, str) and artist.strip():
+                track_author = artist.strip()
+
+        if not isinstance(track_title, str) or not track_title.strip():
+            track_title = self.DEFAULT_BACKGROUND_TRACK_TITLE
+        if not isinstance(track_author, str) or not track_author.strip():
+            track_author = self.DEFAULT_BACKGROUND_TRACK_PERFORMER
+
+        return {
+            'title': track_title.strip(),
+            'performer': track_author.strip(),
+        }
 
     async def _fetch_tikwm_payload(self, target_url: str) -> Optional[Dict[str, Any]]:
         """
@@ -143,6 +200,7 @@ class TikTokPhoto(PhotoMixin, AudioMixin, MediaGroupMixin):
         }
 
         if has_music:
+            music_meta = self._extract_music_metadata_from_tikwm(media_data)
             audio_path = self._generate_unique_path(
                 f"{photo_id}_audio",
                 suffix=self._suffix_from_url(music_url, ".m4a"),
@@ -150,8 +208,8 @@ class TikTokPhoto(PhotoMixin, AudioMixin, MediaGroupMixin):
             if await self._download_audio(music_url, audio_path, size_limit=self.audio_limit):
                 result['audio'] = {
                     'file_path': audio_path,
-                    'title': title,
-                    'performer': uploader,
+                    'title': music_meta['title'],
+                    'performer': music_meta['performer'],
                 }
             else:
                 logger.warning("Failed to download TikTok music for %s", target_url)
@@ -279,11 +337,12 @@ class TikTokPhoto(PhotoMixin, AudioMixin, MediaGroupMixin):
             
             # Добавляем аудио если есть
             if audios:
+                music_meta = self._extract_music_metadata_from_info(first_info)
                 audio_file = audios[0]['file_path']
                 result['audio'] = {
                     'file_path': audio_file,
-                    'title': title,
-                    'performer': uploader,
+                    'title': music_meta['title'],
+                    'performer': music_meta['performer'],
                 }
                 
             return result

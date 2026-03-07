@@ -122,8 +122,10 @@ async def process_block(
                             caption=caption
                         )
                     else:
-                        # Добавляем подпись к последнему медиа в группе.
-                        media[-1].caption = caption
+                        # У Telegram нет "общей" подписи альбома.
+                        # Подпись ставится к одному элементу группы, поэтому
+                        # используем первый элемент как визуально общий caption.
+                        media[0].caption = caption
                         await message.answer_media_group(media=media)
                  
             elif file_info['type'] == 'profile':
