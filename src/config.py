@@ -53,20 +53,50 @@ def _read_bool_env(name: str, default: bool = False) -> bool:
     raise ValueError(f"{name} должен быть bool-значением (true/false, 1/0, yes/no, on/off)")
 
 
+def _resolve_path(path_value: str) -> Path:
+    """Нормализует путь (с поддержкой `~`) и возвращает абсолютный Path."""
+    return Path(path_value).expanduser().resolve()
+
+
 DB_PATH = _require_env("BOT_DB_PATH")
 BOT_VERSION = _require_env("BOT_VERSION")
 ADMIN_ID = _require_int_env("ADMIN_ID")
 BOT_TOKEN = _require_env("BOT_TOKEN")
 YANDEX_MUSIC_TOKEN = _require_env("YANDEX_MUSIC_TOKEN")
 
+DEFAULT_COOKIES_DIR = PROJECT_ROOT / "src" / "data" / "cookies"
+COOKIES_DIR_PATH = os.getenv("COOKIES_DIR", "").strip()
+COOKIES_DIR = _resolve_path(COOKIES_DIR_PATH) if COOKIES_DIR_PATH else DEFAULT_COOKIES_DIR
+
+
+def _resolve_cookie_path(env_name: str, fallback_filename: str) -> tuple[str, Path]:
+    """
+    Возвращает итоговый путь cookies-файла:
+    - явный `*_COOKIES_PATH`, если задан;
+    - иначе `<COOKIES_DIR>/<fallback_filename>`.
+    """
+    explicit_path = os.getenv(env_name, "").strip()
+    if explicit_path:
+        return explicit_path, _resolve_path(explicit_path)
+
+    fallback_path = (COOKIES_DIR / fallback_filename).resolve()
+    return str(fallback_path), fallback_path
+
+
 YOUTUBE_COOKIES_ENABLED = _read_bool_env("YOUTUBE_COOKIES_ENABLED", default=True)
-YOUTUBE_COOKIES_PATH = os.getenv("YOUTUBE_COOKIES_PATH", "").strip()
-YOUTUBE_COOKIES = Path(YOUTUBE_COOKIES_PATH).resolve() if YOUTUBE_COOKIES_PATH else None
+YOUTUBE_COOKIES_PATH, YOUTUBE_COOKIES = _resolve_cookie_path(
+    env_name="YOUTUBE_COOKIES_PATH",
+    fallback_filename="youtube_cookies.txt",
+)
 
 INSTAGRAM_COOKIES_ENABLED = _read_bool_env("INSTAGRAM_COOKIES_ENABLED", default=True)
-INSTAGRAM_COOKIES_PATH = os.getenv("INSTAGRAM_COOKIES_PATH", "").strip()
-INSTAGRAM_COOKIES = Path(INSTAGRAM_COOKIES_PATH).resolve() if INSTAGRAM_COOKIES_PATH else None
+INSTAGRAM_COOKIES_PATH, INSTAGRAM_COOKIES = _resolve_cookie_path(
+    env_name="INSTAGRAM_COOKIES_PATH",
+    fallback_filename="instagram_cookies.txt",
+)
 
 VK_COOKIES_ENABLED = _read_bool_env("VK_COOKIES_ENABLED", default=True)
-VK_COOKIES_PATH = os.getenv("VK_COOKIES_PATH", "").strip()
-VK_COOKIES = Path(VK_COOKIES_PATH).resolve() if VK_COOKIES_PATH else None
+VK_COOKIES_PATH, VK_COOKIES = _resolve_cookie_path(
+    env_name="VK_COOKIES_PATH",
+    fallback_filename="vk.com_cookies.txt",
+)

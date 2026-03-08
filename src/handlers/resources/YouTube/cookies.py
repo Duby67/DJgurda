@@ -11,6 +11,15 @@ from typing import Any, Dict
 from src.config import YOUTUBE_COOKIES, YOUTUBE_COOKIES_ENABLED
 
 logger = logging.getLogger(__name__)
+_WARNED_KEYS: set[str] = set()
+
+
+def _warn_once(key: str, message: str, *args: object) -> None:
+    """Логирует предупреждение только один раз для указанного ключа."""
+    if key in _WARNED_KEYS:
+        return
+    _WARNED_KEYS.add(key)
+    logger.warning(message, *args)
 
 
 def _looks_like_placeholder(path: Path) -> bool:
@@ -51,15 +60,20 @@ def build_youtube_cookie_opts() -> Dict[str, Any]:
         return {}
 
     if not isinstance(YOUTUBE_COOKIES, Path):
-        logger.warning("YouTube cookies enabled, but YOUTUBE_COOKIES_PATH is not set.")
+        _warn_once("youtube-cookies-path-not-set", "YouTube cookies enabled, but YOUTUBE_COOKIES_PATH is not set.")
         return {}
 
     if not YOUTUBE_COOKIES.exists():
-        logger.warning("YouTube cookies enabled, but cookie file does not exist: %s", YOUTUBE_COOKIES)
+        _warn_once(
+            f"youtube-cookies-missing:{YOUTUBE_COOKIES}",
+            "YouTube cookies enabled, but cookie file does not exist: %s",
+            YOUTUBE_COOKIES,
+        )
         return {}
 
     if _looks_like_placeholder(YOUTUBE_COOKIES):
-        logger.warning(
+        _warn_once(
+            f"youtube-cookies-placeholder:{YOUTUBE_COOKIES}",
             "YouTube cookies file looks like a placeholder and will be ignored: %s",
             YOUTUBE_COOKIES,
         )

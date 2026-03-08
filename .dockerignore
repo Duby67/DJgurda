@@ -13,3 +13,5 @@ README.md
 .dockerignore
 src/data/temp_files/*
 !src/data/temp_files/.gitkeep
+src/data/cookies/*
+!src/data/cookies/.gitkeep

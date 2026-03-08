@@ -104,8 +104,6 @@ configure_environment() {
 
     DB_DIR="${BOT_DIR}/data/db"
     COOKIES_DIR="${BOT_DIR}/data/cookies"
-    TEMP_DIR="${BOT_DIR}/data/temp_files"
-    COOKIES_FILE="${COOKIES_DIR}/youtube_cookies.txt"
     ENV_FILE="${BOT_DIR}/.env"
 
     # Защиты от конкурентных запусков и технических окон.
@@ -197,16 +195,7 @@ preflight() {
 }
 
 prepare_runtime_dirs() {
-    mkdir -p "$DB_DIR" "$COOKIES_DIR" "$LOGS_DIR" "$TEMP_DIR"
-
-    if [ ! -f "$COOKIES_FILE" ]; then
-        touch "$COOKIES_FILE"
-        log "INFO" "Created empty cookies file: ${COOKIES_FILE}"
-    fi
-
-    if [ ! -s "$COOKIES_FILE" ]; then
-        log "WARN" "youtube_cookies.txt is empty: YouTube extraction may fail"
-    fi
+    mkdir -p "$DB_DIR" "$COOKIES_DIR" "$LOGS_DIR"
 }
 
 stop_and_remove_container() {
@@ -247,7 +236,6 @@ start_container() {
         --env-file "$ENV_FILE" \
         -v "$DB_DIR":/app/src/data/db \
         -v "$COOKIES_DIR":/app/src/data/cookies:ro \
-        -v "$TEMP_DIR":/app/src/data/temp_files \
         -v "$LOGS_DIR":/app/logs \
         "$IMAGE")"
 

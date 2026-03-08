@@ -82,16 +82,14 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 228
           script: |
-            mkdir -p /home/${{ secrets.SSH_USER }}/bot_dev
-            mkdir -p /home/${{ secrets.SSH_USER }}/bot_dev/data/db
-            mkdir -p /home/${{ secrets.SSH_USER }}/bot_dev/data/cookies
-            
-            touch /home/${{ secrets.SSH_USER }}/bot_dev/data/cookies/youtube_cookies.txt
-            cd /home/${{ secrets.SSH_USER }}/bot_dev
+            BOT_ROOT="/home/${{ secrets.SSH_USER }}/bot_dev"
+            mkdir -p "$BOT_ROOT"
+            cd "$BOT_ROOT"
 
             echo "ADMIN_ID=${{ secrets.ADMIN_ID }}" > .env
             echo "BOT_VERSION=${{ steps.version.outputs.VERSION }}" >> .env
             echo "BOT_DB_PATH=/app/src/data/db/bot.db" >> .env
+            echo "COOKIES_DIR=/app/src/data/cookies" >> .env
             echo "BOT_TOKEN=${{ secrets.BOT_TOKEN_DEV }}" >> .env
             echo "YANDEX_MUSIC_TOKEN=${{ secrets.YANDEX_MUSIC_TOKEN }}" >> .env
 

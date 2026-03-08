@@ -11,6 +11,15 @@ from typing import Dict, Optional
 from src.config import VK_COOKIES, VK_COOKIES_ENABLED
 
 logger = logging.getLogger(__name__)
+_WARNED_KEYS: set[str] = set()
+
+
+def _warn_once(key: str, message: str, *args: object) -> None:
+    """Логирует предупреждение только один раз для указанного ключа."""
+    if key in _WARNED_KEYS:
+        return
+    _WARNED_KEYS.add(key)
+    logger.warning(message, *args)
 
 
 def _looks_like_placeholder(path: Path) -> bool:
@@ -47,15 +56,20 @@ def _resolve_valid_cookie_path() -> Optional[Path]:
         return None
 
     if not isinstance(VK_COOKIES, Path):
-        logger.warning("VK cookies enabled, but VK_COOKIES_PATH is not set.")
+        _warn_once("vk-cookies-path-not-set", "VK cookies enabled, but VK_COOKIES_PATH is not set.")
         return None
 
     if not VK_COOKIES.exists():
-        logger.warning("VK cookies enabled, but cookie file does not exist: %s", VK_COOKIES)
+        _warn_once(
+            f"vk-cookies-missing:{VK_COOKIES}",
+            "VK cookies enabled, but cookie file does not exist: %s",
+            VK_COOKIES,
+        )
         return None
 
     if _looks_like_placeholder(VK_COOKIES):
-        logger.warning(
+        _warn_once(
+            f"vk-cookies-placeholder:{VK_COOKIES}",
             "VK cookies file looks like a placeholder and will be ignored: %s",
             VK_COOKIES,
         )
@@ -93,11 +107,20 @@ def build_vk_request_cookies() -> Dict[str, str]:
                 continue
             cookies[name] = value
     except Exception as exc:
-        logger.warning("Failed to parse VK cookies file %s: %s", cookies_path, exc)
+        _warn_once(
+            f"vk-cookies-parse-failed:{cookies_path}",
+            "Failed to parse VK cookies file %s: %s",
+            cookies_path,
+            exc,
+        )
         return {}
 
     if not cookies:
-        logger.warning("VK cookies file is valid but contains no parsable cookies: %s", cookies_path)
+        _warn_once(
+            f"vk-cookies-empty:{cookies_path}",
+            "VK cookies file is valid but contains no parsable cookies: %s",
+            cookies_path,
+        )
     return cookies
 
 

@@ -48,14 +48,17 @@
 
 ### 4. Улучшение конфигурационного контракта
 
-- Статус (2026-03-07): открыто.
+- Статус (2026-03-08): в работе (частично выполнено).
 - Проблема: `src/config.py` требует токены даже для неактивных интеграций.
 - Действие:
   - Разделить обязательные и условно-обязательные env-переменные.
   - Для неактивных интеграций добавить lazy-проверки только при их использовании.
   - Синхронизировать `manager.sh` с runtime-контрактом YouTube cookies:
     - при `YOUTUBE_COOKIES_ENABLED=false` не требовать жестко `YOUTUBE_COOKIES_PATH` в preflight. ✅ Выполнено (`manager.sh`);
-    - не создавать `youtube_cookies.txt` автоматически, если cookies выключены.
+    - не создавать `youtube_cookies.txt` автоматически, если cookies выключены. ✅ Выполнено (`manager.sh`, `.github/workflows/deploy-dev.yml`, `.github/workflows/deploy-prod.yml`).
+  - Добавить единый `COOKIES_DIR` и auto-discovery `youtube_cookies.txt` / `instagram_cookies.txt` / `vk.com_cookies.txt` при пустых `*_COOKIES_PATH`. ✅ Выполнено (`src/config.py`, `env.example`, `README.md`, `.github/ai_context.md`).
+  - В deploy отказаться от избыточной логики копирования cookies в workflow: создавать/монтировать `$HOME/bot_{env}/data/cookies` централизованно в `manager.sh`, содержимое папки управляется на сервере отдельно. ✅ Выполнено (`.github/workflows/deploy-dev.yml`, `.github/workflows/deploy-prod.yml`, `manager.sh`).
+  - Убрать legacy-создание временных директорий из Docker/deploy и полагаться на runtime-проверки/создание директорий в Python-коде. ✅ Выполнено (`Dockerfile`, `manager.sh`, `src/handlers/mixins/base.py`).
 - Результат: проще локальный запуск и меньше ложных падений на старте.
 
 ### 5. Метрики пользовательской активности (пульс бота)

@@ -65,9 +65,16 @@
    - `BOT_TOKEN`
    - `YANDEX_MUSIC_TOKEN`
 
+   Общая директория cookies (рекомендуемый режим):
+   - `COOKIES_DIR` (опционально; по умолчанию `src/data/cookies`)
+   - Если `*_COOKIES_PATH` не задан, обработчик автоматически ищет cookies в `COOKIES_DIR`:
+     - `youtube_cookies.txt`
+     - `instagram_cookies.txt`
+     - `vk.com_cookies.txt`
+
    Опционально для YouTube cookies:
    - `YOUTUBE_COOKIES_ENABLED` (`true/false`, по умолчанию `true`)
-   - `YOUTUBE_COOKIES_PATH` (опционально; если не задан, cookies не будут применены)
+   - `YOUTUBE_COOKIES_PATH` (опционально; явный override, иначе используется `COOKIES_DIR/youtube_cookies.txt`)
 
    Важное замечание:
    - Если `youtube_cookies.txt` является заглушкой (пустой или без валидных cookie-строк), YouTube handler автоматически игнорирует этот файл.
@@ -76,14 +83,14 @@
 
    Опционально для Instagram cookies:
    - `INSTAGRAM_COOKIES_ENABLED` (`true/false`, по умолчанию `true`)
-   - `INSTAGRAM_COOKIES_PATH` (опционально; если не задан, cookies не будут применены)
+   - `INSTAGRAM_COOKIES_PATH` (опционально; явный override, иначе используется `COOKIES_DIR/instagram_cookies.txt`)
 
    Важное замечание:
    - Для части Instagram Stories требуется авторизация; без валидных Instagram cookies возможна ошибка доступа (`You need to log in to access this content`).
 
    Опционально для VK cookies:
    - `VK_COOKIES_ENABLED` (`true/false`, по умолчанию `true`)
-   - `VK_COOKIES_PATH` (опционально; если не задан, cookies не будут применены)
+   - `VK_COOKIES_PATH` (опционально; явный override, иначе используется `COOKIES_DIR/vk.com_cookies.txt`)
    - Рекомендуемый локальный путь: `src/data/cookies/vk.com_cookies.txt`
    - Историческое имя `vk_cookies.txt` больше не используется
 
@@ -98,7 +105,8 @@
 
    Для Docker/deploy используются значения путей внутри контейнера:
    - `BOT_DB_PATH=/app/src/data/db/bot.db`
-   - `YOUTUBE_COOKIES_PATH=/app/src/data/cookies/youtube_cookies.txt` (опционально, только если используешь cookies)
+   - `COOKIES_DIR=/app/src/data/cookies`
+   - `*_COOKIES_PATH=/app/src/data/cookies/<file>` (опционально, только как явный override)
 4. Старт:
 
    ```bash
@@ -200,6 +208,8 @@ python scripts/release_sync.py --tag v1.2.0 --write
 - Серверный скрипт деплоя: `manager.sh`.
 - Запуск: `./manager.sh dev` или `./manager.sh prod`.
 - Скрипт ожидает env-файл на сервере по пути `$HOME/bot_{env}/.env` и валидирует обязательные ключи перед запуском контейнера.
+- В GitHub Actions deploy не управляет содержимым cookies: workflow подготавливает `$HOME/bot_{env}`, а `manager.sh` сам создает и монтирует `$HOME/bot_{env}/data/cookies` в контейнер как `/app/src/data/cookies` (read-only).
+- Временные директории `temp_files` больше не создаются на этапе Docker/deploy: они проверяются и создаются runtime-кодом Python.
 - `manager.sh` общий для `dev` и `prod`: любые правки должны сохранять совместимость перезапуска обоих окружений.
 - Учитывай, что `prod` может временно отставать от `dev`, поэтому нельзя делать изменения, работающие только для одного окружения.
 

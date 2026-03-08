@@ -8,6 +8,5 @@ RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-RUN mkdir -p /app/src/data/temp_files/{Instagram,TikTok,YandexMusic,YouTube}
 
 CMD ["python", "-m", "src.main"]

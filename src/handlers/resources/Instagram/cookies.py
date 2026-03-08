@@ -11,6 +11,15 @@ from typing import Any, Dict
 from src.config import INSTAGRAM_COOKIES, INSTAGRAM_COOKIES_ENABLED
 
 logger = logging.getLogger(__name__)
+_WARNED_KEYS: set[str] = set()
+
+
+def _warn_once(key: str, message: str, *args: object) -> None:
+    """Логирует предупреждение только один раз для указанного ключа."""
+    if key in _WARNED_KEYS:
+        return
+    _WARNED_KEYS.add(key)
+    logger.warning(message, *args)
 
 
 def _looks_like_placeholder(path: Path) -> bool:
@@ -50,22 +59,26 @@ def build_instagram_cookie_opts() -> Dict[str, Any]:
         return {}
 
     if not isinstance(INSTAGRAM_COOKIES, Path):
-        logger.warning("Instagram cookies enabled, but INSTAGRAM_COOKIES_PATH is not set.")
+        _warn_once(
+            "instagram-cookies-path-not-set",
+            "Instagram cookies enabled, but INSTAGRAM_COOKIES_PATH is not set.",
+        )
         return {}
 
     if not INSTAGRAM_COOKIES.exists():
-        logger.warning(
+        _warn_once(
+            f"instagram-cookies-missing:{INSTAGRAM_COOKIES}",
             "Instagram cookies enabled, but cookie file does not exist: %s",
             INSTAGRAM_COOKIES,
         )
         return {}
 
     if _looks_like_placeholder(INSTAGRAM_COOKIES):
-        logger.warning(
+        _warn_once(
+            f"instagram-cookies-placeholder:{INSTAGRAM_COOKIES}",
             "Instagram cookies file looks like a placeholder and will be ignored: %s",
             INSTAGRAM_COOKIES,
         )
         return {}
 
     return {"cookiefile": str(INSTAGRAM_COOKIES)}
-
