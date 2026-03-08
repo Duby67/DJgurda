@@ -103,6 +103,12 @@ INSTAGRAM_COOKIES_PATH, INSTAGRAM_COOKIES = _resolve_cookie_path(
     fallback_filename="instagram_cookies.txt",
 )
 
+TIKTOK_COOKIES_ENABLED = _read_bool_env("TIKTOK_COOKIES_ENABLED", default=True)
+TIKTOK_COOKIES_PATH, TIKTOK_COOKIES = _resolve_cookie_path(
+    env_name="TIKTOK_COOKIES_PATH",
+    fallback_filename="tiktok_cookies.txt",
+)
+
 VK_COOKIES_ENABLED = _read_bool_env("VK_COOKIES_ENABLED", default=True)
 VK_COOKIES_PATH, VK_COOKIES = _resolve_cookie_path(
     env_name="VK_COOKIES_PATH",

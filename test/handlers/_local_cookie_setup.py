@@ -11,6 +11,7 @@ from pathlib import Path
 COOKIE_FILENAMES = (
     "youtube_cookies.txt",
     "instagram_cookies.txt",
+    "tiktok_cookies.txt",
     "vk.com_cookies.txt",
 )
 

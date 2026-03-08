@@ -82,6 +82,7 @@
    - Если `*_COOKIES_PATH` не задан, обработчик автоматически ищет cookies в `COOKIES_DIR`:
      - `youtube_cookies.txt`
      - `instagram_cookies.txt`
+     - `tiktok_cookies.txt`
      - `vk.com_cookies.txt`
    - Оригинальные локальные cookies-файлы рекомендуется хранить в `local/cookies` (папка вне git-индекса).
    - Для локальных smoke-проверок `test/handlers/*` валидные cookies автоматически копируются из `local/cookies` в `src/data/cookies`.
@@ -102,6 +103,10 @@
 
    Важное замечание:
    - Для части Instagram Stories требуется авторизация; без валидных Instagram cookies возможна ошибка доступа (`You need to log in to access this content`).
+
+   Опционально для TikTok cookies:
+   - `TIKTOK_COOKIES_ENABLED` (`true/false`, по умолчанию `true`)
+   - `TIKTOK_COOKIES_PATH` (опционально; явный override, иначе используется `COOKIES_DIR/tiktok_cookies.txt`)
 
    Опционально для VK cookies:
    - `VK_COOKIES_ENABLED` (`true/false`, по умолчанию `true`)

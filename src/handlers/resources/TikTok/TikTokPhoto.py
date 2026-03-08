@@ -352,6 +352,7 @@ class TikTokPhoto(PhotoMixin, AudioMixin, MediaGroupMixin):
             },
             'force_generic_extractor': False,
         }
+        ydl_opts.update(self._build_tiktok_cookie_opts())
 
         # Скачиваем все медиа
         media_list = await self._download_media_group(

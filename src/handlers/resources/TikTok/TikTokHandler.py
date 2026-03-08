@@ -13,6 +13,8 @@ from .TikTokVideo import TikTokVideo
 from .TikTokPhoto import TikTokPhoto
 from .TikTokProfile import TikTokProfile
 from src.handlers.base import BaseHandler
+from src.config import TIKTOK_COOKIES, TIKTOK_COOKIES_ENABLED
+from src.utils.cookies import CookieFile
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,17 @@ class TikTokHandler(BaseHandler, TikTokVideo, TikTokPhoto, TikTokProfile):
     )
     TRACKING_QUERY_PARAMS = frozenset({"_r", "_t"})
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._tiktok_cookies = CookieFile(
+            provider_key="tiktok",
+            provider_name="TikTok",
+            enabled=TIKTOK_COOKIES_ENABLED,
+            cookie_path=TIKTOK_COOKIES,
+            path_env_name="TIKTOK_COOKIES_PATH",
+            log=logger,
+        )
+
     @property
     def pattern(self) -> re.Pattern:
         """Возвращает паттерн для распознавания URL TikTok."""
@@ -38,6 +51,12 @@ class TikTokHandler(BaseHandler, TikTokVideo, TikTokPhoto, TikTokProfile):
     def source_name(self) -> str:
         """Возвращает название источника."""
         return "TikTok"
+
+    def _build_tiktok_cookie_opts(self) -> Dict[str, str]:
+        """
+        Единая точка подключения TikTok cookies для yt-dlp.
+        """
+        return self._tiktok_cookies.build_ytdlp_opts()
 
     def _normalize_tiktok_url(self, url: str) -> str:
         """

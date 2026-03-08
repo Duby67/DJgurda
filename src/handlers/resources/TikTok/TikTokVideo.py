@@ -45,6 +45,7 @@ class TikTokVideo(VideoMixin):
             'format': 'best[height<=1080][ext=mp4]/best[height<=1080]/best[ext=mp4]/best',
             'writethumbnail': True,
         }
+        ydl_opts.update(self._build_tiktok_cookie_opts())
 
         result = await self._download_video(target_url, ydl_opts, video_id=video_id)
         if not result:
