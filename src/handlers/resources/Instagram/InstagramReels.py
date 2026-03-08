@@ -6,7 +6,6 @@ import re
 from typing import Any, Dict, Optional
 
 from src.handlers.mixins import VideoMixin
-from .cookies import build_instagram_cookie_opts
 
 
 class InstagramReels(VideoMixin):
@@ -34,7 +33,7 @@ class InstagramReels(VideoMixin):
             "writethumbnail": True,
             "noplaylist": True,
         }
-        ydl_opts.update(build_instagram_cookie_opts())
+        ydl_opts.update(self._build_instagram_cookie_opts())
 
         result = await self._download_video(url, ydl_opts, video_id=reels_id)
         if not result:

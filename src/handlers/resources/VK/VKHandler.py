@@ -18,10 +18,10 @@ import aiohttp
 import yt_dlp
 from bs4 import BeautifulSoup
 
+from src.config import VK_COOKIES, VK_COOKIES_ENABLED
 from src.handlers.base import BaseHandler
 from src.handlers.mixins import AudioMixin
-
-from .cookies import build_vk_cookiefile_opt, build_vk_request_cookies
+from src.utils.cookies import build_request_cookies
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,14 @@ class VKHandler(BaseHandler, AudioMixin):
         Инициализирует обработчик и заранее подгружает cookies (если доступны).
         """
         super().__init__()
-        self._request_cookies = build_vk_request_cookies()
+        self._request_cookies = build_request_cookies(
+            provider_key="vk",
+            provider_name="VK",
+            enabled=VK_COOKIES_ENABLED,
+            cookie_path=VK_COOKIES,
+            path_env_name="VK_COOKIES_PATH",
+            log=logger,
+        )
         self._vk_user_id = self._safe_int(self._request_cookies.get("remixuserid")) or 0
         self._badbrowser_logged_pairs: set[tuple[str, str]] = set()
 
@@ -870,7 +877,15 @@ class VKHandler(BaseHandler, AudioMixin):
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
-        ydl_opts.update(build_vk_cookiefile_opt())
+        ydl_opts.update(
+            self._build_ytdlp_cookiefile_opts(
+                provider_key="vk",
+                provider_name="VK",
+                enabled=VK_COOKIES_ENABLED,
+                cookie_path=VK_COOKIES,
+                path_env_name="VK_COOKIES_PATH",
+            )
+        )
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = await asyncio.to_thread(ydl.extract_info, url, download=False)

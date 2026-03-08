@@ -9,6 +9,7 @@ import re
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from src.config import INSTAGRAM_COOKIES, INSTAGRAM_COOKIES_ENABLED
 from src.handlers.base import BaseHandler
 
 from .InstagramMediaGroup import InstagramMediaGroup
@@ -49,6 +50,26 @@ class InstagramHandler(
         Возвращает имя источника.
         """
         return "Instagram"
+
+    def _build_instagram_cookie_opts(self) -> Dict[str, str]:
+        """
+        Единая точка подключения Instagram cookies для всех Instagram-миксинов.
+
+        Логика:
+        - проверяет, включены ли cookies флагом `INSTAGRAM_COOKIES_ENABLED`;
+        - проверяет валидность исходного файла `INSTAGRAM_COOKIES`;
+        - игнорирует отсутствующий/пустой/placeholder-файл с понятной диагностикой;
+        - создает временную runtime-копию файла для `yt-dlp`, чтобы оригинал не
+          модифицировался;
+        - возвращает `{"cookiefile": "<runtime-path>"}` или пустой словарь.
+        """
+        return self._build_ytdlp_cookiefile_opts(
+            provider_key="instagram",
+            provider_name="Instagram",
+            enabled=INSTAGRAM_COOKIES_ENABLED,
+            cookie_path=INSTAGRAM_COOKIES,
+            path_env_name="INSTAGRAM_COOKIES_PATH",
+        )
 
     def _normalize_instagram_url(self, url: str) -> str:
         """
@@ -128,4 +149,3 @@ class InstagramHandler(
 
         logger.warning("Unsupported Instagram URL type: %s", target_url)
         return None
-

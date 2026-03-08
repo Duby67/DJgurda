@@ -18,6 +18,7 @@ from src.config import (
     PHOTO_SIZE_LIMIT, 
     AUDIO_SIZE_LIMIT
 )
+from src.utils.cookies import build_ytdlp_cookiefile_opt
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,30 @@ class BaseMixin:
         merged_opts.setdefault("no_warnings", True)
         merged_opts.setdefault("logger", _YtdlpQuietLogger(self.__class__.__name__))
         return merged_opts
+
+    def _build_ytdlp_cookiefile_opts(
+        self,
+        *,
+        provider_key: str,
+        provider_name: str,
+        enabled: bool,
+        cookie_path: Optional[Path],
+        path_env_name: str,
+    ) -> Dict[str, str]:
+        """
+        Возвращает безопасные `cookiefile`-опции для yt-dlp.
+
+        Общая логика вынесена в `src.utils.cookies`, чтобы все наследники
+        `BaseMixin` использовали единый контракт работы с cookies.
+        """
+        return build_ytdlp_cookiefile_opt(
+            provider_key=provider_key,
+            provider_name=provider_name,
+            enabled=enabled,
+            cookie_path=cookie_path,
+            path_env_name=path_env_name,
+            log=logger,
+        )
 
     async def _random_delay(self, min_sec: float = 1, max_sec: float = 3) -> None:
         """

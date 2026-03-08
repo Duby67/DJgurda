@@ -5,8 +5,8 @@
 import re
 from typing import Any, Dict, Optional
 
+from src.config import YOUTUBE_COOKIES, YOUTUBE_COOKIES_ENABLED
 from src.handlers.mixins import VideoMixin
-from .cookies import build_youtube_cookie_opts
 
 
 class YouTubeShorts(VideoMixin):
@@ -40,7 +40,15 @@ class YouTubeShorts(VideoMixin):
                 }
             },
         }
-        ydl_opts.update(build_youtube_cookie_opts())
+        ydl_opts.update(
+            self._build_ytdlp_cookiefile_opts(
+                provider_key="youtube",
+                provider_name="YouTube",
+                enabled=YOUTUBE_COOKIES_ENABLED,
+                cookie_path=YOUTUBE_COOKIES,
+                path_env_name="YOUTUBE_COOKIES_PATH",
+            )
+        )
         result = await self._download_video(url, ydl_opts, video_id=shorts_id)
         if not result:
             return None

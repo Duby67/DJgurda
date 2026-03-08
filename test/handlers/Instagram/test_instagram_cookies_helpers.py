@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -20,18 +21,27 @@ os.environ.setdefault("YANDEX_MUSIC_TOKEN", "local-test-token")
 os.environ.setdefault("YOUTUBE_COOKIES_ENABLED", "false")
 os.environ.setdefault("INSTAGRAM_COOKIES_ENABLED", "false")
 
-from src.handlers.resources.Instagram import cookies as instagram_cookies
+from src.utils.cookies import build_ytdlp_cookiefile_opt
+
+_TEST_LOGGER = logging.getLogger(__name__)
 
 
-def test_instagram_cookie_opts_disabled(monkeypatch) -> None:
+def test_instagram_cookie_opts_disabled() -> None:
     """При отключенном флаге cookies не должны передаваться."""
-    monkeypatch.setattr(instagram_cookies, "INSTAGRAM_COOKIES_ENABLED", False)
-    monkeypatch.setattr(instagram_cookies, "INSTAGRAM_COOKIES", None)
+    assert (
+        build_ytdlp_cookiefile_opt(
+            provider_key="instagram",
+            provider_name="Instagram",
+            enabled=False,
+            cookie_path=None,
+            path_env_name="INSTAGRAM_COOKIES_PATH",
+            log=_TEST_LOGGER,
+        )
+        == {}
+    )
 
-    assert instagram_cookies.build_instagram_cookie_opts() == {}
 
-
-def test_instagram_cookie_opts_valid_file(monkeypatch, tmp_path: Path) -> None:
+def test_instagram_cookie_opts_valid_file(tmp_path: Path) -> None:
     """При валидном cookie-файле должен возвращаться путь к runtime-копии."""
     cookie_file = tmp_path / "instagram_cookies.txt"
     cookie_file.write_text(
@@ -40,10 +50,14 @@ def test_instagram_cookie_opts_valid_file(monkeypatch, tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(instagram_cookies, "INSTAGRAM_COOKIES_ENABLED", True)
-    monkeypatch.setattr(instagram_cookies, "INSTAGRAM_COOKIES", cookie_file)
-
-    opts = instagram_cookies.build_instagram_cookie_opts()
+    opts = build_ytdlp_cookiefile_opt(
+        provider_key="instagram",
+        provider_name="Instagram",
+        enabled=True,
+        cookie_path=cookie_file,
+        path_env_name="INSTAGRAM_COOKIES_PATH",
+        log=_TEST_LOGGER,
+    )
     assert "cookiefile" in opts
 
     runtime_cookiefile = Path(str(opts["cookiefile"]))
@@ -52,12 +66,19 @@ def test_instagram_cookie_opts_valid_file(monkeypatch, tmp_path: Path) -> None:
     assert runtime_cookiefile.read_text(encoding="utf-8") == cookie_file.read_text(encoding="utf-8")
 
 
-def test_instagram_cookie_opts_placeholder(monkeypatch, tmp_path: Path) -> None:
+def test_instagram_cookie_opts_placeholder(tmp_path: Path) -> None:
     """Пустой/заглушечный cookie-файл должен игнорироваться."""
     cookie_file = tmp_path / "instagram_cookies.txt"
     cookie_file.write_text("", encoding="utf-8")
 
-    monkeypatch.setattr(instagram_cookies, "INSTAGRAM_COOKIES_ENABLED", True)
-    monkeypatch.setattr(instagram_cookies, "INSTAGRAM_COOKIES", cookie_file)
-
-    assert instagram_cookies.build_instagram_cookie_opts() == {}
+    assert (
+        build_ytdlp_cookiefile_opt(
+            provider_key="instagram",
+            provider_name="Instagram",
+            enabled=True,
+            cookie_path=cookie_file,
+            path_env_name="INSTAGRAM_COOKIES_PATH",
+            log=_TEST_LOGGER,
+        )
+        == {}
+    )

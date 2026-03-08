@@ -6,8 +6,8 @@ import html
 from typing import Any, Dict, Optional
 from urllib.parse import urlsplit, urlunsplit
 
+from src.config import YOUTUBE_COOKIES, YOUTUBE_COOKIES_ENABLED
 from src.handlers.mixins import MetadataMixin, PhotoMixin
-from .cookies import build_youtube_cookie_opts
 
 
 class YouTubeChannel(PhotoMixin, MetadataMixin):
@@ -153,7 +153,15 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
                 }
             },
         }
-        ydl_opts.update(build_youtube_cookie_opts())
+        ydl_opts.update(
+            self._build_ytdlp_cookiefile_opts(
+                provider_key="youtube",
+                provider_name="YouTube",
+                enabled=YOUTUBE_COOKIES_ENABLED,
+                cookie_path=YOUTUBE_COOKIES,
+                path_env_name="YOUTUBE_COOKIES_PATH",
+            )
+        )
 
         info = await self._extract_channel_metadata(url, ydl_opts)
         if not info:
