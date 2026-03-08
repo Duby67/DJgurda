@@ -84,10 +84,12 @@
    Опционально для VK cookies:
    - `VK_COOKIES_ENABLED` (`true/false`, по умолчанию `true`)
    - `VK_COOKIES_PATH` (опционально; если не задан, cookies не будут применены)
+   - Рекомендуемый локальный путь: `src/data/cookies/vk.com_cookies.txt`
+   - Историческое имя `vk_cookies.txt` больше не используется
 
    Важное замечание:
    - Для части VK Music ссылок требуется авторизованная сессия; без валидных VK cookies обработчик может не извлечь audio URL/playlist metadata.
-   - Если `vk_cookies.txt` пустой или выглядит как заглушка, VK handler автоматически игнорирует его.
+   - Если `vk.com_cookies.txt` пустой или выглядит как заглушка, VK handler автоматически игнорирует его.
 
    Шаблон:
    - `env.example` (скопируй в `.env` и подставь значения).

@@ -38,7 +38,7 @@ os.environ.setdefault(
 )
 os.environ.setdefault(
     "VK_COOKIES_PATH",
-    str(PROJECT_ROOT / "src" / "data" / "cookies" / "vk_cookies.txt"),
+    str(PROJECT_ROOT / "src" / "data" / "cookies" / "vk.com_cookies.txt"),
 )
 
 from src.handlers.manager import ServiceManager

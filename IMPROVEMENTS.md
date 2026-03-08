@@ -39,6 +39,7 @@
 - Действие:
   - Подключить готовые обработчики YouTube/Instagram в `ServiceManager` с минимальным риском для текущего TikTok pipeline. ✅ Выполнено.
   - Подключить `VKHandler` в `ServiceManager` с поддержкой `audio`/`playlist`, безопасными VK cookies и локальными smoke-проверками по шаблону `test/handlers/<Source>`. ✅ Выполнено (`src/handlers/resources/VK/*`, `src/handlers/manager.py`, `test/handlers/VK/*`, `src/config.py`, `env.example`).
+  - Для VK Music стабилизировать extraction: использовать API-first цепочку `reload_audios`/`load_section`, декодировать `audio_api_unavailable`, поддержать HLS-загрузку трека и подтвердить локальным smoke-прогоном `4/4`. ✅ Выполнено (`src/handlers/resources/VK/VKHandler.py`, `test/handlers/VK/test_vk_handlers_local.py`).
   - Выбрать подход: поэтапное включение или архивирование оставшихся неиспользуемых обработчиков.
   - Для включаемых источников добавить критерии readiness и чеклист.
 - Результат: меньше технического долга и понятный roadmap по источникам.
