@@ -9,7 +9,9 @@ import re
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from src.config import YOUTUBE_COOKIES, YOUTUBE_COOKIES_ENABLED
 from src.handlers.base import BaseHandler
+from src.utils.cookies import CookieFile
 
 from .YouTubeChannel import YouTubeChannel
 from .YouTubeShorts import YouTubeShorts
@@ -25,6 +27,17 @@ class YouTubeHandler(BaseHandler, YouTubeShorts, YouTubeChannel):
     PATTERN = re.compile(r"https?://(?:www\.|m\.)?(?:youtube\.com|youtu\.be)/\S+")
     TRACKING_QUERY_PARAMS = frozenset({"si", "feature", "pp"})
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._youtube_cookies = CookieFile(
+            provider_key="youtube",
+            provider_name="YouTube",
+            enabled=YOUTUBE_COOKIES_ENABLED,
+            cookie_path=YOUTUBE_COOKIES,
+            path_env_name="YOUTUBE_COOKIES_PATH",
+            log=logger,
+        )
+
     @property
     def pattern(self) -> re.Pattern:
         """
@@ -38,6 +51,12 @@ class YouTubeHandler(BaseHandler, YouTubeShorts, YouTubeChannel):
         Возвращает имя источника.
         """
         return "YouTube"
+
+    def _build_youtube_cookie_opts(self) -> Dict[str, str]:
+        """
+        Единая точка подключения YouTube cookies для всех YouTube-миксинов.
+        """
+        return self._youtube_cookies.build_ytdlp_opts()
 
     def _normalize_youtube_url(self, url: str) -> str:
         """
@@ -105,4 +124,3 @@ class YouTubeHandler(BaseHandler, YouTubeShorts, YouTubeChannel):
 
         logger.warning("Unsupported YouTube URL type: %s", target_url)
         return None
-

@@ -19,6 +19,82 @@ _YTDLP_COOKIE_RUNTIME_DIR = PROJECT_TEMP_DIR / "_yt_dlp_cookies"
 _MAX_RUNTIME_COPIES_PER_PROVIDER = 20
 
 
+class CookieFile:
+    """
+    Нейтральный интерфейс для работы с cookies-файлом провайдера.
+
+    Хранит параметры исходного файла (source of truth) и умеет:
+    - проверять валидность cookies-файла;
+    - создавать runtime-копию для yt-dlp;
+    - формировать опции/словарь cookies для разных сценариев.
+    """
+
+    def __init__(
+        self,
+        *,
+        provider_key: str,
+        provider_name: str,
+        enabled: bool,
+        cookie_path: Optional[Path],
+        path_env_name: str,
+        log: Optional[logging.Logger] = None,
+    ) -> None:
+        self._provider_key = provider_key
+        self._provider_name = provider_name
+        self._enabled = enabled
+        self._cookie_path = cookie_path
+        self._path_env_name = path_env_name
+        self._log = log or logger
+
+    def resolve_valid_path(self) -> Optional[Path]:
+        """
+        Возвращает валидный cookies-файл или `None`, если файл отключен/не найден.
+        """
+        return resolve_valid_cookie_path(
+            provider_key=self._provider_key,
+            provider_name=self._provider_name,
+            enabled=self._enabled,
+            cookie_path=self._cookie_path,
+            path_env_name=self._path_env_name,
+            log=self._log,
+        )
+
+    def prepare_runtime_copy(self) -> Optional[Path]:
+        """
+        Создает runtime-копию для yt-dlp (отдельный файл на запуск/сессию).
+        """
+        valid_path = self.resolve_valid_path()
+        if not valid_path:
+            return None
+        return prepare_cookiefile_for_ytdlp(valid_path, provider_key=self._provider_key)
+
+    def build_ytdlp_opts(self) -> Dict[str, str]:
+        """
+        Возвращает опции `cookiefile` для yt-dlp (runtime-копия на каждый вызов).
+        """
+        return build_ytdlp_cookiefile_opt(
+            provider_key=self._provider_key,
+            provider_name=self._provider_name,
+            enabled=self._enabled,
+            cookie_path=self._cookie_path,
+            path_env_name=self._path_env_name,
+            log=self._log,
+        )
+
+    def build_request_cookies(self) -> Dict[str, str]:
+        """
+        Возвращает cookies-словарь для HTTP-запросов провайдера.
+        """
+        return build_request_cookies(
+            provider_key=self._provider_key,
+            provider_name=self._provider_name,
+            enabled=self._enabled,
+            cookie_path=self._cookie_path,
+            path_env_name=self._path_env_name,
+            log=self._log,
+        )
+
+
 def warn_once(log: logging.Logger, key: str, message: str, *args: object) -> None:
     """
     Логирует предупреждение только один раз для указанного ключа.

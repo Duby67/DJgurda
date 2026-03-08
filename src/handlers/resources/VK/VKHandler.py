@@ -21,7 +21,7 @@ from bs4 import BeautifulSoup
 from src.config import VK_COOKIES, VK_COOKIES_ENABLED
 from src.handlers.base import BaseHandler
 from src.handlers.mixins import AudioMixin
-from src.utils.cookies import build_request_cookies
+from src.utils.cookies import CookieFile
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,7 @@ class VKHandler(BaseHandler, AudioMixin):
         Инициализирует обработчик и заранее подгружает cookies (если доступны).
         """
         super().__init__()
-        self._request_cookies = build_request_cookies(
+        self._vk_cookies = CookieFile(
             provider_key="vk",
             provider_name="VK",
             enabled=VK_COOKIES_ENABLED,
@@ -115,6 +115,7 @@ class VKHandler(BaseHandler, AudioMixin):
             path_env_name="VK_COOKIES_PATH",
             log=logger,
         )
+        self._request_cookies = self._vk_cookies.build_request_cookies()
         self._vk_user_id = self._safe_int(self._request_cookies.get("remixuserid")) or 0
         self._badbrowser_logged_pairs: set[tuple[str, str]] = set()
 
@@ -131,6 +132,12 @@ class VKHandler(BaseHandler, AudioMixin):
         Возвращает имя источника.
         """
         return "VK"
+
+    def _build_vk_cookie_opts(self) -> Dict[str, str]:
+        """
+        Возвращает cookiefile-опции для yt-dlp в VK fallback-сценариях.
+        """
+        return self._vk_cookies.build_ytdlp_opts()
 
     @staticmethod
     def _first_non_empty(*values: Any) -> Optional[str]:
@@ -877,15 +884,7 @@ class VKHandler(BaseHandler, AudioMixin):
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
-        ydl_opts.update(
-            self._build_ytdlp_cookiefile_opts(
-                provider_key="vk",
-                provider_name="VK",
-                enabled=VK_COOKIES_ENABLED,
-                cookie_path=VK_COOKIES,
-                path_env_name="VK_COOKIES_PATH",
-            )
-        )
+        ydl_opts.update(self._build_vk_cookie_opts())
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = await asyncio.to_thread(ydl.extract_info, url, download=False)

@@ -62,6 +62,9 @@
   - Убрать legacy-создание временных директорий из Docker/deploy и полагаться на runtime-проверки/создание директорий в Python-коде. ✅ Выполнено (`Dockerfile`, `manager.sh`, `src/handlers/mixins/base.py`).
   - Централизовать lifecycle runtime-хранилища: подготовка `BOT_TEMP_DIR` + per-handler temp-папок на startup, очистка устаревших временных файлов на startup и полная очистка temp на shutdown; хранить temp вне репозитория (по умолчанию системный temp-dir, в deploy `/tmp/djgurda/temp_files`). ✅ Выполнено (`src/config.py`, `src/utils/runtime_storage.py`, `src/bot/lifespan/startup.py`, `src/bot/lifespan/shutdown.py`, `src/handlers/manager.py`, `README.md`, `.github/ai_context.md`).
   - Унифицировать cookie-логику обработчиков: убрать дублирование `src/handlers/resources/{YouTube,Instagram,VK}/cookies.py`, вынести общий слой в `src/utils/cookies.py` (валидация/placeholder-check/runtime-copy/warn-once) и подключать его через базовый handler/mixin. Для VK оставить только специфичный парсинг cookies в dict для HTTP-запросов. ✅ Выполнено (`src/utils/cookies.py`, `src/handlers/mixins/base.py`, `src/handlers/resources/cookie_runtime.py`, удалены legacy-файлы `src/handlers/resources/{YouTube,Instagram,VK}/cookies.py`, `src/handlers/resources/YouTube/{YouTubeShorts.py,YouTubeChannel.py}`, `src/handlers/resources/Instagram/{InstagramHandler.py,InstagramReels.py,InstagramMediaGroup.py,InstagramStories.py,InstagramProfile.py}`, `src/handlers/resources/VK/VKHandler.py`, `test/handlers/Instagram/test_instagram_cookies_helpers.py`).
+  - Уточнить нейтральный интерфейс cookies: выделить общий объект-обертку для исходного файла, создавать runtime-копии per request и использовать единый контракт в handlers/миксинах.
+  - Добавить поддержку TikTok cookies по общей схеме (enabled/path + runtime-копии для yt-dlp).
+  - Разнести VK-обработчики на отдельные mixin-классы `VKAudio` и `VKPlaylist`.
 - Результат: проще локальный запуск и меньше ложных падений на старте.
 
 ### 5. Метрики пользовательской активности (пульс бота)
@@ -174,6 +177,7 @@
     - `state transitions`: команды `/start`/`/stop` и toggle-команды (изменение `bot_enabled/errors_enabled/notifications_enabled`);
     - `data writes`: `update_stats`, `set_*_enabled`, создание/обновление записей в БД.
   - Добавить схему в отдельный md-файл (или секцию в `README`) и поддерживать вместе с архитектурными изменениями.
+  - Проверить и зафиксировать цепочку формирования обработчиков: `mixins -> source_mixin -> source_Handler -> media_router`.
 - Результат: быстрее ревью архитектуры, легче выявлять странности в маршруте данных.
 
 ### 11. Dependency graph модулей

@@ -11,6 +11,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from src.config import INSTAGRAM_COOKIES, INSTAGRAM_COOKIES_ENABLED
 from src.handlers.base import BaseHandler
+from src.utils.cookies import CookieFile
 
 from .InstagramMediaGroup import InstagramMediaGroup
 from .InstagramProfile import InstagramProfile
@@ -30,6 +31,17 @@ class InstagramHandler(
     """
     Обработчик ссылок Instagram: reels/media_group/stories/profile.
     """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._instagram_cookies = CookieFile(
+            provider_key="instagram",
+            provider_name="Instagram",
+            enabled=INSTAGRAM_COOKIES_ENABLED,
+            cookie_path=INSTAGRAM_COOKIES,
+            path_env_name="INSTAGRAM_COOKIES_PATH",
+            log=logger,
+        )
 
     PATTERN = re.compile(r"https?://(?:www\.|m\.)?instagram\.com/\S+")
     TRACKING_QUERY_PARAMS = frozenset({"igshid", "igsh", "fbclid"})
@@ -63,13 +75,7 @@ class InstagramHandler(
           модифицировался;
         - возвращает `{"cookiefile": "<runtime-path>"}` или пустой словарь.
         """
-        return self._build_ytdlp_cookiefile_opts(
-            provider_key="instagram",
-            provider_name="Instagram",
-            enabled=INSTAGRAM_COOKIES_ENABLED,
-            cookie_path=INSTAGRAM_COOKIES,
-            path_env_name="INSTAGRAM_COOKIES_PATH",
-        )
+        return self._instagram_cookies.build_ytdlp_opts()
 
     def _normalize_instagram_url(self, url: str) -> str:
         """
