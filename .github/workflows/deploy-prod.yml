@@ -101,6 +101,7 @@ jobs:
             echo "BOT_VERSION=${{ steps.version.outputs.VERSION }}" >> .env
             echo "BOT_DB_PATH=/app/src/data/db/bot.db" >> .env
             echo "COOKIES_DIR=/app/src/data/cookies" >> .env
+            echo "BOT_TEMP_DIR=/tmp/djgurda/temp_files" >> .env
             echo "BOT_TOKEN=${{ secrets.BOT_TOKEN_PROD }}" >> .env
             echo "YANDEX_MUSIC_TOKEN=${{ secrets.YANDEX_MUSIC_TOKEN }}" >> .env
 

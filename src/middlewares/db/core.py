@@ -8,13 +8,13 @@ import logging
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
-from src.config import DB_PATH
+from src.config import DB_FILE
 from .models.base import Base
 
 logger = logging.getLogger(__name__)
 
 # URL для подключения к SQLite с асинхронным драйвером
-SQLALCHEMY_DATABASE_URL = f"sqlite+aiosqlite:///{DB_PATH}"
+SQLALCHEMY_DATABASE_URL = f"sqlite+aiosqlite:///{DB_FILE.as_posix()}"
 
 # Асинхронный движок базы данных
 engine = create_async_engine(

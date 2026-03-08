@@ -1,15 +1,15 @@
 """Модуль `startup`."""
-import time
 import logging
 
 from aiogram import Bot
-from pathlib import Path
 from zoneinfo import ZoneInfo
 from datetime import datetime, timezone
 
-from src.config import ADMIN_ID, PROJECT_TEMP_DIR, MAX_AGE_SECONDS
+from src.config import ADMIN_ID, MAX_AGE_SECONDS
+from src.handlers.manager import get_active_handler_names
 from src.middlewares.db import get_chats_with_notifications_enabled, init_db
 from src.utils.Emoji import EMOJI_SUCCESS
+from src.utils.runtime_storage import cleanup_expired_temp_files, ensure_runtime_storage
 
 logger = logging.getLogger(__name__)
 
@@ -17,17 +17,12 @@ logger = logging.getLogger(__name__)
 async def on_startup(bot: Bot) -> None:
     """Обработчик запуска бота."""
     try:
+        # Подготовка runtime-хранилища (БД + temp-папки по обработчикам).
+        ensure_runtime_storage(get_active_handler_names())
+        cleanup_expired_temp_files(MAX_AGE_SECONDS)
+
         # Инициализация базы данных
         await init_db()
-        
-        # Очистка устаревших временных файлов
-        now = time.time()
-        temp_dir = Path(PROJECT_TEMP_DIR)
-        if temp_dir.exists():
-            for file_path in temp_dir.glob("**/*"):
-                if file_path.is_file() and (now - file_path.stat().st_mtime) > MAX_AGE_SECONDS:
-                    file_path.unlink()
-                    logger.debug(f"Removed expired file: {file_path}")
 
         # Установка времени запуска
         utc_time = datetime.now(timezone.utc)

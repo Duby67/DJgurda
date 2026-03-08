@@ -6,6 +6,7 @@ from aiogram import Bot, Dispatcher
 from src.middlewares.db import get_chats_with_notifications_enabled, close_db
 from src.config import ADMIN_ID
 from src.utils.Emoji import EMOJI_WARNING
+from src.utils.runtime_storage import cleanup_all_temp_files
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,11 @@ async def on_shutdown(bot: Bot, dispatcher: Dispatcher) -> None:
             await bot.send_message(chat_id=chat_id, text=message_text)
         except Exception as exc:
             logger.error("Failed to send shutdown notification to chat %s: %s", chat_id, exc)
+
+    try:
+        cleanup_all_temp_files()
+    except Exception:
+        logger.exception("Error while cleaning temp files during shutdown")
 
     try:
         await close_db()

@@ -65,6 +65,9 @@
    - `BOT_TOKEN`
    - `YANDEX_MUSIC_TOKEN`
 
+   Опционально для временных файлов:
+   - `BOT_TEMP_DIR` (опционально; если не задан, используется системный temp-dir, например `/tmp/djgurda/temp_files` в Docker)
+
    Общая директория cookies (рекомендуемый режим):
    - `COOKIES_DIR` (опционально; по умолчанию `src/data/cookies`)
    - Если `*_COOKIES_PATH` не задан, обработчик автоматически ищет cookies в `COOKIES_DIR`:
@@ -106,6 +109,7 @@
    Для Docker/deploy используются значения путей внутри контейнера:
    - `BOT_DB_PATH=/app/src/data/db/bot.db`
    - `COOKIES_DIR=/app/src/data/cookies`
+   - `BOT_TEMP_DIR=/tmp/djgurda/temp_files`
    - `*_COOKIES_PATH=/app/src/data/cookies/<file>` (опционально, только как явный override)
 4. Старт:
 
@@ -208,8 +212,10 @@ python scripts/release_sync.py --tag v1.2.0 --write
 - Серверный скрипт деплоя: `manager.sh`.
 - Запуск: `./manager.sh dev` или `./manager.sh prod`.
 - Скрипт ожидает env-файл на сервере по пути `$HOME/bot_{env}/.env` и валидирует обязательные ключи перед запуском контейнера.
+- `bot.db` и cookies хранятся вне репозитория в `$HOME/bot_{env}/data/{db,cookies}` и монтируются в контейнер как volumes.
 - В GitHub Actions deploy не управляет содержимым cookies: workflow подготавливает `$HOME/bot_{env}`, а `manager.sh` сам создает и монтирует `$HOME/bot_{env}/data/cookies` в контейнер как `/app/src/data/cookies` (read-only).
-- Временные директории `temp_files` больше не создаются на этапе Docker/deploy: они проверяются и создаются runtime-кодом Python.
+- Временные файлы создаются только внутри контейнера в `BOT_TEMP_DIR` (по умолчанию `/tmp/djgurda/temp_files`), включая отдельные подпапки по handler-классам.
+- При старте бот инициализирует runtime-директории и удаляет устаревшие временные файлы; при остановке выполняется полная очистка временных файлов.
 - `manager.sh` общий для `dev` и `prod`: любые правки должны сохранять совместимость перезапуска обоих окружений.
 - Учитывай, что `prod` может временно отставать от `dev`, поэтому нельзя делать изменения, работающие только для одного окружения.
 

@@ -10,6 +10,19 @@ from src.handlers.resources import CoubHandler, InstagramHandler, TikTokHandler,
 
 logger = logging.getLogger(__name__)
 
+ACTIVE_HANDLER_CLASSES = (
+    TikTokHandler,
+    YouTubeHandler,
+    InstagramHandler,
+    CoubHandler,
+    VKHandler,
+)
+
+
+def get_active_handler_names() -> tuple[str, ...]:
+    """Возвращает имена активных handler-классов в runtime."""
+    return tuple(handler_cls.__name__ for handler_cls in ACTIVE_HANDLER_CLASSES)
+
 
 class ServiceManager:
     """
@@ -20,14 +33,7 @@ class ServiceManager:
         """
         Инициализирует менеджер с зарегистрированными обработчиками.
         """
-        active_handler_classes = (
-            TikTokHandler,
-            YouTubeHandler,
-            InstagramHandler,
-            CoubHandler,
-            VKHandler,
-        )
-        self.handlers: List[BaseHandler] = [handler_cls() for handler_cls in active_handler_classes]
+        self.handlers: List[BaseHandler] = [handler_cls() for handler_cls in ACTIVE_HANDLER_CLASSES]
         logger.info(f"Registered handlers: {len(self.handlers)}")
 
     def get_handler(self, url: str) -> Optional[BaseHandler]:

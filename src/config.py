@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -18,7 +19,6 @@ AUDIO_SIZE_LIMIT = 50 * 1024 * 1024
 STATISTICS_TOP_USERS_LIMIT = 3
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-PROJECT_TEMP_DIR = PROJECT_ROOT / "src" / "data" / "temp_files"
 
 
 def _require_env(name: str) -> str:
@@ -53,16 +53,24 @@ def _read_bool_env(name: str, default: bool = False) -> bool:
     raise ValueError(f"{name} должен быть bool-значением (true/false, 1/0, yes/no, on/off)")
 
 
-def _resolve_path(path_value: str) -> Path:
+def _resolve_path(path_value: str, *, base_dir: Path = PROJECT_ROOT) -> Path:
     """Нормализует путь (с поддержкой `~`) и возвращает абсолютный Path."""
-    return Path(path_value).expanduser().resolve()
+    expanded = Path(os.path.expandvars(path_value)).expanduser()
+    if not expanded.is_absolute():
+        expanded = base_dir / expanded
+    return expanded.resolve()
 
 
 DB_PATH = _require_env("BOT_DB_PATH")
+DB_FILE = _resolve_path(DB_PATH)
 BOT_VERSION = _require_env("BOT_VERSION")
 ADMIN_ID = _require_int_env("ADMIN_ID")
 BOT_TOKEN = _require_env("BOT_TOKEN")
 YANDEX_MUSIC_TOKEN = _require_env("YANDEX_MUSIC_TOKEN")
+
+BOT_TEMP_DIR_PATH = os.getenv("BOT_TEMP_DIR", "").strip()
+DEFAULT_TEMP_DIR = Path(tempfile.gettempdir()) / "djgurda" / "temp_files"
+PROJECT_TEMP_DIR = _resolve_path(BOT_TEMP_DIR_PATH) if BOT_TEMP_DIR_PATH else DEFAULT_TEMP_DIR
 
 DEFAULT_COOKIES_DIR = PROJECT_ROOT / "src" / "data" / "cookies"
 COOKIES_DIR_PATH = os.getenv("COOKIES_DIR", "").strip()
