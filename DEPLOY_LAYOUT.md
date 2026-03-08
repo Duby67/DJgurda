@@ -2,11 +2,13 @@
 
 ## Схема расположения файлов (сервер и контейнер)
 
-Ниже схема основана на фактических путях из:
+Ниже схема основана на фактическом runtime-коде:
 
 - `src/config.py`
-- `src/middlewares/db/core.py`
+- `src/utils/runtime_storage.py`
 - `src/bot/lifespan/startup.py`
+- `src/bot/lifespan/shutdown.py`
+- `src/middlewares/db/core.py`
 - `.github/workflows/deploy-*.yml`
 - `manager.sh`
 
@@ -21,10 +23,11 @@
    ├─ .env
    ├─ data/
    │  ├─ db/
-   │  │  └─ bot.db                 # SQLite база
+   │  │  └─ bot.db                  # внешняя SQLite база
    │  └─ cookies/
-   │     ├─ youtube_cookies.txt    # cookies для YouTube (опционально)
-   │     └─ instagram_cookies.txt  # cookies для Instagram (опционально)
+   │     ├─ youtube_cookies.txt     # опционально
+   │     ├─ instagram_cookies.txt   # опционально
+   │     └─ vk.com_cookies.txt      # опционально
    └─ logs/
 ```
 
@@ -40,72 +43,86 @@
 /app
 ├─ src/
 │  └─ data/
-│     ├─ db/                       # volume mount с сервера
+│     ├─ db/                        # volume mount с сервера
 │     │  └─ bot.db
-│     ├─ cookies/                  # volume mount (read-only)
-│     │  ├─ youtube_cookies.txt
-│     │  └─ instagram_cookies.txt
-│     └─ temp_files/               # временные файлы внутри контейнера
-└─ logs/                           # volume mount с сервера
+│     └─ cookies/                   # volume mount (read-only)
+│        ├─ youtube_cookies.txt
+│        ├─ instagram_cookies.txt
+│        └─ vk.com_cookies.txt
+└─ logs/                            # volume mount с сервера
 ```
 
-## Проброс volume (из `manager.sh`)
+Временные файлы в контейнере хранятся вне `/app/src/data`:
+
+```text
+/tmp/djgurda/temp_files/            # значение BOT_TEMP_DIR в deploy
+├─ TikTokHandler/
+├─ YouTubeHandler/
+├─ InstagramHandler/
+├─ CoubHandler/
+└─ VKHandler/
+```
+
+## Проброс volumes (из `manager.sh`)
 
 ```text
 <server>/data/db      -> /app/src/data/db
 <server>/data/cookies -> /app/src/data/cookies:ro
-<server>/data/temp_files -> /app/src/data/temp_files
 <server>/logs         -> /app/logs
 ```
 
-## Какие модули используют эти пути
+`temp_files` volume больше не используется.
 
-- `BOT_DB_PATH`:
-  - читается в `src/config.py`
-  - используется для SQLAlchemy URL в `src/middlewares/db/core.py`
-- `YOUTUBE_COOKIES_PATH`:
-  - используется только при `YOUTUBE_COOKIES_ENABLED=true`
-  - при отключенном режиме cookies (`YOUTUBE_COOKIES_ENABLED=false`) YouTube handler не передает `cookiefile` в `yt-dlp`
-  - если файл существует, но является заглушкой (пустой/без cookie-строк), handler игнорирует его
-- `INSTAGRAM_COOKIES_PATH`:
-  - используется только при `INSTAGRAM_COOKIES_ENABLED=true`
-  - при отключенном режиме cookies (`INSTAGRAM_COOKIES_ENABLED=false`) Instagram handler не передает `cookiefile` в `yt-dlp`
-  - если файл существует, но является заглушкой (пустой/без cookie-строк), handler игнорирует его
-- `PROJECT_TEMP_DIR` (`/app/src/data/temp_files` в контейнере):
-  - формируется в `src/config.py`
-  - используется миксинами `src/handlers/mixins/*` для скачивания временных файлов
-  - очищается на startup в `src/bot/lifespan/startup.py`
+## Контракт env путей
+
+- `BOT_DB_PATH=/app/src/data/db/bot.db` (обязательный)
+- `COOKIES_DIR=/app/src/data/cookies` (рекомендуемый)
+- `BOT_TEMP_DIR=/tmp/djgurda/temp_files` (в deploy задается workflow)
+- `*_COOKIES_PATH` опциональны как явный override:
+  - `YOUTUBE_COOKIES_PATH`
+  - `INSTAGRAM_COOKIES_PATH`
+  - `VK_COOKIES_PATH`
+
+## Как runtime использует пути
+
+- БД:
+  - читается в `src/config.py` (`DB_FILE`);
+  - используется в SQLAlchemy URL в `src/middlewares/db/core.py`.
+
+- Cookies:
+  - приоритет у явных `*_COOKIES_PATH`;
+  - если `*_COOKIES_PATH` пуст, берется `<COOKIES_DIR>/<provider_file>`;
+  - провайдерные файлы: `youtube_cookies.txt`, `instagram_cookies.txt`, `vk.com_cookies.txt`;
+  - пустые/заглушечные cookies-файлы игнорируются соответствующими handler-утилитами.
+
+- Temp runtime storage:
+  - `ensure_runtime_storage(...)` на startup создает:
+    - родительскую директорию БД;
+    - `BOT_TEMP_DIR`;
+    - подпапки по активным handler-классам;
+  - `cleanup_expired_temp_files(MAX_AGE_SECONDS)` на startup удаляет устаревшие временные файлы;
+  - `cleanup_all_temp_files()` на shutdown удаляет все временные файлы.
 
 ## Стадии деплоя в `manager.sh`
 
-`manager.sh` общий для `dev` и `prod`.  
-Любые изменения скрипта должны сохранять рабочий перезапуск обоих окружений, даже если `prod` временно отстает от `dev`.
+`manager.sh` общий для `dev` и `prod`.
 
-Скрипт выполняет деплой в фиксированном порядке с логами по шагам:
+Скрипт выполняет деплой в фиксированном порядке:
 
 1. `acquire-lock`:
-   - ожидание глобального lock-файла (`$HOME/.cache/djgurda/deploy.lock`);
-   - предотвращает параллельный деплой из cron/CI/manual для dev/prod.
+   - захват глобального lock-файла (`$HOME/.cache/djgurda/deploy.lock`).
 2. `preflight`:
-   - проверка `docker` в `PATH`;
-   - проверка `flock` и доступности docker daemon;
-   - проверка каталога окружения и `.env`;
-   - проверка freeze-файлов:
-     - глобальный: `$HOME/.bot_deploy.freeze`;
-     - окружения: `$HOME/bot_{env}/.deploy.freeze`;
-   - проверка обязательных ключей;
-   - проверка ожидаемого контейнерного пути `BOT_DB_PATH` для совместимости deploy-контура.
+   - проверки `docker`, `flock`, доступности daemon;
+   - проверки окружения, `.env` и freeze-файлов;
+   - проверка обязательных env-ключей и `BOT_DB_PATH`.
 3. `prepare-runtime`:
-   - создание runtime-директорий (`db`, `cookies`, `logs`);
-   - проверка/создание `youtube_cookies.txt`.
+   - создание серверных директорий `db`, `cookies`, `logs`.
 4. `stop-container`:
-   - сначала выполняется graceful-остановка `docker stop --time 25`, чтобы приложение успело отработать `shutdown`-хук (включая уведомление «Бот выключается...»);
-   - затем контейнер удаляется; принудительное удаление (`rm -f`) используется только как fallback.
+   - graceful-остановка (`docker stop --time 25`) и удаление контейнера.
 5. `cleanup-cache`:
-   - очистка локального кэша деплой-каталога;
-   - `docker system prune -f`.
+   - очистка `.cache` + `docker system prune -f`.
 6. `start-container`:
-   - запуск контейнера с нужным образом, томами и restart policy;
-   - проверка факта старта контейнера через `docker ps`.
+   - `docker run` с volume для `db/cookies/logs`;
+   - проверка, что контейнер запущен.
 7. `summary`:
-   - итоговая сводка с окружением, контейнером, образом, лог-файлом и длительностью.
+   - итоговая сводка по деплою.
