@@ -20,4 +20,22 @@ COUB_TEST_CASES: Final[tuple[dict[str, str], ...]] = (
         "expected_type": "video",
         "description": "COUB-видео формата /view/<id>.",
     },
+    {
+        "name": "video_view_2gq2qz",
+        "url": "https://coub.com/view/2gq2qz",
+        "expected_type": "video",
+        "description": "COUB-видео формата /view/<id> (дополнительный кейс 2gq2qz).",
+    },
+    {
+        "name": "video_view_seyrj",
+        "url": "https://coub.com/view/seyrj",
+        "expected_type": "video",
+        "description": "COUB-видео формата /view/<id> (дополнительный кейс seyrj).",
+    },
+    {
+        "name": "video_view_2lm7gh",
+        "url": "https://coub.com/view/2lm7gh",
+        "expected_type": "video",
+        "description": "COUB-видео формата /view/<id> (дополнительный кейс 2lm7gh).",
+    },
 )

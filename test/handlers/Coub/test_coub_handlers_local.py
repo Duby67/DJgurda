@@ -11,7 +11,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
+import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -71,6 +74,66 @@ DEFAULT_CASES = tuple(
 )
 
 
+def validate_video_streams(file_info: dict[str, Any]) -> tuple[bool, str]:
+    """Проверяет, что итоговый файл содержит video и audio потоки."""
+    file_path = file_info.get("file_path")
+    if not isinstance(file_path, Path):
+        return False, "file_info['file_path'] имеет неверный тип"
+    if not file_path.exists():
+        return False, f"файл не найден: {file_path}"
+
+    ffprobe_path = shutil.which("ffprobe")
+    if not ffprobe_path:
+        return True, "ffprobe не найден, проверка потоков пропущена"
+
+    try:
+        probe_result = subprocess.run(
+            [
+                ffprobe_path,
+                "-v",
+                "error",
+                "-print_format",
+                "json",
+                "-show_streams",
+                str(file_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return False, f"ошибка ffprobe: {exc}"
+
+    if probe_result.returncode != 0:
+        stderr = (probe_result.stderr or "").strip()
+        return False, f"ffprobe завершился с ошибкой: {stderr or 'без stderr'}"
+
+    try:
+        payload = json.loads(probe_result.stdout or "{}")
+    except json.JSONDecodeError as exc:
+        return False, f"не удалось распарсить JSON ffprobe: {exc}"
+
+    streams = payload.get("streams")
+    if not isinstance(streams, list):
+        return False, "ffprobe не вернул список streams"
+
+    has_video = any(
+        isinstance(stream, dict) and stream.get("codec_type") == "video"
+        for stream in streams
+    )
+    has_audio = any(
+        isinstance(stream, dict) and stream.get("codec_type") == "audio"
+        for stream in streams
+    )
+
+    if not has_video:
+        return False, "в итоговом файле нет видео-потока"
+    if not has_audio:
+        return False, "в итоговом файле нет аудио-потока"
+    return True, "аудио- и видео-потоки подтверждены"
+
+
 async def run_case(case: TestCase, timeout_sec: int) -> TestResult:
     """Запускает один тест-кейс и возвращает результат."""
     service_manager = ServiceManager()
@@ -95,53 +158,64 @@ async def run_case(case: TestCase, timeout_sec: int) -> TestResult:
 
     file_info: Optional[dict[str, Any]] = None
     try:
-        file_info = await asyncio.wait_for(
-            handler.process(case.url, context=f"local-smoke:{case.name}", resolved_url=resolved_url),
-            timeout=timeout_sec,
-        )
-    except asyncio.TimeoutError:
+        try:
+            file_info = await asyncio.wait_for(
+                handler.process(case.url, context=f"local-smoke:{case.name}", resolved_url=resolved_url),
+                timeout=timeout_sec,
+            )
+        except asyncio.TimeoutError:
+            return TestResult(
+                case=case,
+                resolved_url=resolved_url,
+                ok=False,
+                message=f"таймаут обработки ({timeout_sec} сек)",
+            )
+        except Exception as exc:  # noqa: BLE001
+            return TestResult(
+                case=case,
+                resolved_url=resolved_url,
+                ok=False,
+                message=f"исключение: {exc}",
+            )
+
+        if not file_info:
+            return TestResult(
+                case=case,
+                resolved_url=resolved_url,
+                ok=False,
+                message="handler.process вернул None",
+            )
+
+        actual_type = file_info.get("type")
+        if actual_type != case.expected_type:
+            return TestResult(
+                case=case,
+                resolved_url=resolved_url,
+                ok=False,
+                message=f"ожидался type={case.expected_type}, получен type={actual_type}",
+                actual_type=actual_type,
+            )
+
+        streams_ok, streams_message = validate_video_streams(file_info)
+        if not streams_ok:
+            return TestResult(
+                case=case,
+                resolved_url=resolved_url,
+                ok=False,
+                message=streams_message,
+                actual_type=actual_type,
+            )
+
         return TestResult(
             case=case,
             resolved_url=resolved_url,
-            ok=False,
-            message=f"таймаут обработки ({timeout_sec} сек)",
-        )
-    except Exception as exc:  # noqa: BLE001
-        return TestResult(
-            case=case,
-            resolved_url=resolved_url,
-            ok=False,
-            message=f"исключение: {exc}",
+            ok=True,
+            message=f"успешно ({streams_message})",
+            actual_type=actual_type,
         )
     finally:
         if file_info:
             handler.cleanup(file_info)
-
-    if not file_info:
-        return TestResult(
-            case=case,
-            resolved_url=resolved_url,
-            ok=False,
-            message="handler.process вернул None",
-        )
-
-    actual_type = file_info.get("type")
-    if actual_type != case.expected_type:
-        return TestResult(
-            case=case,
-            resolved_url=resolved_url,
-            ok=False,
-            message=f"ожидался type={case.expected_type}, получен type={actual_type}",
-            actual_type=actual_type,
-        )
-
-    return TestResult(
-        case=case,
-        resolved_url=resolved_url,
-        ok=True,
-        message="успешно",
-        actual_type=actual_type,
-    )
 
 
 async def run_all(timeout_sec: int) -> int:

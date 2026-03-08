@@ -101,6 +101,31 @@ class CoubVideo(VideoMixin):
                 yield from CoubVideo._collect_http_urls(nested)
 
     @staticmethod
+    def _collect_http_urls_with_key_path(
+        value: Any,
+        key_path: tuple[str, ...] = (),
+    ) -> Iterable[Tuple[str, tuple[str, ...]]]:
+        """
+        Итерирует все HTTP(S) URL вместе с путём ключей до найденного значения.
+        """
+        if isinstance(value, str):
+            if value.startswith(("http://", "https://")):
+                yield value, key_path
+            return
+
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                yield from CoubVideo._collect_http_urls_with_key_path(item, key_path)
+            return
+
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                yield from CoubVideo._collect_http_urls_with_key_path(
+                    nested,
+                    (*key_path, str(key).lower()),
+                )
+
+    @staticmethod
     def _deduplicate_urls(urls: Iterable[str]) -> list[str]:
         """
         Убирает дубликаты URL с сохранением порядка.
@@ -145,7 +170,7 @@ class CoubVideo(VideoMixin):
         # Нечеткая классификация для URL без расширения.
         if "audio" in path:
             return "audio"
-        if "video" in path and "screen" not in path and "image" not in path:
+        if "video" in path and "image" not in path:
             return "video"
         return None
 
@@ -158,12 +183,18 @@ class CoubVideo(VideoMixin):
         score = 0
         if "high" in lowered or "big" in lowered or "hd" in lowered:
             score += 40
+        if "raw" in lowered or "original" in lowered:
+            score += 35
         if "med" in lowered or "medium" in lowered:
             score += 20
         if "low" in lowered:
             score += 10
         if "muted" in lowered:
             score -= 5
+        if "share" in lowered:
+            score -= 10
+        if "watermark" in lowered or "branded" in lowered or "logo" in lowered:
+            score -= 50
         return score
 
     def _pick_best_url(self, urls: Iterable[str]) -> Optional[str]:
@@ -174,6 +205,30 @@ class CoubVideo(VideoMixin):
         if not valid_urls:
             return None
         return max(valid_urls, key=self._score_url)
+
+    def _order_urls_by_quality(self, urls: Iterable[str]) -> list[str]:
+        """
+        Упорядочивает URL по приоритету качества с удалением дублей.
+        """
+        valid_urls = [url for url in urls if self._is_valid_media_url(url)]
+        return sorted(self._deduplicate_urls(valid_urls), key=self._score_url, reverse=True)
+
+    @staticmethod
+    def _infer_media_type_from_key_path(key_path: tuple[str, ...]) -> Optional[str]:
+        """
+        Пытается определить тип медиа по пути ключей в JSON.
+        """
+        if not key_path:
+            return None
+
+        combined = "/".join(part.lower() for part in key_path)
+        if any(token in combined for token in ("image", "thumbnail", "poster", "preview")):
+            return None
+        if any(token in combined for token in ("audio", "sound", "music", "voice")):
+            return "audio"
+        if any(token in combined for token in ("video", "clip", "movie", "mp4", "webm")):
+            return "video"
+        return None
 
     @staticmethod
     def _nested_get(data: Dict[str, Any], *keys: str) -> Any:
@@ -241,17 +296,32 @@ class CoubVideo(VideoMixin):
         """
         Извлекает video/audio URL из payload endpoint /segments.
         """
-        segments = segments_payload.get("segments")
-        if not isinstance(segments, list):
-            return [], []
-
-        raw_urls: list[str] = []
-        for segment_item in segments:
-            raw_urls.extend(self._collect_http_urls(segment_item))
-
         video_urls: list[str] = []
         audio_urls: list[str] = []
-        for candidate_url in self._deduplicate_urls(raw_urls):
+
+        candidate_nodes: list[Any] = []
+        segments = segments_payload.get("segments")
+        if isinstance(segments, list):
+            candidate_nodes.extend(segments)
+        elif isinstance(segments, dict):
+            candidate_nodes.append(segments)
+        else:
+            candidate_nodes.append(segments_payload)
+
+        for node in candidate_nodes:
+            for candidate_url, key_path in self._collect_http_urls_with_key_path(node):
+                media_type = self._classify_media_url(candidate_url)
+                if not media_type:
+                    media_type = self._infer_media_type_from_key_path(key_path)
+
+                if media_type == "video":
+                    video_urls.append(candidate_url)
+                elif media_type == "audio":
+                    audio_urls.append(candidate_url)
+
+        for candidate_url in self._deduplicate_urls(self._collect_http_urls(segments_payload)):
+            if candidate_url in video_urls or candidate_url in audio_urls:
+                continue
             media_type = self._classify_media_url(candidate_url)
             if media_type == "video":
                 video_urls.append(candidate_url)
@@ -296,9 +366,25 @@ class CoubVideo(VideoMixin):
             logger.warning("Direct media download failed for %s: %s", source_url, exc)
             return False
 
+    @staticmethod
+    async def _run_ffmpeg_command(command: list[str]) -> Tuple[bool, str]:
+        """
+        Запускает ffmpeg-команду и возвращает результат выполнения.
+        """
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await process.communicate()
+        error_text = stderr.decode(errors="ignore").strip() if stderr else ""
+        return process.returncode == 0, error_text
+
     async def _mux_video_and_audio(self, video_path: Path, audio_path: Path, output_path: Path) -> bool:
         """
-        Объединяет видео и аудио в MP4 без перекодирования, где это возможно.
+        Объединяет видео и аудио в MP4.
+        Длительность результата всегда выравнивается по аудио:
+        видеоряд зацикливается, пока не закончится аудиодорожка.
         """
         ffmpeg_path = which("ffmpeg")
         if not ffmpeg_path:
@@ -307,12 +393,14 @@ class CoubVideo(VideoMixin):
         audio_suffix = audio_path.suffix.lower()
         copy_audio = audio_suffix in {".aac", ".m4a"}
 
-        command = [
+        copy_command = [
             ffmpeg_path,
             "-y",
             "-hide_banner",
             "-loglevel",
             "error",
+            "-stream_loop",
+            "-1",
             "-i",
             str(video_path),
             "-i",
@@ -324,28 +412,67 @@ class CoubVideo(VideoMixin):
             "-c:v",
             "copy",
             "-shortest",
+            "-fflags",
+            "+genpts",
             "-movflags",
             "+faststart",
         ]
         if copy_audio:
-            command.extend(["-c:a", "copy"])
+            copy_command.extend(["-c:a", "copy"])
         else:
-            command.extend(["-c:a", "aac", "-b:a", "192k"])
-        command.append(str(output_path))
+            copy_command.extend(["-c:a", "aac", "-b:a", "192k"])
+        copy_command.append(str(output_path))
 
-        process = await asyncio.create_subprocess_exec(
-            *command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        _, stderr = await process.communicate()
+        copy_ok, copy_error = await self._run_ffmpeg_command(copy_command)
+        if copy_ok:
+            return output_path.exists() and output_path.stat().st_size > 0
 
-        if process.returncode != 0:
+        output_path.unlink(missing_ok=True)
+
+        # Fallback: если stream-copy не сработал, перекодируем видео,
+        # но сохраняем логику audio-led по длительности.
+        reencode_command = [
+            ffmpeg_path,
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-stream_loop",
+            "-1",
+            "-i",
+            str(video_path),
+            "-i",
+            str(audio_path),
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "20",
+            "-pix_fmt",
+            "yuv420p",
+            "-shortest",
+            "-movflags",
+            "+faststart",
+        ]
+        if copy_audio:
+            reencode_command.extend(["-c:a", "copy"])
+        else:
+            reencode_command.extend(["-c:a", "aac", "-b:a", "192k"])
+        reencode_command.append(str(output_path))
+
+        reencode_ok, reencode_error = await self._run_ffmpeg_command(reencode_command)
+        if not reencode_ok:
             logger.warning(
-                "ffmpeg mux failed for %s + %s: %s",
+                "ffmpeg mux failed for %s + %s (copy error: %s, reencode error: %s)",
                 video_path,
                 audio_path,
-                (stderr.decode(errors="ignore").strip() if stderr else "unknown error"),
+                copy_error or "unknown error",
+                reencode_error or "unknown error",
             )
             return False
         return output_path.exists() and output_path.stat().st_size > 0
@@ -424,27 +551,17 @@ class CoubVideo(VideoMixin):
         self,
         *,
         coub_id: str,
-        metadata_urls: Dict[str, list[str] | Optional[str]],
+        segment_video_urls: list[str],
+        ordered_audio_urls: list[str],
     ) -> Optional[Path]:
         """
         SOURCE A: segments (приоритетный путь для минимизации watermark).
         """
-        segments_url = self.COUB_SEGMENTS_API_URL_TEMPLATE.format(coub_id=coub_id)
-        segments_payload = await self._fetch_json_payload(segments_url)
-        if not segments_payload:
-            return None
-
-        segment_video_urls, segment_audio_urls = self._extract_segment_source_urls(segments_payload)
         if not segment_video_urls:
             logger.info("COUB segments source has no usable video for %s", coub_id)
             return None
 
-        best_video_url = self._pick_best_url(segment_video_urls)
-        best_audio_url = self._pick_best_url(segment_audio_urls)
-        if not best_audio_url:
-            best_audio_url = self._pick_best_url(metadata_urls.get("audio_urls", []))
-
-        if not best_video_url or not best_audio_url:
+        if not ordered_audio_urls:
             logger.info("COUB segments source is incomplete for %s (video/audio pair not found)", coub_id)
             return None
 
@@ -452,17 +569,24 @@ class CoubVideo(VideoMixin):
             logger.warning("ffmpeg is not available; COUB segments source cannot be muxed for %s", coub_id)
             return None
 
-        return await self._build_video_with_audio(
-            video_url=best_video_url,
-            audio_url=best_audio_url,
-            video_id=f"{coub_id}_segments",
-        )
+        ordered_video_urls = self._order_urls_by_quality(segment_video_urls)
+        for video_url in ordered_video_urls:
+            for audio_url in ordered_audio_urls:
+                merged_path = await self._build_video_with_audio(
+                    video_url=video_url,
+                    audio_url=audio_url,
+                    video_id=f"{coub_id}_segments",
+                )
+                if merged_path:
+                    return merged_path
+        return None
 
     async def _try_source_share(
         self,
         *,
         coub_id: str,
         metadata_urls: Dict[str, list[str] | Optional[str]],
+        ordered_audio_urls: list[str],
     ) -> Optional[Path]:
         """
         SOURCE B: file_versions.share.default.
@@ -470,6 +594,16 @@ class CoubVideo(VideoMixin):
         share_url = metadata_urls.get("share_url")
         if not isinstance(share_url, str) or not self._is_valid_media_url(share_url):
             return None
+
+        if ordered_audio_urls and which("ffmpeg"):
+            for audio_url in ordered_audio_urls:
+                merged_path = await self._build_video_with_audio(
+                    video_url=share_url,
+                    audio_url=audio_url,
+                    video_id=f"{coub_id}_share_muxed",
+                )
+                if merged_path:
+                    return merged_path
 
         result = await self._download_video(
             share_url,
@@ -489,16 +623,15 @@ class CoubVideo(VideoMixin):
         *,
         coub_id: str,
         metadata_urls: Dict[str, list[str] | Optional[str]],
+        ordered_audio_urls: list[str],
     ) -> Optional[Path]:
         """
         SOURCE C: html5/mobile/iphone + fallback на текущий ytdlp-style.
         """
         video_urls = [url for url in metadata_urls.get("video_urls", []) if isinstance(url, str)]
-        audio_urls = [url for url in metadata_urls.get("audio_urls", []) if isinstance(url, str)]
 
-        if video_urls and audio_urls and which("ffmpeg"):
-            ordered_video_urls = sorted(video_urls, key=self._score_url, reverse=True)
-            ordered_audio_urls = sorted(audio_urls, key=self._score_url, reverse=True)
+        if video_urls and ordered_audio_urls and which("ffmpeg"):
+            ordered_video_urls = self._order_urls_by_quality(video_urls)
 
             for video_url in ordered_video_urls:
                 for audio_url in ordered_audio_urls:
@@ -564,11 +697,24 @@ class CoubVideo(VideoMixin):
         title = title_raw.strip() if isinstance(title_raw, str) and title_raw.strip() else "COUB Video"
         uploader = self._extract_uploader(metadata)
         metadata_urls = self._extract_metadata_source_urls(metadata)
+        metadata_audio_urls = [url for url in metadata_urls.get("audio_urls", []) if isinstance(url, str)]
+
+        segments_url = self.COUB_SEGMENTS_API_URL_TEMPLATE.format(coub_id=coub_id)
+        segments_payload = await self._fetch_json_payload(segments_url)
+        segment_video_urls: list[str] = []
+        segment_audio_urls: list[str] = []
+        if segments_payload:
+            segment_video_urls, segment_audio_urls = self._extract_segment_source_urls(segments_payload)
+
+        ordered_audio_urls = self._order_urls_by_quality([*segment_audio_urls, *metadata_audio_urls])
+        if not ordered_audio_urls:
+            logger.warning("COUB has no explicit audio source URLs for %s", coub_id)
 
         # SOURCE A: segments (приоритет no-watermark).
         file_path = await self._try_source_segments(
             coub_id=coub_id,
-            metadata_urls=metadata_urls,
+            segment_video_urls=segment_video_urls,
+            ordered_audio_urls=ordered_audio_urls,
         )
         if file_path:
             return self._build_file_info(
@@ -583,6 +729,7 @@ class CoubVideo(VideoMixin):
         file_path = await self._try_source_share(
             coub_id=coub_id,
             metadata_urls=metadata_urls,
+            ordered_audio_urls=ordered_audio_urls,
         )
         if file_path:
             return self._build_file_info(
@@ -597,6 +744,7 @@ class CoubVideo(VideoMixin):
         file_path = await self._try_source_file_versions(
             coub_id=coub_id,
             metadata_urls=metadata_urls,
+            ordered_audio_urls=ordered_audio_urls,
         )
         if file_path:
             return self._build_file_info(
