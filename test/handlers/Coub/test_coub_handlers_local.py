@@ -24,6 +24,13 @@ from typing import Any, Optional
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+HANDLERS_TEST_ROOT = PROJECT_ROOT / "test" / "handlers"
+if str(HANDLERS_TEST_ROOT) not in sys.path:
+    sys.path.insert(0, str(HANDLERS_TEST_ROOT))
+
+from _local_cookie_setup import prepare_local_cookie_runtime
+
+prepare_local_cookie_runtime(PROJECT_ROOT)
 
 # Фиктивные значения для локального прогона теста.
 os.environ.setdefault("BOT_DB_PATH", str(PROJECT_ROOT / "src" / "data" / "db" / "bot.db"))

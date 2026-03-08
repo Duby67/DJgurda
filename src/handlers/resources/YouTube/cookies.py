@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from src.config import YOUTUBE_COOKIES, YOUTUBE_COOKIES_ENABLED
+from src.handlers.resources.cookie_runtime import prepare_cookiefile_for_ytdlp
 
 logger = logging.getLogger(__name__)
 _WARNED_KEYS: set[str] = set()
@@ -79,4 +80,13 @@ def build_youtube_cookie_opts() -> Dict[str, Any]:
         )
         return {}
 
-    return {"cookiefile": str(YOUTUBE_COOKIES)}
+    runtime_cookie_path = prepare_cookiefile_for_ytdlp(YOUTUBE_COOKIES, provider_key="youtube")
+    if not isinstance(runtime_cookie_path, Path):
+        _warn_once(
+            f"youtube-cookies-runtime-copy-failed:{YOUTUBE_COOKIES}",
+            "YouTube cookies file is valid, but runtime copy for yt-dlp failed and will be ignored: %s",
+            YOUTUBE_COOKIES,
+        )
+        return {}
+
+    return {"cookiefile": str(runtime_cookie_path)}

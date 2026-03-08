@@ -74,6 +74,9 @@
      - `youtube_cookies.txt`
      - `instagram_cookies.txt`
      - `vk.com_cookies.txt`
+   - Оригинальные локальные cookies-файлы рекомендуется хранить в `local/cookies` (папка вне git-индекса).
+   - Для локальных smoke-проверок `test/handlers/*` валидные cookies автоматически копируются из `local/cookies` в `src/data/cookies`.
+   - Для `yt-dlp` используется временная рабочая копия cookie-файла, оригинал не модифицируется.
 
    Опционально для YouTube cookies:
    - `YOUTUBE_COOKIES_ENABLED` (`true/false`, по умолчанию `true`)
@@ -94,7 +97,8 @@
    Опционально для VK cookies:
    - `VK_COOKIES_ENABLED` (`true/false`, по умолчанию `true`)
    - `VK_COOKIES_PATH` (опционально; явный override, иначе используется `COOKIES_DIR/vk.com_cookies.txt`)
-   - Рекомендуемый локальный путь: `src/data/cookies/vk.com_cookies.txt`
+   - Рекомендуемый путь оригинального файла: `local/cookies/vk.com_cookies.txt`
+   - Рабочий runtime-путь: `src/data/cookies/vk.com_cookies.txt`
    - Историческое имя `vk_cookies.txt` больше не используется
 
    Важное замечание:

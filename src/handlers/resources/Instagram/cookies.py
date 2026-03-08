@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from src.config import INSTAGRAM_COOKIES, INSTAGRAM_COOKIES_ENABLED
+from src.handlers.resources.cookie_runtime import prepare_cookiefile_for_ytdlp
 
 logger = logging.getLogger(__name__)
 _WARNED_KEYS: set[str] = set()
@@ -81,4 +82,13 @@ def build_instagram_cookie_opts() -> Dict[str, Any]:
         )
         return {}
 
-    return {"cookiefile": str(INSTAGRAM_COOKIES)}
+    runtime_cookie_path = prepare_cookiefile_for_ytdlp(INSTAGRAM_COOKIES, provider_key="instagram")
+    if not isinstance(runtime_cookie_path, Path):
+        _warn_once(
+            f"instagram-cookies-runtime-copy-failed:{INSTAGRAM_COOKIES}",
+            "Instagram cookies file is valid, but runtime copy for yt-dlp failed and will be ignored: %s",
+            INSTAGRAM_COOKIES,
+        )
+        return {}
+
+    return {"cookiefile": str(runtime_cookie_path)}

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from src.config import VK_COOKIES, VK_COOKIES_ENABLED
+from src.handlers.resources.cookie_runtime import prepare_cookiefile_for_ytdlp
 
 logger = logging.getLogger(__name__)
 _WARNED_KEYS: set[str] = set()
@@ -131,4 +132,14 @@ def build_vk_cookiefile_opt() -> Dict[str, str]:
     cookies_path = _resolve_valid_cookie_path()
     if not cookies_path:
         return {}
-    return {"cookiefile": str(cookies_path)}
+
+    runtime_cookie_path = prepare_cookiefile_for_ytdlp(cookies_path, provider_key="vk")
+    if not isinstance(runtime_cookie_path, Path):
+        _warn_once(
+            f"vk-cookies-runtime-copy-failed:{cookies_path}",
+            "VK cookies file is valid, but runtime copy for yt-dlp failed and will be ignored: %s",
+            cookies_path,
+        )
+        return {}
+
+    return {"cookiefile": str(runtime_cookie_path)}

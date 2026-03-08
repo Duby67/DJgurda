@@ -46,7 +46,8 @@ Thumbs.db
 Desktop.ini
 
 # Локальные runtime-артефакты проекта
-src/data/db/
+src/data/db/*
+!src/data/db/.gitkeep
 src/data/temp_files/
 src/data/cookies/*
 !src/data/cookies/.gitkeep

@@ -32,7 +32,7 @@ def test_instagram_cookie_opts_disabled(monkeypatch) -> None:
 
 
 def test_instagram_cookie_opts_valid_file(monkeypatch, tmp_path: Path) -> None:
-    """При валидном cookie-файле должен возвращаться cookiefile."""
+    """При валидном cookie-файле должен возвращаться путь к runtime-копии."""
     cookie_file = tmp_path / "instagram_cookies.txt"
     cookie_file.write_text(
         "# Netscape HTTP Cookie File\n"
@@ -43,7 +43,13 @@ def test_instagram_cookie_opts_valid_file(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(instagram_cookies, "INSTAGRAM_COOKIES_ENABLED", True)
     monkeypatch.setattr(instagram_cookies, "INSTAGRAM_COOKIES", cookie_file)
 
-    assert instagram_cookies.build_instagram_cookie_opts() == {"cookiefile": str(cookie_file)}
+    opts = instagram_cookies.build_instagram_cookie_opts()
+    assert "cookiefile" in opts
+
+    runtime_cookiefile = Path(str(opts["cookiefile"]))
+    assert runtime_cookiefile.exists()
+    assert runtime_cookiefile != cookie_file
+    assert runtime_cookiefile.read_text(encoding="utf-8") == cookie_file.read_text(encoding="utf-8")
 
 
 def test_instagram_cookie_opts_placeholder(monkeypatch, tmp_path: Path) -> None:
@@ -55,4 +61,3 @@ def test_instagram_cookie_opts_placeholder(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(instagram_cookies, "INSTAGRAM_COOKIES", cookie_file)
 
     assert instagram_cookies.build_instagram_cookie_opts() == {}
-

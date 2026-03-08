@@ -870,24 +870,7 @@ class VKHandler(BaseHandler, AudioMixin):
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         })
-        temp_cookiefile_path: Optional[Path] = None
-        cookiefile_opt = build_vk_cookiefile_opt()
-        source_cookiefile = cookiefile_opt.get("cookiefile")
-        if isinstance(source_cookiefile, str) and source_cookiefile.strip():
-            source_cookiefile_path = Path(source_cookiefile)
-            temp_cookiefile_path = self._generate_unique_path("vk_cookiefile_ytdlp_fallback", suffix=".txt")
-            try:
-                temp_cookiefile_path.parent.mkdir(parents=True, exist_ok=True)
-                temp_cookiefile_path.write_bytes(source_cookiefile_path.read_bytes())
-                ydl_opts["cookiefile"] = str(temp_cookiefile_path)
-            except Exception as exc:
-                logger.warning(
-                    "VK yt-dlp fallback cookies copy failed (%s -> %s): %s",
-                    source_cookiefile_path,
-                    temp_cookiefile_path,
-                    exc,
-                )
-                temp_cookiefile_path = None
+        ydl_opts.update(build_vk_cookiefile_opt())
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = await asyncio.to_thread(ydl.extract_info, url, download=False)
@@ -908,9 +891,6 @@ class VKHandler(BaseHandler, AudioMixin):
                         return fmt_url
         except Exception as exc:
             logger.warning("VK yt-dlp fallback failed for %s: %s", url, exc)
-        finally:
-            if isinstance(temp_cookiefile_path, Path):
-                temp_cookiefile_path.unlink(missing_ok=True)
         return None
 
     async def _download_audio_stream(
