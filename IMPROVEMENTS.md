@@ -61,6 +61,7 @@
   - В deploy отказаться от избыточной логики копирования cookies в workflow: создавать/монтировать `$HOME/bot_{env}/data/cookies` централизованно в `manager.sh`, содержимое папки управляется на сервере отдельно. ✅ Выполнено (`.github/workflows/deploy-dev.yml`, `.github/workflows/deploy-prod.yml`, `manager.sh`).
   - Убрать legacy-создание временных директорий из Docker/deploy и полагаться на runtime-проверки/создание директорий в Python-коде. ✅ Выполнено (`Dockerfile`, `manager.sh`, `src/handlers/mixins/base.py`).
   - Централизовать lifecycle runtime-хранилища: подготовка `BOT_TEMP_DIR` + per-handler temp-папок на startup, очистка устаревших временных файлов на startup и полная очистка temp на shutdown; хранить temp вне репозитория (по умолчанию системный temp-dir, в deploy `/tmp/djgurda/temp_files`). ✅ Выполнено (`src/config.py`, `src/utils/runtime_storage.py`, `src/bot/lifespan/startup.py`, `src/bot/lifespan/shutdown.py`, `src/handlers/manager.py`, `README.md`, `.github/ai_context.md`).
+  - Унифицировать cookie-логику обработчиков: убрать дублирование `src/handlers/resources/{YouTube,Instagram,VK}/cookies.py`, вынести общий слой в `src/utils/cookies.py` (валидация/placeholder-check/runtime-copy/warn-once) и подключать его через базовый handler/mixin. Для VK оставить только специфичный парсинг cookies в dict для HTTP-запросов.
 - Результат: проще локальный запуск и меньше ложных падений на старте.
 
 ### 5. Метрики пользовательской активности (пульс бота)
