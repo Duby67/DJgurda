@@ -116,6 +116,7 @@
   - Добавить runtime-поддержку COUB (`https://coub.com/view/<id>`) через единый pipeline handlers, включая регистрацию в `ServiceManager` и smoke-проверки по шаблону `test/handlers/<Source>`. ✅ Выполнено (`src/handlers/manager.py`, `src/handlers/resources/Coub/*`, `test/handlers/Coub/test_coub_handlers_local.py`, `test/handlers/Coub/Coub_urls.py`).
   - Для COUB video реализовать каскад источников `segments -> share -> file_versions/ytdlp`, валидацию `permalink == requested_id`, приоритет no-watermark пути через `segments` и fallback-деградацию без падения отправки. ✅ Выполнено (`src/handlers/resources/Coub/CoubVideo.py`).
   - Для COUB video выровнять длительность итогового MP4 по оригинальной аудиодорожке (audio-led): зацикливать видеоряд до длины аудио и подтверждать наличие audio/video потоков в smoke-проверке. ✅ Выполнено (`src/handlers/resources/Coub/CoubVideo.py`, `test/handlers/Coub/test_coub_handlers_local.py`).
+  - Улучшить метод получения COUB video без watermark: усилить приоритет raw/segments-источников, расширить эвристику фильтрации branded/share URL и добавить диагностику выбранного source для ускоренного разбора проблемных кейсов.
   - Собирать `exceptions_per_hour`, `error_rate`, `handler_failure_rate`.
   - Вести топ ошибок по типу/источнику:
     - `ValueError`, `TelegramTimeoutError`, ошибки БД, ошибки загрузки контента.
