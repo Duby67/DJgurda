@@ -24,8 +24,6 @@ class MetadataMixin(BaseMixin):
         """
         default_opts = {
             "skip_download": True,
-            "quiet": True,
-            "no_warnings": True,
             "user_agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -33,7 +31,7 @@ class MetadataMixin(BaseMixin):
             ),
             "geo_bypass": True,
         }
-        merged_opts = {**default_opts, **ydl_opts}
+        merged_opts = self._build_ytdlp_opts(default_opts, ydl_opts)
 
         await self._random_delay()
 
@@ -87,4 +85,3 @@ class MetadataMixin(BaseMixin):
             if found:
                 return found
         return None
-

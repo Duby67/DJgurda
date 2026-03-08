@@ -18,8 +18,8 @@ async def on_startup(bot: Bot) -> None:
     """Обработчик запуска бота."""
     try:
         # Подготовка runtime-хранилища (БД + temp-папки по обработчикам).
-        ensure_runtime_storage(get_active_handler_names())
         cleanup_expired_temp_files(MAX_AGE_SECONDS)
+        ensure_runtime_storage(get_active_handler_names())
 
         # Инициализация базы данных
         await init_db()

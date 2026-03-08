@@ -10,6 +10,7 @@ import asyncio
 import logging
 
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 from src.config import (
     PROJECT_TEMP_DIR, 
@@ -19,6 +20,27 @@ from src.config import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class _YtdlpQuietLogger:
+    """
+    Тихий logger для yt-dlp, перенаправляющий технические сообщения в debug-уровень.
+    """
+
+    def __init__(self, scope: str) -> None:
+        self._scope = scope
+
+    def debug(self, message: str) -> None:
+        logger.debug("%s yt-dlp: %s", self._scope, message)
+
+    def info(self, message: str) -> None:
+        logger.debug("%s yt-dlp: %s", self._scope, message)
+
+    def warning(self, message: str) -> None:
+        logger.debug("%s yt-dlp warning: %s", self._scope, message)
+
+    def error(self, message: str) -> None:
+        logger.debug("%s yt-dlp error: %s", self._scope, message)
 
 
 class BaseMixin:
@@ -53,6 +75,8 @@ class BaseMixin:
         Возвращает:
             Path: Уникальный путь к файлу
         """
+        # Директория может быть очищена runtime-обслуживанием между запросами.
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
         unique_id = f"{identifier}_{uuid.uuid4().hex[:8]}"
         return self.temp_dir / f"{unique_id}{suffix}"
 
@@ -68,6 +92,23 @@ class BaseMixin:
         """
         parts = url.rstrip('/').split('/')
         return parts[-1].split('?')[0]
+
+    def _build_ytdlp_opts(
+        self,
+        default_opts: Dict[str, Any],
+        ydl_opts: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Объединяет опции yt-dlp и автоматически подключает тихий logger.
+        """
+        merged_opts: Dict[str, Any] = dict(default_opts)
+        if ydl_opts:
+            merged_opts.update(ydl_opts)
+
+        merged_opts.setdefault("quiet", True)
+        merged_opts.setdefault("no_warnings", True)
+        merged_opts.setdefault("logger", _YtdlpQuietLogger(self.__class__.__name__))
+        return merged_opts
 
     async def _random_delay(self, min_sec: float = 1, max_sec: float = 3) -> None:
         """

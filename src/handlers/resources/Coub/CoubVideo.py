@@ -350,11 +350,12 @@ class CoubVideo(VideoMixin):
             )
         }
         try:
+            target_path.parent.mkdir(parents=True, exist_ok=True)
             timeout = aiohttp.ClientTimeout(total=90)
             async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
                 async with session.get(source_url) as response:
                     if response.status != 200:
-                        logger.warning("Direct media download HTTP %s for %s", response.status, source_url)
+                        logger.debug("Direct media download HTTP %s for %s", response.status, source_url)
                         return False
                     with target_path.open("wb") as file_obj:
                         async for chunk in response.content.iter_chunked(256 * 1024):
@@ -363,7 +364,7 @@ class CoubVideo(VideoMixin):
                             file_obj.write(chunk)
             return target_path.exists() and target_path.stat().st_size > 0
         except Exception as exc:
-            logger.warning("Direct media download failed for %s: %s", source_url, exc)
+            logger.debug("Direct media download failed for %s: %s", source_url, exc)
             return False
 
     @staticmethod
@@ -570,8 +571,10 @@ class CoubVideo(VideoMixin):
             return None
 
         ordered_video_urls = self._order_urls_by_quality(segment_video_urls)
+        attempts = 0
         for video_url in ordered_video_urls:
             for audio_url in ordered_audio_urls:
+                attempts += 1
                 merged_path = await self._build_video_with_audio(
                     video_url=video_url,
                     audio_url=audio_url,
@@ -579,6 +582,8 @@ class CoubVideo(VideoMixin):
                 )
                 if merged_path:
                     return merged_path
+        if attempts:
+            logger.warning("COUB segments source exhausted for %s after %s mux attempt(s)", coub_id, attempts)
         return None
 
     async def _try_source_share(
@@ -595,8 +600,10 @@ class CoubVideo(VideoMixin):
         if not isinstance(share_url, str) or not self._is_valid_media_url(share_url):
             return None
 
+        mux_attempts = 0
         if ordered_audio_urls and which("ffmpeg"):
             for audio_url in ordered_audio_urls:
+                mux_attempts += 1
                 merged_path = await self._build_video_with_audio(
                     video_url=share_url,
                     audio_url=audio_url,
@@ -604,6 +611,8 @@ class CoubVideo(VideoMixin):
                 )
                 if merged_path:
                     return merged_path
+        if mux_attempts:
+            logger.warning("COUB share source mux exhausted for %s after %s attempt(s)", coub_id, mux_attempts)
 
         result = await self._download_video(
             share_url,
@@ -630,11 +639,13 @@ class CoubVideo(VideoMixin):
         """
         video_urls = [url for url in metadata_urls.get("video_urls", []) if isinstance(url, str)]
 
+        mux_attempts = 0
         if video_urls and ordered_audio_urls and which("ffmpeg"):
             ordered_video_urls = self._order_urls_by_quality(video_urls)
 
             for video_url in ordered_video_urls:
                 for audio_url in ordered_audio_urls:
+                    mux_attempts += 1
                     merged_path = await self._build_video_with_audio(
                         video_url=video_url,
                         audio_url=audio_url,
@@ -642,6 +653,12 @@ class CoubVideo(VideoMixin):
                     )
                     if merged_path:
                         return merged_path
+        if mux_attempts:
+            logger.warning(
+                "COUB file_versions mux exhausted for %s after %s attempt(s)",
+                coub_id,
+                mux_attempts,
+            )
 
         # Последний fallback: текущий ytdlp-style по основной ссылке COUB.
         has_ffmpeg = bool(which("ffmpeg"))

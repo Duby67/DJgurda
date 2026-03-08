@@ -77,8 +77,7 @@ def cleanup_expired_temp_files(max_age_seconds: int) -> int:
         except Exception as exc:
             logger.warning("Failed to remove expired temp file %s: %s", file_path, exc)
 
-    removed_dirs = _prune_empty_dirs(PROJECT_TEMP_DIR)
-    logger.info("Expired temp cleanup finished: files_removed=%s, empty_dirs_removed=%s", removed_files, removed_dirs)
+    logger.info("Expired temp cleanup finished: files_removed=%s", removed_files)
     return removed_files
 
 

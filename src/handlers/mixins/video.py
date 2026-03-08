@@ -64,12 +64,10 @@ class VideoMixin(BaseMixin):
 
         default_opts = {
             'outtmpl': str(base_path),
-            'quiet': True,
-            'no_warnings': True,
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'geo_bypass': True,
         }
-        merged_opts = {**default_opts, **ydl_opts}
+        merged_opts = self._build_ytdlp_opts(default_opts, ydl_opts)
 
         file_path = None
         thumb_path = None

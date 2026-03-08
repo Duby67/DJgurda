@@ -109,6 +109,7 @@ class VKHandler(BaseHandler, AudioMixin):
         super().__init__()
         self._request_cookies = build_vk_request_cookies()
         self._vk_user_id = self._safe_int(self._request_cookies.get("remixuserid")) or 0
+        self._badbrowser_logged_pairs: set[tuple[str, str]] = set()
 
     @property
     def pattern(self) -> re.Pattern:
@@ -243,6 +244,29 @@ class VKHandler(BaseHandler, AudioMixin):
 
         return None, None
 
+    @staticmethod
+    def _is_badbrowser_url(url: str) -> bool:
+        """
+        Проверяет, что URL указывает на interstitial `badbrowser.php`.
+        """
+        parsed = urlsplit(url)
+        return parsed.path.lower().endswith("/badbrowser.php")
+
+    def _warn_badbrowser_redirect(self, requested_url: str, response_url: str) -> None:
+        """
+        Логирует редирект на `badbrowser.php` один раз для пары URL.
+        """
+        pair = (requested_url, response_url)
+        if pair in self._badbrowser_logged_pairs:
+            return
+        self._badbrowser_logged_pairs.add(pair)
+        logger.warning(
+            "VK request redirected to badbrowser.php: requested=%s, redirected=%s. "
+            "Likely anti-bot/interstitial response; valid auth cookies may be required.",
+            requested_url,
+            response_url,
+        )
+
     async def _fetch_html(self, session: aiohttp.ClientSession, url: str) -> Optional[str]:
         """
         Загружает HTML-страницу.
@@ -253,6 +277,10 @@ class VKHandler(BaseHandler, AudioMixin):
                 allow_redirects=True,
                 cookies=self._request_cookies or None,
             ) as response:
+                response_url = str(response.url)
+                if self._is_badbrowser_url(response_url):
+                    self._warn_badbrowser_redirect(url, response_url)
+                    return None
                 if response.status != 200:
                     logger.warning("VK HTML request failed (%s): %s", response.status, url)
                     return None
@@ -277,6 +305,10 @@ class VKHandler(BaseHandler, AudioMixin):
                 allow_redirects=True,
                 cookies=self._request_cookies or None,
             ) as response:
+                response_url = str(response.url)
+                if self._is_badbrowser_url(response_url):
+                    self._warn_badbrowser_redirect(url, response_url)
+                    return None
                 if response.status != 200:
                     logger.warning("VK POST request failed (%s): %s", response.status, url)
                     return None
@@ -775,9 +807,7 @@ class VKHandler(BaseHandler, AudioMixin):
         base_path = self._generate_unique_path(track_token, suffix="")
         output_template = f"{base_path}.%(ext)s"
 
-        ydl_opts: Dict[str, Any] = {
-            "quiet": True,
-            "no_warnings": True,
+        ydl_opts: Dict[str, Any] = self._build_ytdlp_opts({
             "noplaylist": True,
             "format": "bestaudio/best",
             "retries": 2,
@@ -792,7 +822,7 @@ class VKHandler(BaseHandler, AudioMixin):
                 ),
                 "Accept-Language": "ru,en-US;q=0.9,en;q=0.8",
             },
-        }
+        })
 
         def _download() -> Optional[Path]:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -831,18 +861,33 @@ class VKHandler(BaseHandler, AudioMixin):
         """
         Редкий fallback: пытается извлечь direct URL через yt-dlp metadata режим.
         """
-        ydl_opts: Dict[str, Any] = {
+        ydl_opts: Dict[str, Any] = self._build_ytdlp_opts({
             "skip_download": True,
-            "quiet": True,
-            "no_warnings": True,
             "geo_bypass": True,
             "user_agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
-        }
-        ydl_opts.update(build_vk_cookiefile_opt())
+        })
+        temp_cookiefile_path: Optional[Path] = None
+        cookiefile_opt = build_vk_cookiefile_opt()
+        source_cookiefile = cookiefile_opt.get("cookiefile")
+        if isinstance(source_cookiefile, str) and source_cookiefile.strip():
+            source_cookiefile_path = Path(source_cookiefile)
+            temp_cookiefile_path = self._generate_unique_path("vk_cookiefile_ytdlp_fallback", suffix=".txt")
+            try:
+                temp_cookiefile_path.parent.mkdir(parents=True, exist_ok=True)
+                temp_cookiefile_path.write_bytes(source_cookiefile_path.read_bytes())
+                ydl_opts["cookiefile"] = str(temp_cookiefile_path)
+            except Exception as exc:
+                logger.warning(
+                    "VK yt-dlp fallback cookies copy failed (%s -> %s): %s",
+                    source_cookiefile_path,
+                    temp_cookiefile_path,
+                    exc,
+                )
+                temp_cookiefile_path = None
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = await asyncio.to_thread(ydl.extract_info, url, download=False)
@@ -863,6 +908,9 @@ class VKHandler(BaseHandler, AudioMixin):
                         return fmt_url
         except Exception as exc:
             logger.warning("VK yt-dlp fallback failed for %s: %s", url, exc)
+        finally:
+            if isinstance(temp_cookiefile_path, Path):
+                temp_cookiefile_path.unlink(missing_ok=True)
         return None
 
     async def _download_audio_stream(
@@ -1619,3 +1667,4 @@ class VKHandler(BaseHandler, AudioMixin):
 
         logger.warning("VK content type is not supported by process() branch: %s", content_type)
         return None
+
