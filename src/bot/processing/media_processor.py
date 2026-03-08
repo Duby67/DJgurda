@@ -173,6 +173,9 @@ async def process_block(
                     await message.answer_photo(photo=photo, caption=profile_caption)
                 else:
                     await message.answer(profile_caption)
+            elif content_type == 'playlist':
+                playlist_caption = file_info.get('caption_text') or caption
+                await message.answer(playlist_caption)
             else:
                 raise ValueError(f"Unsupported file_info type: {content_type}")
 

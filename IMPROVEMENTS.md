@@ -34,10 +34,11 @@
 
 ### 3. Стратегия по неактивным handlers
 
-- Статус (2026-03-07): частично выполнено.
-- Проблема: в коде есть YouTube/Instagram/YandexMusic/VK handlers; после подключения YouTube/Instagram в runtime остаются неактивными YandexMusic/VK.
+- Статус (2026-03-08): частично выполнено.
+- Проблема: в коде есть YouTube/Instagram/YandexMusic/VK handlers; после подключения YouTube/Instagram/VK в runtime остается неактивным YandexMusic.
 - Действие:
   - Подключить готовые обработчики YouTube/Instagram в `ServiceManager` с минимальным риском для текущего TikTok pipeline. ✅ Выполнено.
+  - Подключить `VKHandler` в `ServiceManager` с поддержкой `audio`/`playlist`, безопасными VK cookies и локальными smoke-проверками по шаблону `test/handlers/<Source>`. ✅ Выполнено (`src/handlers/resources/VK/*`, `src/handlers/manager.py`, `test/handlers/VK/*`, `src/config.py`, `env.example`).
   - Выбрать подход: поэтапное включение или архивирование оставшихся неиспользуемых обработчиков.
   - Для включаемых источников добавить критерии readiness и чеклист.
 - Результат: меньше технического долга и понятный roadmap по источникам.
@@ -222,7 +223,7 @@
 
 ### 14. Возврат к тестам как отдельная фаза
 
-- Статус (2026-03-07): частично выполнено.
+- Статус (2026-03-08): частично выполнено.
 - Проблема: `tests/` сейчас legacy и не участвует в актуальном контуре.
 - Действие:
   - При готовности вернуть минимальный smoke-набор:
@@ -234,6 +235,7 @@
   - Зафиксировать в `README.md` и `.github/ai_context.md`, что для будущих проверок работоспособности handlers используется прототип: `test/handlers/TikTok/test_tiktok_handlers_local.py` + `test/handlers/TikTok/TikTok_urls.py`. ✅ Выполнено.
   - Добавить отдельный smoke-тест `test/handlers/YouTube/test_youtube_handlers_local.py` и источник ссылок `test/handlers/YouTube/YouTube_urls.py` для кейсов `shorts`/`channel`. ✅ Выполнено.
   - Добавить отдельный smoke-тест `test/handlers/Instagram/test_instagram_handlers_local.py` и источник ссылок `test/handlers/Instagram/Instagram_urls.py` для кейсов `reels`/`media_group`/`stories`/`profile`. ✅ Выполнено.
+  - Добавить отдельный smoke-тест `test/handlers/VK/test_vk_handlers_local.py` и источник ссылок `test/handlers/VK/VK_urls.py` для кейсов `audio`/`playlist` VK Music. ✅ Выполнено.
   - Зафиксировать единое правило именования источника тестовых ссылок как `<Source>_urls.py` для новых smoke-тестов handlers. ✅ Выполнено.
   - Перенести структуру локальных smoke-тестов handlers в единый путь `test/handlers/*`. ✅ Выполнено.
   - Обновить TikTok video smoke-ссылку на кейс `https://www.tiktok.com/t/ZP8XA8HA8/`, который воспроизводил ошибку формата. ✅ Выполнено (`test/handlers/TikTok/TikTok_urls.py`).

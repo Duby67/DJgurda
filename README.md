@@ -7,6 +7,7 @@
 - YouTube (`shorts`, `channel`)
 - Instagram (`reels`, `media_group`, `stories`, `profile`)
 - COUB (`video`)
+- VK Music (`audio`, `playlist`)
 
 Бот сохраняет статистику по чатам и пользователям.
 
@@ -79,6 +80,14 @@
 
    Важное замечание:
    - Для части Instagram Stories требуется авторизация; без валидных Instagram cookies возможна ошибка доступа (`You need to log in to access this content`).
+
+   Опционально для VK cookies:
+   - `VK_COOKIES_ENABLED` (`true/false`, по умолчанию `true`)
+   - `VK_COOKIES_PATH` (опционально; если не задан, cookies не будут применены)
+
+   Важное замечание:
+   - Для части VK Music ссылок требуется авторизованная сессия; без валидных VK cookies обработчик может не извлечь audio URL/playlist metadata.
+   - Если `vk_cookies.txt` пустой или выглядит как заглушка, VK handler автоматически игнорирует его.
 
    Шаблон:
    - `env.example` (скопируй в `.env` и подставь значения).
@@ -175,8 +184,8 @@ python scripts/release_sync.py --tag v1.2.0 --write
 
 ## Текущее ограничение
 
-В runtime зарегистрированы `TikTokHandler`, `YouTubeHandler`, `InstagramHandler`, `CoubHandler`.  
-`YandexMusic` и `VK` handlers присутствуют в коде, но пока не подключены в `ServiceManager`.
+В runtime зарегистрированы `TikTokHandler`, `YouTubeHandler`, `InstagramHandler`, `CoubHandler`, `VKHandler`.  
+`YandexMusic` handler присутствует в коде, но пока не подключен в `ServiceManager`.
 
 ## База данных
 
