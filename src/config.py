@@ -68,7 +68,7 @@ BOT_TOKEN = _require_env("BOT_TOKEN")
 YANDEX_MUSIC_TOKEN = _require_env("YANDEX_MUSIC_TOKEN")
 
 BOT_TEMP_DIR_PATH = os.getenv("BOT_TEMP_DIR", "").strip()
-DEFAULT_TEMP_DIR = (PROJECT_ROOT / "src" / "data" / "temp_files").resolve()
+DEFAULT_TEMP_DIR = (PROJECT_ROOT / "src" / "data" / "runtime").resolve()
 PROJECT_TEMP_DIR = _resolve_path(BOT_TEMP_DIR_PATH) if BOT_TEMP_DIR_PATH else DEFAULT_TEMP_DIR
 
 DEFAULT_COOKIES_DIR = PROJECT_ROOT / "src" / "data" / "cookies"

@@ -10,12 +10,12 @@ import uuid
 from pathlib import Path
 from typing import Dict, Optional
 
-from src.config import COOKIES_DIR
+from src.config import PROJECT_TEMP_DIR
 
 logger = logging.getLogger(__name__)
 
 _WARNED_KEYS: set[str] = set()
-_YTDLP_COOKIE_RUNTIME_DIR = COOKIES_DIR
+_DEFAULT_YTDLP_COOKIE_RUNTIME_DIR = PROJECT_TEMP_DIR / "_cookies"
 _MAX_RUNTIME_COPIES_PER_PROVIDER = 20
 
 
@@ -37,6 +37,7 @@ class CookieFile:
         enabled: bool,
         cookie_path: Optional[Path],
         path_env_name: str,
+        runtime_dir: Optional[Path] = None,
         log: Optional[logging.Logger] = None,
     ) -> None:
         self._provider_key = provider_key
@@ -44,6 +45,7 @@ class CookieFile:
         self._enabled = enabled
         self._cookie_path = cookie_path
         self._path_env_name = path_env_name
+        self._runtime_dir = runtime_dir
         self._log = log or logger
 
     def resolve_valid_path(self) -> Optional[Path]:
@@ -66,7 +68,11 @@ class CookieFile:
         valid_path = self.resolve_valid_path()
         if not valid_path:
             return None
-        return prepare_cookiefile_for_ytdlp(valid_path, provider_key=self._provider_key)
+        return prepare_cookiefile_for_ytdlp(
+            valid_path,
+            provider_key=self._provider_key,
+            runtime_dir=self._runtime_dir,
+        )
 
     def build_ytdlp_opts(self) -> Dict[str, str]:
         """
@@ -79,6 +85,7 @@ class CookieFile:
             cookie_path=self._cookie_path,
             path_env_name=self._path_env_name,
             log=self._log,
+            runtime_dir=self._runtime_dir,
         )
 
     def build_request_cookies(self) -> Dict[str, str]:
@@ -183,13 +190,13 @@ def resolve_valid_cookie_path(
     return cookie_path
 
 
-def _prune_old_runtime_copies(provider_key: str) -> None:
+def _prune_old_runtime_copies(provider_key: str, runtime_dir: Path) -> None:
     """
     Ограничивает число runtime-копий cookies для одного провайдера.
     """
     try:
         candidates = sorted(
-            _YTDLP_COOKIE_RUNTIME_DIR.glob(f"runtime_{provider_key}_*.txt"),
+            runtime_dir.glob(f"runtime_{provider_key}_*.txt"),
             key=lambda path: path.stat().st_mtime if path.exists() else 0,
             reverse=True,
         )
@@ -203,7 +210,11 @@ def _prune_old_runtime_copies(provider_key: str) -> None:
             continue
 
 
-def prepare_cookiefile_for_ytdlp(source_path: Path, provider_key: str) -> Optional[Path]:
+def prepare_cookiefile_for_ytdlp(
+    source_path: Path,
+    provider_key: str,
+    runtime_dir: Optional[Path] = None,
+) -> Optional[Path]:
     """
     Создает рабочую копию cookie-файла для yt-dlp и возвращает путь к ней.
 
@@ -217,11 +228,12 @@ def prepare_cookiefile_for_ytdlp(source_path: Path, provider_key: str) -> Option
     if not safe_provider_key:
         safe_provider_key = "provider"
 
+    runtime_root = runtime_dir if isinstance(runtime_dir, Path) else _DEFAULT_YTDLP_COOKIE_RUNTIME_DIR
     try:
-        _YTDLP_COOKIE_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-        runtime_copy_path = _YTDLP_COOKIE_RUNTIME_DIR / f"runtime_{safe_provider_key}_{uuid.uuid4().hex[:12]}.txt"
+        runtime_root.mkdir(parents=True, exist_ok=True)
+        runtime_copy_path = runtime_root / f"runtime_{safe_provider_key}_{uuid.uuid4().hex[:12]}.txt"
         shutil.copy2(source_path, runtime_copy_path)
-        _prune_old_runtime_copies(safe_provider_key)
+        _prune_old_runtime_copies(safe_provider_key, runtime_root)
         return runtime_copy_path
     except Exception as exc:
         logger.warning(
@@ -241,6 +253,7 @@ def build_ytdlp_cookiefile_opt(
     cookie_path: Optional[Path],
     path_env_name: str,
     log: logging.Logger,
+    runtime_dir: Optional[Path] = None,
 ) -> Dict[str, str]:
     """
     Возвращает `cookiefile`-опцию для yt-dlp в безопасном auto-режиме.
@@ -256,7 +269,11 @@ def build_ytdlp_cookiefile_opt(
     if not valid_cookie_path:
         return {}
 
-    runtime_cookie_path = prepare_cookiefile_for_ytdlp(valid_cookie_path, provider_key=provider_key)
+    runtime_cookie_path = prepare_cookiefile_for_ytdlp(
+        valid_cookie_path,
+        provider_key=provider_key,
+        runtime_dir=runtime_dir,
+    )
     if not isinstance(runtime_cookie_path, Path):
         warn_once(
             log,
@@ -283,12 +300,14 @@ def cleanup_runtime_cookiefile(cookiefile: Optional[Path | str]) -> None:
         return
 
     try:
-        cookies_root = _YTDLP_COOKIE_RUNTIME_DIR.resolve()
+        if not runtime_path.is_relative_to(PROJECT_TEMP_DIR):
+            return
     except Exception:
-        cookies_root = _YTDLP_COOKIE_RUNTIME_DIR
-
-    if runtime_path.parent != cookies_root:
-        return
+        try:
+            if PROJECT_TEMP_DIR.resolve() not in runtime_path.parents:
+                return
+        except Exception:
+            return
 
     if not runtime_path.name.startswith("runtime_"):
         return

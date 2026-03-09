@@ -133,6 +133,7 @@ class BaseMixin:
             cookie_path=cookie_path,
             path_env_name=path_env_name,
             log=logger,
+            runtime_dir=self.temp_dir,
         )
 
     async def _random_delay(self, min_sec: float = 1, max_sec: float = 3) -> None:

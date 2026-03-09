@@ -35,6 +35,7 @@ class YouTubeHandler(BaseHandler, YouTubeShorts, YouTubeChannel):
             enabled=YOUTUBE_COOKIES_ENABLED,
             cookie_path=YOUTUBE_COOKIES,
             path_env_name="YOUTUBE_COOKIES_PATH",
+            runtime_dir=self.temp_dir,
             log=logger,
         )
 

@@ -39,6 +39,7 @@ class TikTokHandler(BaseHandler, TikTokVideo, TikTokPhoto, TikTokProfile):
             enabled=TIKTOK_COOKIES_ENABLED,
             cookie_path=TIKTOK_COOKIES,
             path_env_name="TIKTOK_COOKIES_PATH",
+            runtime_dir=self.temp_dir,
             log=logger,
         )
 

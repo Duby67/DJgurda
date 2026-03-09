@@ -110,6 +110,7 @@ class VKHandler(BaseHandler, VKAudio, VKPlaylist):
             enabled=VK_COOKIES_ENABLED,
             cookie_path=VK_COOKIES,
             path_env_name="VK_COOKIES_PATH",
+            runtime_dir=self.temp_dir,
             log=logger,
         )
         self._request_cookies = self._vk_cookies.build_request_cookies()
@@ -487,4 +488,3 @@ class VKHandler(BaseHandler, VKAudio, VKPlaylist):
 
         logger.warning("VK content type is not supported by process() branch: %s", content_type)
         return None
-

@@ -40,6 +40,7 @@ class InstagramHandler(
             enabled=INSTAGRAM_COOKIES_ENABLED,
             cookie_path=INSTAGRAM_COOKIES,
             path_env_name="INSTAGRAM_COOKIES_PATH",
+            runtime_dir=self.temp_dir,
             log=logger,
         )
 
