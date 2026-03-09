@@ -244,9 +244,12 @@
   - `ServiceManager` переведен на thin-wrapper над `HandlerRegistry`; активный runtime-реестр формируется декларативно через factory-слой. ✅ (`src/handlers/manager.py`).
   - Базовый контракт `BaseHandler.process` обновлен до `HandlerOutput` (`MediaResult | LegacyFileInfo`). ✅ (`src/handlers/base.py`).
   - Подписи для пользователя формируются из typed-результата (`MediaResult`), а не из сырого `file_info`. ✅ (`src/utils/messages.py`).
+  - Выполненный пункт 7 из `local/REFACTORING.md` удален как закрытый инкремент; follow-up ТЗ вынесено в отдельный `.github`-файл с правилами использования только по прямому запросу пользователя. ✅ (`local/REFACTORING.md`, `.github/ai-agent-technical-task.md`, `.github/ai-context.md`).
 - Вне scope этого инкремента:
   - массовая миграция всех platform handlers на прямой возврат `MediaResult`;
   - перевод всех внутренних mixins на composition-services.
+- Следующий целевой шаг:
+  - pilot-миграция `YouTubeHandler` на прямой `MediaResult` и explicit composition без inheritance-boundary (зафиксирована в `.github/ai-agent-technical-task.md`).
 - Результат: архитектурная граница зафиксирована как `handler -> MediaResult -> SenderRegistry -> Telegram` при сохранении совместимости с текущими legacy handlers.
 
 ## Приоритет P3 (дальше)
