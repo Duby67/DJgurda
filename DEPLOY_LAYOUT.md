@@ -52,10 +52,10 @@
 └─ logs/                            # volume mount с сервера
 ```
 
-Временные файлы в контейнере хранятся вне `/app/src/data`:
+Временные файлы в контейнере хранятся в фиксированной runtime-директории:
 
 ```text
-/tmp/djgurda/runtime/            # значение BOT_TEMP_DIR в deploy
+/app/src/data/runtime/
 ├─ TikTokHandler/
 ├─ YouTubeHandler/
 ├─ InstagramHandler/
@@ -77,7 +77,6 @@
 
 - `BOT_DB_PATH=/app/src/data/db/bot.db` (обязательный)
 - `COOKIES_DIR=/app/src/data/cookies` (рекомендуемый)
-- `BOT_TEMP_DIR=/tmp/djgurda/runtime` (в deploy задается workflow)
 - `*_COOKIES_PATH` опциональны как явный override:
   - `YOUTUBE_COOKIES_PATH`
   - `INSTAGRAM_COOKIES_PATH`
@@ -98,7 +97,7 @@
 - Temp runtime storage:
   - `ensure_runtime_storage(...)` на startup создает:
     - родительскую директорию БД;
-    - `BOT_TEMP_DIR`;
+    - `/app/src/data/runtime`;
     - подпапки по активным handler-классам;
   - `cleanup_expired_runtime(MAX_AGE_SECONDS)` на startup удаляет устаревшие временные файлы;
   - `cleanup_all_runtime()` на shutdown удаляет все временные файлы.

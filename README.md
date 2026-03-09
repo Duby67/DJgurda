@@ -74,8 +74,8 @@
    - `BOT_TOKEN`
    - `YANDEX_MUSIC_TOKEN`
 
-   Опционально для временных файлов:
-   - `BOT_TEMP_DIR` (опционально; если не задан, используется `src/data/runtime`)
+   Runtime-директория временных файлов фиксирована в `src/config.py`:
+   - `src/data/runtime` (внутри контейнера: `/app/src/data/runtime`)
 
    Общая директория cookies (рекомендуемый режим):
    - `COOKIES_DIR` (опционально; по умолчанию `src/data/cookies`)
@@ -127,7 +127,6 @@
    Для Docker/deploy используются значения путей внутри контейнера:
    - `BOT_DB_PATH=/app/src/data/db/bot.db`
    - `COOKIES_DIR=/app/src/data/cookies`
-   - `BOT_TEMP_DIR=/tmp/djgurda/runtime` (если нужен отдельный volume/путь)
    - `*_COOKIES_PATH=/app/src/data/cookies/<file>` (опционально, только как явный override)
 4. Старт:
 
@@ -232,7 +231,7 @@ python scripts/release_sync.py --tag v1.2.0 --write
 - Скрипт ожидает env-файл на сервере по пути `$HOME/bot_{env}/.env` и валидирует обязательные ключи перед запуском контейнера.
 - `bot.db` и cookies хранятся вне репозитория в `$HOME/bot_{env}/data/{db,cookies}` и монтируются в контейнер как volumes.
 - В GitHub Actions deploy не управляет содержимым cookies: workflow подготавливает `$HOME/bot_{env}`, а `manager.sh` сам создает и монтирует `$HOME/bot_{env}/data/cookies` в контейнер как `/app/src/data/cookies` (read-only).
-- Временные файлы создаются только внутри контейнера в `BOT_TEMP_DIR` (по умолчанию `src/data/runtime`), включая отдельные подпапки по handler-классам.
+- Временные файлы создаются только внутри контейнера в `/app/src/data/runtime` (фиксированный путь), включая отдельные подпапки по handler-классам.
 - При старте бот инициализирует runtime-директории и удаляет устаревшие временные файлы; при остановке выполняется полная очистка временных файлов.
 - `manager.sh` общий для `dev` и `prod`: любые правки должны сохранять совместимость перезапуска обоих окружений.
 - Rule: remote server access is forbidden for AI agents (SSH/RDP/WinRM/remote shell). Any server-side action is performed only by the user.
