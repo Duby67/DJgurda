@@ -24,9 +24,6 @@
 /home/<SSH_USER>/
 ├─ deploy/
 │  ├─ manager.sh
-│  ├─ sync_cookies.sh
-│  ├─ sync_cookies.bat
-│  ├─ sync_cookies.env.example
 │  └─ cookies/       # materialized on runner
 │     ├─ .gitkeep
 │     ├─ coub_cookies.txt
@@ -106,6 +103,7 @@
 - `deploy/sync_cookies.sh`, `deploy/sync_cookies.bat`
   - ручная синхронизация cookies для deploy-контура;
   - скрипты только добавляют новые `*_cookies.txt` на сервер или перезаписывают одноименные, но не удаляют файлы, которых нет локально.
+  - это локальные инструменты пользователя; GitHub Actions не копирует их на сервер автоматически.
 - `deploy/sync_cookies.env`
   - локальный конфиг ручной синхронизации с `REMOTE_USER`, `REMOTE_HOST`, `REMOTE_PORT`;
   - не попадает в git.

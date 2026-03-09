@@ -2,6 +2,7 @@
 
 set -Eeuo pipefail
 
+# Пути deploy-контура и локального конфига ручной синхронизации.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="${SCRIPT_DIR}/cookies"
 CONFIG_FILE="${SCRIPT_DIR}/sync_cookies.env"
@@ -12,6 +13,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
+# Подключаем локальный конфиг с параметрами подключения.
 # shellcheck disable=SC1090
 source "$CONFIG_FILE"
 
@@ -37,6 +39,7 @@ case "$TARGET_ENV" in
         ;;
 esac
 
+# Целевая server-side директория cookies для выбранного окружения.
 REMOTE_DIR="/home/${REMOTE_USER}/bot_${TARGET_ENV}/data/cookies"
 
 command -v ssh >/dev/null 2>&1 || {
@@ -61,6 +64,7 @@ if [ "${#cookie_files[@]}" -eq 0 ]; then
     exit 0
 fi
 
+# Синхронизация идет только по локально существующим файлам без удаления server-side остатков.
 uploaded_count=0
 for cookie_file in "${cookie_files[@]}"; do
     cookie_name="$(basename "$cookie_file")"

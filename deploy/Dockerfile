@@ -2,22 +2,22 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Dockerfile lives in deploy/, but the build context remains the repository root.
+# Dockerfile лежит в deploy/, но build context остается корнем репозитория.
 
-# System packages required by runtime handlers.
+# Системные пакеты, необходимые runtime-обработчикам.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency manifest separately to preserve layer caching for pip installs.
+# Копируем манифест зависимостей отдельно, чтобы сохранить кэш слоя для pip install.
 COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
-# Copy only runtime application code.
+# Копируем только runtime-код приложения.
 COPY src ./src
 
-# Prepare runtime directories.
+# Подготавливаем runtime-директории, которые не приезжают из репозитория.
 RUN mkdir -p /app/src/data \
     && chmod -R 0777 /app/src/data
 

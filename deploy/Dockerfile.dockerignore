@@ -1,8 +1,8 @@
-# VCS and CI metadata are not needed in the runtime image.
+# Метаданные VCS и CI не нужны внутри runtime-образа.
 .git
 .github/
 
-# Local environment files and developer caches.
+# Локальные env-файлы и кэши разработки.
 .env
 .env.*
 .pytest_cache/
@@ -18,23 +18,23 @@ __pycache__/
 venv/
 env/
 
-# Tests, docs and local-only project materials stay outside the runtime image.
+# Тесты, документация и локальные материалы не должны попадать в runtime-образ.
 test/
 docs/
 local/
 README.md
 
-# Repository-level service files are irrelevant inside the container.
+# Служебные файлы репозитория не нужны внутри контейнера.
 .gitignore
 .gitattributes
 .markdownlint.json
 .markdownlintignore
 
-# Deploy helper scripts and deploy cookie staging are used outside image build.
+# Deploy-скрипты и staging cookies используются вне сборки образа.
 deploy/manager.sh
 deploy/*.cmd
 deploy/*.sh
 deploy/cookies/
 
-# Runtime data is created separately by volumes and container startup.
+# Runtime-данные создаются отдельно через volumes и startup-инициализацию.
 src/data/

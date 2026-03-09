@@ -1,6 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
+REM Пути deploy-контура и локального конфига ручной синхронизации.
 set "SCRIPT_DIR=%~dp0"
 set "SOURCE_DIR=%SCRIPT_DIR%cookies"
 set "CONFIG_FILE=%SCRIPT_DIR%sync_cookies.env"
@@ -11,6 +12,7 @@ if not exist "%CONFIG_FILE%" (
     exit /b 1
 )
 
+REM Загружаем локальный конфиг с параметрами подключения.
 for /f "usebackq eol=# tokens=1,* delims==" %%A in ("%CONFIG_FILE%") do (
     if not "%%~A"=="" (
         set "%%~A=%%~B"
@@ -48,6 +50,7 @@ if /I not "%TARGET_ENV%"=="dev" if /I not "%TARGET_ENV%"=="prod" (
     exit /b 1
 )
 
+REM Целевая server-side директория cookies для выбранного окружения.
 set "REMOTE_DIR=/home/%REMOTE_USER%/bot_%TARGET_ENV%/data/cookies"
 
 where ssh >nul 2>&1
@@ -69,6 +72,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM Синхронизация идет только по локально существующим файлам без удаления server-side остатков.
 set /a FILES_COPIED=0
 for %%F in ("%SOURCE_DIR%\*_cookies.txt") do (
     if exist "%%~fF" (

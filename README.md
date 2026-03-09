@@ -250,9 +250,9 @@ python scripts/release_sync.py --tag v1.2.0 --write
 - Временные файлы создаются только внутри контейнера в `/app/src/data/runtime` (фиксированный путь), включая отдельные подпапки по handler-классам.
 - При старте бот инициализирует runtime-директории и удаляет устаревшие временные файлы; при остановке выполняется полная очистка временных файлов.
 - `deploy/manager.sh` общий для `dev` и `prod`: любые правки должны сохранять совместимость перезапуска обоих окружений.
-- Rule: remote server access is forbidden for AI agents (SSH/RDP/WinRM/remote shell). Any server-side action is performed only by the user.
-- Encoding rule: UTF-8 with BOM is strongly discouraged; use plain UTF-8 without BOM.
-- `deploy/manager.sh` includes DB backup rotation: backups are written to `$HOME/bot_{env}/data/db/backups`, retention is controlled by `DB_BACKUP_KEEP_COUNT` (default `14`).
+- Удаленный доступ к серверу для AI-агентов запрещен (SSH/RDP/WinRM/remote shell). Любые server-side действия выполняет только пользователь.
+- Для кодировки используйте обычный UTF-8 без BOM; UTF-8 with BOM нежелателен.
+- В `deploy/manager.sh` включена ротация резервных копий БД: бэкапы пишутся в `$HOME/bot_{env}/data/db/backups`, хранение регулируется `DB_BACKUP_KEEP_COUNT` (по умолчанию `14`).
 - Учитывай, что `prod` может временно отставать от `dev`, поэтому нельзя делать изменения, работающие только для одного окружения.
 
 ## Управление в чатах
