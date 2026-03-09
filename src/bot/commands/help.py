@@ -1,6 +1,7 @@
 """Команда `/help` и формирование списка поддерживаемых источников."""
 
 import logging
+from typing import Optional
 
 from aiogram import Router
 from aiogram.filters import Command
@@ -10,8 +11,16 @@ from src.handlers.manager import ServiceManager
 from src.utils.Emoji import emoji
 
 router = Router()
-service_manager = ServiceManager()
+service_manager: Optional[ServiceManager] = None
 logger = logging.getLogger(__name__)
+
+
+def _get_service_manager() -> ServiceManager:
+    """Ленивая инициализация ServiceManager после старта приложения."""
+    global service_manager
+    if service_manager is None:
+        service_manager = ServiceManager()
+    return service_manager
 
 
 @router.message(Command("help"))
@@ -27,7 +36,7 @@ async def help_command(message: Message) -> None:
     )
     try:
         sources = []
-        for handler in service_manager.handlers:
+        for handler in _get_service_manager().handlers:
             name = handler.source_name
             source_emoji = emoji(name)
             sources.append(f"{source_emoji} {name}")

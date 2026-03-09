@@ -65,6 +65,7 @@
   - Уточнить нейтральный интерфейс cookies: выделить общий объект-обертку для исходного файла, создавать runtime-копии per request и использовать единый контракт в handlers/миксинах. ✅ Выполнено (`src/utils/cookies.py`, `src/handlers/resources/Instagram/InstagramHandler.py`, `src/handlers/resources/YouTube/YouTubeHandler.py`, `src/handlers/resources/YouTube/YouTubeShorts.py`, `src/handlers/resources/YouTube/YouTubeChannel.py`, `src/handlers/resources/VK/VKHandler.py`).
   - Добавить поддержку TikTok cookies по общей схеме (enabled/path + runtime-копии для yt-dlp). ✅ Выполнено (`src/config.py`, `env.example`, `README.md`, `.github/ai_context.md`, `src/handlers/resources/TikTok/TikTokHandler.py`, `src/handlers/resources/TikTok/TikTokVideo.py`, `src/handlers/resources/TikTok/TikTokPhoto.py`, `test/handlers/_local_cookie_setup.py`).
   - Разнести VK-обработчики на отдельные mixin-классы `VKAudio` и `VKPlaylist`. ✅ Выполнено (`src/handlers/resources/VK/VKAudio.py`, `src/handlers/resources/VK/VKPlaylist.py`, `src/handlers/resources/VK/VKHandler.py`).
+  - Отложить инициализацию `ServiceManager` до обработки сообщений/команд, чтобы создание temp-папок не происходило на стадии import до startup-хука с `ensure_runtime_storage(...)`. ✅ Выполнено (`src/bot/commands/help.py`, `src/bot/processing/media_router.py`).
 - Результат: проще локальный запуск и меньше ложных падений на старте.
 
 ### 5. Метрики пользовательской активности (пульс бота)

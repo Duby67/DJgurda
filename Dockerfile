@@ -8,5 +8,6 @@ RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+RUN chmod -R 0777 /app/src/data
 
 CMD ["python", "-m", "src.main"]

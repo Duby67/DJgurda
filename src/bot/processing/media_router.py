@@ -1,6 +1,7 @@
 """Модуль `media_router`."""
 import logging
 import asyncio
+from typing import Optional
 
 from aiogram import Router, F
 from aiogram.types import Message, ReplyParameters
@@ -16,7 +17,15 @@ from .media_processor import process_block
 logger = logging.getLogger(__name__)
 
 router = Router()
-service_manager = ServiceManager()
+service_manager: Optional[ServiceManager] = None
+
+
+def _get_service_manager() -> ServiceManager:
+    """Ленивая инициализация ServiceManager после старта приложения."""
+    global service_manager
+    if service_manager is None:
+        service_manager = ServiceManager()
+    return service_manager
 
 
 @router.message(F.text | F.caption)
@@ -41,9 +50,10 @@ async def handle_media_message(message: Message) -> None:
     user_link = get_user_link(message.from_user)
 
     tasks = []
+    manager = _get_service_manager()
     for idx, (raw_url, context) in enumerate(blocks, start=1):
         resolved_url = await resolve_url(raw_url)
-        handler = service_manager.get_handler(resolved_url)
+        handler = manager.get_handler(resolved_url)
         if not handler:
             logger.warning(f"No handler found for resolved URL: {resolved_url}")
             if await get_errors_enabled(message.chat.id):
