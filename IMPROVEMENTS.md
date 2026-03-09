@@ -231,6 +231,24 @@
   - delivered: 400
 - Результат: видно, где ломается UX/интеграции и что упрощать в первую очередь.
 
+### 13.1 Эволюционный переход к typed-контракту + registry
+
+- Статус (2026-03-09): частично выполнено (первый практический инкремент по `local/REFACTORING.md`, пункт 7).
+- Проблема: orchestration-слой зависел от legacy `dict[file_info]`, централизованного `if/elif` отправки и ручной регистрации handlers.
+- Выполнено:
+  - Введен typed-контракт результата обработчика: `ContentType`, `MediaAttachment`, `AudioAttachment`, `MediaResult`. ✅ (`src/handlers/contracts.py`).
+  - Введен compatibility-layer для legacy handlers: `LegacyFileInfoAdapter` + `adapt_handler_output` (`dict[file_info] -> MediaResult`). ✅ (`src/handlers/adapters/legacy_file_info.py`, `src/handlers/adapters/__init__.py`).
+  - `media_processor` переведен на работу через `MediaResult`; cleanup временных файлов выполняется по typed-контракту результата, без чтения сырых handler-specific полей. ✅ (`src/bot/processing/media_processor.py`).
+  - Введен `SenderRegistry` и sender-стратегии по `ContentType`; отправка больше не зависит от централизованного `if/elif` в `media_processor`. ✅ (`src/bot/processing/senders/registry.py`, `src/bot/processing/senders/__init__.py`).
+  - Введен декларативный `HandlerRegistry` + `HandlerDescriptor` (`pattern`, `priority`, `feature_flags`, `factory`, `source_name`, `supported_content_types`). ✅ (`src/handlers/registry.py`).
+  - `ServiceManager` переведен на thin-wrapper над `HandlerRegistry`; активный runtime-реестр формируется декларативно через factory-слой. ✅ (`src/handlers/manager.py`).
+  - Базовый контракт `BaseHandler.process` обновлен до `HandlerOutput` (`MediaResult | LegacyFileInfo`). ✅ (`src/handlers/base.py`).
+  - Подписи для пользователя формируются из typed-результата (`MediaResult`), а не из сырого `file_info`. ✅ (`src/utils/messages.py`).
+- Вне scope этого инкремента:
+  - массовая миграция всех platform handlers на прямой возврат `MediaResult`;
+  - перевод всех внутренних mixins на composition-services.
+- Результат: архитектурная граница зафиксирована как `handler -> MediaResult -> SenderRegistry -> Telegram` при сохранении совместимости с текущими legacy handlers.
+
 ## Приоритет P3 (дальше)
 
 ### 14. Возврат к тестам как отдельная фаза

@@ -1,55 +1,36 @@
-"""
-Менеджер сервисов для обработки медиа.
-"""
+"""Менеджер runtime-обработчиков поверх декларативного registry."""
+
+from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import Optional
 
-from .base import BaseHandler
-from src.handlers.resources import CoubHandler, InstagramHandler, TikTokHandler, YouTubeHandler
-# from src.handlers.resources import VKHandler  # DEV-only: disabled for production deploy
+from src.handlers.base import BaseHandler
+from src.handlers.registry import HandlerRegistry, RuntimeHandlerEntry, get_default_handler_registry
 
 logger = logging.getLogger(__name__)
 
-ACTIVE_HANDLER_CLASSES = (
-    TikTokHandler,
-    YouTubeHandler,
-    InstagramHandler,
-    CoubHandler,
-    # VKHandler,  # DEV-only: disabled for production deploy
-)
-
 
 def get_active_handler_names() -> tuple[str, ...]:
-    """Возвращает имена активных handler-классов в runtime."""
-    return tuple(handler_cls.__name__ for handler_cls in ACTIVE_HANDLER_CLASSES)
+    """Возвращает имена активных runtime handler-классов."""
+    return get_default_handler_registry().get_runtime_handler_names()
 
 
 class ServiceManager:
-    """
-    Менеджер для регистрации и поиска обработчиков медиа.
-    """
-    
-    def __init__(self) -> None:
-        """
-        Инициализирует менеджер с зарегистрированными обработчиками.
-        """
-        self.handlers: List[BaseHandler] = [handler_cls() for handler_cls in ACTIVE_HANDLER_CLASSES]
-        logger.info(f"Registered handlers: {len(self.handlers)}")
+    """Thin-wrapper над `HandlerRegistry` для поиска handler-а по URL."""
+
+    def __init__(self, registry: HandlerRegistry | None = None) -> None:
+        self.registry = registry or get_default_handler_registry()
+        self._entries: list[RuntimeHandlerEntry] = self.registry.create_runtime_entries()
+        self.handlers: list[BaseHandler] = [entry.handler for entry in self._entries]
+        logger.info("Registered handlers: %s", len(self.handlers))
 
     def get_handler(self, url: str) -> Optional[BaseHandler]:
-        """
-        Находит обработчик, поддерживающий данный URL.
-        
-        Аргументы:
-            url: URL для обработки
-            
-        Возвращает:
-            BaseHandler или None если подходящий обработчик не найден
-        """
-        for handler in self.handlers:
-            if handler.pattern.search(url):
-                logger.debug(f"Handler found for {url}: {handler.source_name}")
-                return handler
-        logger.debug(f"No handler found for URL: {url}")
+        """Находит обработчик, поддерживающий данный URL."""
+        for entry in self._entries:
+            if entry.descriptor.pattern.search(url):
+                logger.debug("Handler found for %s: %s", url, entry.descriptor.source_name)
+                return entry.handler
+
+        logger.debug("No handler found for URL: %s", url)
         return None

@@ -6,6 +6,8 @@ from pathlib import Path
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Iterable, Optional
 
+from src.handlers.contracts import HandlerOutput
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,7 +26,7 @@ class BaseHandler(ABC):
         pass
 
     @abstractmethod
-    async def process(self, url: str, context: str, resolved_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    async def process(self, url: str, context: str, resolved_url: Optional[str] = None) -> Optional[HandlerOutput]:
         """Функция `process`."""
         pass
 
