@@ -15,12 +15,13 @@ import aiohttp
 import yt_dlp
 from bs4 import BeautifulSoup
 
+from src.handlers.mixins import AudioMixin
 from src.utils.cookies import cleanup_runtime_cookiefile
 
 logger = logging.getLogger(__name__)
 
 
-class VKAudio:
+class VKAudio(AudioMixin):
     """
     Миксин для обработки одиночных треков VK Music.
     """

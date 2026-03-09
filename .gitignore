@@ -48,7 +48,7 @@ Desktop.ini
 # Локальные runtime-артефакты проекта
 src/data/db/*
 !src/data/db/.gitkeep
-src/data/runtime/
-src/data/temp_files/
+src/data/runtime/*
+!src/data/runtime/.gitkeep
 src/data/cookies/*
 !src/data/cookies/.gitkeep
