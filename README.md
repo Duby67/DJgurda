@@ -20,14 +20,14 @@
 
 Основной источник контекста для разработчиков и AI-агентов:
 
-- [`.github/ai_context.md`](./.github/ai_context.md)
+- [`.github/ai-context.md`](./.github/ai-context.md)
 - [`IMPROVEMENTS.md`](./IMPROVEMENTS.md)
 
 Политика актуальности:
 
-- `README.md` и `.github/ai_context.md` - канонические документы.
+- `README.md` и `.github/ai-context.md` - канонические документы.
 - Контекст всегда проверяется по коду в `src/`.
-- При любом обращении к `README.md` агент обязан дополнительно проверить `.github/ai_context.md` и `IMPROVEMENTS.md`.
+- При любом обращении к `README.md` агент обязан дополнительно проверить `.github/ai-context.md` и `IMPROVEMENTS.md`.
 - В пользовательских caption хэштеги из заголовков контента должны удаляться; если заголовок после очистки пустой, используется нейтральный fallback-текст.
 
 ## Важный статус по структуре
