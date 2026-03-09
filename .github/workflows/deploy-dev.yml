@@ -63,6 +63,47 @@ jobs:
             ghcr.io/${{ steps.repo_meta.outputs.repo_lc }}:dev-${{ github.sha }}
           platforms: linux/amd64
 
+      - name: Materialize deploy cookies on runner
+        shell: bash
+        env:
+          COUB_COOKIES_FILE: ${{ secrets.COUB_COOKIES_FILE }}
+          INSTAGRAM_COOKIES_FILE: ${{ secrets.INSTAGRAM_COOKIES_FILE }}
+          TIKTOK_COOKIES_FILE: ${{ secrets.TIKTOK_COOKIES_FILE }}
+          VK_COOKIES_FILE: ${{ secrets.VK_COOKIES_FILE }}
+          YOUTUBE_COOKIES_FILE: ${{ secrets.YOUTUBE_COOKIES_FILE }}
+        run: |
+          mkdir -p deploy/cookies
+          find deploy/cookies -maxdepth 1 -type f -name '*_cookies.txt' -delete
+
+          materialize_cookie() {
+            local filename="$1"
+            local content="$2"
+            if [ -z "$content" ]; then
+              return 0
+            fi
+            printf '%s' "$content" > "deploy/cookies/${filename}"
+          }
+
+          materialize_cookie "coub_cookies.txt" "$COUB_COOKIES_FILE"
+          materialize_cookie "instagram_cookies.txt" "$INSTAGRAM_COOKIES_FILE"
+          materialize_cookie "tiktok_cookies.txt" "$TIKTOK_COOKIES_FILE"
+          materialize_cookie "vk.com_cookies.txt" "$VK_COOKIES_FILE"
+          materialize_cookie "www.youtube.com_cookies.txt" "$YOUTUBE_COOKIES_FILE"
+
+          COOKIE_COUNT="$(find deploy/cookies -maxdepth 1 -type f -name '*_cookies.txt' | wc -l | tr -d ' ')"
+          echo "Deploy cookies materialized: ${COOKIE_COUNT}"
+
+      - name: Prepare deploy/cookies staging on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 228
+          script: |
+            mkdir -p "/home/${{ secrets.SSH_USER }}/deploy/cookies"
+            find "/home/${{ secrets.SSH_USER }}/deploy/cookies" -maxdepth 1 -type f -name '*_cookies.txt' -delete
+
       - name: Copy deploy/manager.sh to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -71,6 +112,18 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 228
           source: "deploy/manager.sh"
+          target: "/home/${{ secrets.SSH_USER }}"
+          overwrite: true
+          strip_components: 0
+
+      - name: Copy deploy/cookies to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 228
+          source: "deploy/cookies"
           target: "/home/${{ secrets.SSH_USER }}"
           overwrite: true
           strip_components: 0
@@ -84,7 +137,18 @@ jobs:
           port: 228
           script: |
             BOT_ROOT="/home/${{ secrets.SSH_USER }}/bot_dev"
+            DEPLOY_COOKIES_DIR="/home/${{ secrets.SSH_USER }}/deploy/cookies"
+            TARGET_COOKIES_DIR="${BOT_ROOT}/data/cookies"
             mkdir -p "$BOT_ROOT"
+            mkdir -p "$TARGET_COOKIES_DIR"
+
+            if find "$DEPLOY_COOKIES_DIR" -maxdepth 1 -type f -name '*_cookies.txt' | grep -q .; then
+              find "$DEPLOY_COOKIES_DIR" -maxdepth 1 -type f -name '*_cookies.txt' -exec cp -f {} "$TARGET_COOKIES_DIR"/ \;
+              echo "Deploy cookies synchronized into ${TARGET_COOKIES_DIR}"
+            else
+              echo "No deploy cookie files provided; keep existing server cookies in ${TARGET_COOKIES_DIR}"
+            fi
+
             cd "$BOT_ROOT"
 
             echo "ADMIN_ID=${{ secrets.ADMIN_ID }}" > .env

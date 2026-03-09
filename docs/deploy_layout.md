@@ -13,6 +13,7 @@
 - `src/middlewares/db/core.py`
 - `.github/workflows/deploy-*.yml`
 - `deploy/Dockerfile`
+- `deploy/Dockerfile.dockerignore`
 - `deploy/manager.sh`
 
 ## Сервер (VPS)
@@ -22,16 +23,27 @@
 ```text
 /home/<SSH_USER>/
 ├─ deploy/
-│  └─ manager.sh
+│  ├─ manager.sh
+│  ├─ sync_cookies.sh
+│  ├─ sync_cookies.bat
+│  ├─ sync_cookies.env.example
+│  └─ cookies/       # materialized on runner
+│     ├─ .gitkeep
+│     ├─ coub_cookies.txt
+│     ├─ instagram_cookies.txt
+│     ├─ tiktok_cookies.txt
+│     ├─ vk.com_cookies.txt
+│     └─ www.youtube.com_cookies.txt 
 └─ bot_dev/
    ├─ .env
    ├─ data/
    │  ├─ db/
    │  │  └─ bot.db                  # внешняя SQLite база
    │  └─ cookies/
-   │     ├─ www.youtube.com_cookies.txt     # опционально
-   │     ├─ instagram_cookies.txt   # опционально
-   │     └─ vk.com_cookies.txt      # опционально
+   │     ├─ instagram_cookies.txt
+   │     ├─ tiktok_cookies.txt
+   │     ├─ vk.com_cookies.txt
+   │     └─ www.youtube.com_cookies.txt
    └─ logs/
 ```
 
@@ -50,9 +62,10 @@
 │     ├─ db/                        # volume mount с сервера
 │     │  └─ bot.db
 │     └─ cookies/                   # volume mount (read-only)
-│        ├─ www.youtube.com_cookies.txt
 │        ├─ instagram_cookies.txt
-│        └─ vk.com_cookies.txt
+│        ├─ tiktok_cookies.txt
+│        ├─ vk.com_cookies.txt
+│        └─ www.youtube.com_cookies.txt
 └─ logs/                            # volume mount с сервера
 ```
 
@@ -77,6 +90,28 @@
 
 `runtime` volume больше не используется.
 
+## Логика cookie-директорий
+
+- `src/data/cookies`
+  - runtime-оригиналы, с которыми бот взаимодействует в текущем окружении;
+  - в deploy директория приходит с сервера как read-only volume.
+- `local/cookies`
+  - локальные оригиналы cookies для smoke-проверок и ручных тестов;
+  - локальные smoke-тесты копируют их в `src/data/cookies`.
+- `deploy/cookies`
+  - deploy-источник cookies;
+  - в git хранится только `.gitkeep`, реальные `*_cookies.txt` игнорируются;
+  - GitHub Actions materializes эту директорию из опциональных secrets, затем синхронизирует только переданные файлы на сервер с перезаписью по совпадающим именам;
+  - если secrets не заданы, deploy продолжает использовать существующие cookies на сервере.
+- `deploy/sync_cookies.sh`, `deploy/sync_cookies.bat`
+  - ручная синхронизация cookies для deploy-контура;
+  - скрипты только добавляют новые `*_cookies.txt` на сервер или перезаписывают одноименные, но не удаляют файлы, которых нет локально.
+- `deploy/sync_cookies.env`
+  - локальный конфиг ручной синхронизации с `REMOTE_USER`, `REMOTE_HOST`, `REMOTE_PORT`;
+  - не попадает в git.
+- `deploy/sync_cookies.env.example`
+  - шаблон локального конфига ручной синхронизации.
+
 ## Контракт env путей
 
 - `BOT_DB_PATH=/app/src/data/db/bot.db` (обязательный)
@@ -84,6 +119,7 @@
 - `*_COOKIES_PATH` опциональны как явный override:
   - `YOUTUBE_COOKIES_PATH`
   - `INSTAGRAM_COOKIES_PATH`
+  - `TIKTOK_COOKIES_PATH`
   - `VK_COOKIES_PATH`
 
 ## Как runtime использует пути
@@ -95,7 +131,7 @@
 - Cookies:
   - приоритет у явных `*_COOKIES_PATH`;
   - если `*_COOKIES_PATH` пуст, берется `<COOKIES_DIR>/<provider_file>`;
-  - провайдерные файлы: `www.youtube.com_cookies.txt`, `instagram_cookies.txt`, `vk.com_cookies.txt`;
+  - провайдерные файлы: `www.youtube.com_cookies.txt`, `instagram_cookies.txt`, `tiktok_cookies.txt`, `vk.com_cookies.txt`;
   - пустые/заглушечные cookies-файлы игнорируются соответствующими handler-утилитами.
 
 - Temp runtime storage:
@@ -129,3 +165,16 @@
    - проверка, что контейнер запущен.
 7. `summary`:
    - итоговая сводка по деплою.
+
+## Дополнительные шаги GitHub Actions до `deploy/manager.sh`
+
+1. Workflow materializes `deploy/cookies` на runner из secrets:
+   - `YOUTUBE_COOKIES_FILE`
+   - `INSTAGRAM_COOKIES_FILE`
+   - `TIKTOK_COOKIES_FILE`
+   - `VK_COOKIES_FILE`
+   - `COUB_COOKIES_FILE`
+2. Workflow очищает только staging-папку `/home/<SSH_USER>/deploy/cookies` от старых `*_cookies.txt`.
+3. `deploy/cookies` копируется на сервер в `/home/<SSH_USER>/deploy/cookies`.
+4. Если в staging есть `*_cookies.txt`, workflow копирует их в `/home/<SSH_USER>/bot_{env}/data/cookies` с перезаписью только одноименных файлов.
+5. Если после materialize в `deploy/cookies` нет ни одного `*_cookies.txt`, deploy не завершается ошибкой и контейнер продолжает использовать уже существующие cookies на сервере.

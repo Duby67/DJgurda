@@ -1,0 +1,40 @@
+# VCS and CI metadata are not needed in the runtime image.
+.git
+.github/
+
+# Local environment files and developer caches.
+.env
+.env.*
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.idea/
+.vscode/
+.venv/
+venv/
+env/
+
+# Tests, docs and local-only project materials stay outside the runtime image.
+test/
+docs/
+local/
+README.md
+
+# Repository-level service files are irrelevant inside the container.
+.gitignore
+.gitattributes
+.markdownlint.json
+.markdownlintignore
+
+# Deploy helper scripts and deploy cookie staging are used outside image build.
+deploy/manager.sh
+deploy/*.cmd
+deploy/*.sh
+deploy/cookies/
+
+# Runtime data is created separately by volumes and container startup.
+src/data/

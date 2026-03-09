@@ -6,7 +6,7 @@
 
 ## Метаданные backlog
 
-- Последняя ревизия backlog: 2026-03-09 | version/tag: v1.2.3
+- Последняя ревизия backlog: 2026-03-10 | version/tag: v1.2.3
 
 ## Приоритет P0 (критично)
 
@@ -57,8 +57,9 @@
   - при `YOUTUBE_COOKIES_ENABLED=false` не требовать жестко `YOUTUBE_COOKIES_PATH` в preflight. ✅ Выполнено (`deploy/manager.sh`);
   - не создавать `www.youtube.com_cookies.txt` автоматически, если cookies выключены. ✅ Выполнено (`deploy/manager.sh`, `.github/workflows/deploy-dev.yml`, `.github/workflows/deploy-prod.yml`).
   - Добавить единый `COOKIES_DIR` и auto-discovery `www.youtube.com_cookies.txt` / `instagram_cookies.txt` / `vk.com_cookies.txt` при пустых `*_COOKIES_PATH`. ✅ Выполнено (`src/config.py`, `env.example`, `README.md`, `.github/ai-context.md`).
-  - Перевести локальный источник оригинальных cookies в `local/cookies`, добавить автокопирование в `src/data/cookies` для smoke-тестов handlers и использовать для `yt-dlp` только временные рабочие копии cookie-файлов (без модификации оригиналов). ✅ Выполнено (`local/sync_cookies.cmd`, `test/handlers/_local_cookie_setup.py`, `test/handlers/*/test_*_handlers_local.py`, `src/utils/cookies.py`, `README.md`, `.github/ai-context.md`, `env.example`).
-- В deploy отказаться от избыточной логики копирования cookies в workflow: создавать/монтировать `$HOME/bot_{env}/data/cookies` централизованно в `deploy/manager.sh`, содержимое папки управляется на сервере отдельно. ✅ Выполнено (`.github/workflows/deploy-dev.yml`, `.github/workflows/deploy-prod.yml`, `deploy/manager.sh`).
+  - Перевести локальный источник оригинальных cookies в `local/cookies`, добавить автокопирование в `src/data/cookies` для smoke-тестов handlers и использовать для `yt-dlp` только временные рабочие копии cookie-файлов (без модификации оригиналов). ✅ Выполнено (`test/handlers/_local_cookie_setup.py`, `test/handlers/*/test_*_handlers_local.py`, `src/utils/cookies.py`, `README.md`, `.github/ai-context.md`, `env.example`).
+- Зафиксировать deploy-источник cookies в `deploy/cookies`: хранить в git только `.gitkeep`, игнорировать любые `*_cookies.txt`, materialize файлы на runner из secrets только при их наличии и синхронизировать на сервер лишь переданные файлы без удаления отсутствующих cookies. ✅ Выполнено (`.gitignore`, `deploy/Dockerfile.dockerignore`, `deploy/cookies/.gitkeep`, `.github/workflows/deploy-dev.yml`, `.github/workflows/deploy-prod.yml`, `deploy/sync_cookies.sh`, `deploy/sync_cookies.bat`, `README.md`, `.github/ai-context.md`, `docs/deploy_layout.md`).
+- Вынести параметры ручной синхронизации cookies из скриптов в локальный `deploy/sync_cookies.env`, не попадающий в git, и добавить шаблон `deploy/sync_cookies.env.example`. ✅ Выполнено (`.gitignore`, `deploy/sync_cookies.sh`, `deploy/sync_cookies.bat`, `deploy/sync_cookies.env.example`, `README.md`, `.github/ai-context.md`, `docs/deploy_layout.md`).
 - Убрать legacy-создание временных директорий из Docker/deploy и полагаться на runtime-проверки/создание директорий в Python-коде. ✅ Выполнено (`deploy/Dockerfile`, `deploy/manager.sh`, `src/handlers/mixins/base.py`).
   - Централизовать lifecycle runtime-хранилища: подготовка `src/data/runtime` + per-handler temp-папок на startup, очистка устаревших временных файлов на startup и полная очистка temp на shutdown; runtime-путь фиксирован в `src/config.py` и используется только внутри контейнера (`/app/src/data/runtime`). ✅ Выполнено (`src/config.py`, `src/utils/runtime_storage.py`, `src/bot/lifespan/startup.py`, `src/bot/lifespan/shutdown.py`, `src/handlers/manager.py`, `README.md`, `.github/ai-context.md`).
   - Унифицировать cookie-логику обработчиков: убрать дублирование `src/handlers/resources/{YouTube,Instagram,VK}/cookies.py`, вынести общий слой в `src/utils/cookies.py` (валидация/placeholder-check/runtime-copy/warn-once) и подключать его через базовый handler/mixin. Для VK оставить только специфичный парсинг cookies в dict для HTTP-запросов. ✅ Выполнено (`src/utils/cookies.py`, `src/handlers/mixins/base.py`, удалены legacy-файлы `src/handlers/resources/{YouTube,Instagram,VK}/cookies.py`, `src/handlers/resources/YouTube/{YouTubeShorts.py,YouTubeChannel.py}`, `src/handlers/resources/Instagram/{InstagramHandler.py,InstagramReels.py,InstagramMediaGroup.py,InstagramStories.py,InstagramProfile.py}`, `src/handlers/resources/VK/VKHandler.py`, `test/handlers/Instagram/test_instagram_cookies_helpers.py`).
@@ -290,11 +291,11 @@
 
 ### 15. Гигиена проверок качества
 
-- Статус (2026-03-07): открыто.
+- Статус (2026-03-10): в работе (частично выполнено).
 - Проблема: локальная проверка markdownlint цепляет `venv/Lib/site-packages/**/LICENSE.md` и дает шум, не относящийся к проектному коду.
 - Действие:
   - Уточнить `.markdownlintignore` и/или команду запуска lint так, чтобы надежно исключать `venv/**` и другие внешние директории.
-  - Зафиксировать в `README`/`.github/ai-context.md` каноническую команду lint только для поддерживаемых markdown-файлов репозитория.
+  - Зафиксировать в `README`/`.github/ai-context.md` каноническую команду lint только для поддерживаемых markdown-файлов репозитория. ✅ Частично выполнено: правило запуска `markdownlint-cli2` с обязательным запросом на выполнение вне sandbox зафиксировано в `.github/ai-context.md`.
   - Добавить отдельный check `python -m compileall src test` в CI как быстрый синтаксический smoke.
 - Результат: предсказуемые проверки качества без ложных срабатываний и быстрее обратная связь в dev-потоке.
 

@@ -2,6 +2,10 @@
 .env
 .env.*
 local/
+*_cookies.txt
+deploy/cookies/*
+!deploy/cookies/.gitkeep
+deploy/sync_cookies.env
 
 # Виртуальные окружения Python
 .venv/

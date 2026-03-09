@@ -9,11 +9,11 @@
 - `.github/`
   - GitHub Actions, AI-контекст и task-файл для AI-агента.
 - `deploy/`
-  - deploy-артефакты репозитория: `deploy/Dockerfile` и серверный deploy-скрипт.
+  - deploy-артефакты репозитория: `deploy/Dockerfile`, `deploy/Dockerfile.dockerignore`, `deploy/manager.sh`, `deploy/sync_cookies.sh`, `deploy/sync_cookies.bat`, `deploy/sync_cookies.env.example` и `deploy/cookies/.gitkeep`.
 - `docs/`
   - поддерживаемая проектная документация и обзорные карты.
 - `local/`
-  - локальные и пользовательские материалы, не являющиеся runtime-кодом.
+  - локальные и пользовательские материалы, не являющиеся runtime-кодом; в `local/cookies` лежат локальные оригиналы cookies для smoke-проверок.
 - `scripts/`
   - служебные скрипты проекта, включая release-sync и вспомогательные утилиты.
 - `src/`
@@ -49,8 +49,16 @@
 
 - `deploy/Dockerfile`
   - сборка контейнера runtime-окружения.
+- `deploy/Dockerfile.dockerignore`
+  - docker ignore-файл, привязанный к `deploy/Dockerfile`.
 - `deploy/manager.sh`
   - серверный скрипт управления deploy и перезапуском контейнера.
+- `deploy/sync_cookies.sh`, `deploy/sync_cookies.bat`
+  - ручные скрипты синхронизации cookies на сервер без удаления файлов, которых нет локально.
+- `deploy/sync_cookies.env.example`
+  - шаблон локального конфига для ручной синхронизации cookies.
+- `deploy/cookies/.gitkeep`
+  - фиксирует deploy-папку для cookies; реальные `*_cookies.txt` в этой директории не попадают в git.
 - `env.example`
   - эталон набора переменных окружения для локальной настройки.
 - `requirements.txt`
@@ -64,8 +72,6 @@
   - исключения Git.
 - `.gitattributes`
   - правила Git-атрибутов.
-- `.dockerignore`
-  - исключения при сборке Docker-контекста.
 - `.markdownlint.json`
   - правила markdownlint.
 - `.markdownlintignore`
