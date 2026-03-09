@@ -21,18 +21,20 @@
 Основной источник контекста для разработчиков и AI-агентов:
 
 - [`.github/ai-context.md`](./.github/ai-context.md)
-- [`IMPROVEMENTS.md`](./IMPROVEMENTS.md)
+- [`docs/improvements.md`](./docs/improvements.md)
 
 Политика актуальности:
 
-- `README.md` и `.github/ai-context.md` - канонические документы.
+- `README.md` и `.github/ai-context.md` - канонические документы верхнего уровня.
+- `docs/improvements.md`, `docs/release_notes.md` и `docs/deploy_layout.md` - поддерживаемые operational-документы.
 - Контекст всегда проверяется по коду в `src/`.
-- При любом обращении к `README.md` агент обязан дополнительно проверить `.github/ai-context.md` и `IMPROVEMENTS.md`.
+- При любом обращении к `README.md` агент обязан дополнительно проверить `.github/ai-context.md` и `docs/improvements.md`.
 - В пользовательских caption хэштеги из заголовков контента должны удаляться; если заголовок после очистки пустой, используется нейтральный fallback-текст.
 
 ## Важный статус по структуре
 
-- `docs/` не используется как поддерживаемый источник актуального контекста.
+- `docs/` используется как каталог поддерживаемой документации верхнего уровня.
+- Каноничность внутри `docs/` определяется конкретными файлами: `docs/improvements.md`, `docs/release_notes.md` и `docs/deploy_layout.md` поддерживаются; обзорные карты в `docs/` остаются вторичными.
 - `test/` Содержит скрипты для локальной проверки.
   - `test/handlers/` smoke-скрипты для локальной проверки handlers.
   - Все тесты (`pytest` и smoke-скрипты) запускать только с повышенными правами после явного подтверждения пользователя.
@@ -165,11 +167,11 @@
 
 Подробная схема вынесена в отдельный файл:
 
-- [`DEPLOY_LAYOUT.md`](./DEPLOY_LAYOUT.md)
+- [`docs/deploy_layout.md`](./docs/deploy_layout.md)
 
 ## Release Notes
 
-- [`RELEASE_NOTES.md`](./RELEASE_NOTES.md)
+- [`docs/release_notes.md`](./docs/release_notes.md)
 
 ## Релизная синхронизация версии
 
@@ -177,8 +179,8 @@
 - Для релиза в `prod` рекомендуется ставить tag на тот же commit (например, `v1.2.0`).
 - Скрипт проверки/подготовки релиза:
   - проверяет соответствие `__version__` и tag;
-  - проверяет наличие секции в `RELEASE_NOTES.md`;
-  - проверяет/обновляет метку ревизии backlog в `IMPROVEMENTS.md`.
+  - проверяет наличие секции в `docs/release_notes.md`;
+  - проверяет/обновляет метку ревизии backlog в `docs/improvements.md`.
 
 Проверка (без изменений файлов):
 
@@ -186,7 +188,7 @@
 python scripts/release_sync.py --tag v1.2.0
 ```
 
-Автодобавление шаблона в `RELEASE_NOTES.md` и обновление ревизии в `IMPROVEMENTS.md`:
+Автодобавление шаблона в `docs/release_notes.md` и обновление ревизии в `docs/improvements.md`:
 
 ```bash
 python scripts/release_sync.py --tag v1.2.0 --write
@@ -201,12 +203,12 @@ python scripts/release_sync.py --tag v1.2.0 --write
    - если `patch < 9`: увеличить `patch`;
    - если `patch == 9`: `patch = 0`, увеличить `minor`;
    - если при переносе `minor == 9`: `minor = 0`, увеличить `major`.
-5. Подготовить `RELEASE_NOTES.md`:
+5. Подготовить `docs/release_notes.md`:
    - добавить секцию релиза `vX.Y.Z`;
    - перенести в нее список реально выполненных задач/изменений.
-6. Выполнить релизную чистку `IMPROVEMENTS.md`:
-   - удалить из активного backlog только те задачи, которые уже отражены в `RELEASE_NOTES.md` этого релиза.
-   - важно: очистка `IMPROVEMENTS.md` делается после фиксации задач в `RELEASE_NOTES.md`.
+6. Выполнить релизную чистку `docs/improvements.md`:
+   - удалить из активного backlog только те задачи, которые уже отражены в `docs/release_notes.md` этого релиза.
+   - важно: очистка `docs/improvements.md` делается после фиксации задач в `docs/release_notes.md`.
 7. Прогнать проверку синхронизации:
    - `python scripts/release_sync.py --tag vX.Y.Z` (или `--write` для автосинхронизации метаданных).
 8. Сделать финальный commit релиза (version + release notes + cleanup backlog).

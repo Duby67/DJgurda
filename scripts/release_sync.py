@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Проверка и синхронизация версии релиза между tag, src/__init__.py, RELEASE_NOTES.md и IMPROVEMENTS.md."""
+"""Проверка и синхронизация версии релиза между tag, src/__init__.py, docs/release_notes.md и docs/improvements.md."""
 
 from __future__ import annotations
 
@@ -13,9 +13,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
+DOCS = ROOT / "docs"
 SRC_INIT = ROOT / "src" / "__init__.py"
-RELEASE_NOTES = ROOT / "RELEASE_NOTES.md"
-IMPROVEMENTS = ROOT / "IMPROVEMENTS.md"
+RELEASE_NOTES = DOCS / "release_notes.md"
+IMPROVEMENTS = DOCS / "improvements.md"
 
 
 @dataclass
