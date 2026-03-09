@@ -149,7 +149,7 @@
 - `src/bot/processing/media_router.py` - вход в поток обработки ссылок.
 - `src/handlers/manager.py` - выбор обработчика по URL.
 - `src/middlewares/db/*` - модели и DB-операции.
-- `.github/workflows/*` и `manager.sh` - CI/CD и деплой.
+- `.github/workflows/*` и `deploy/` - CI/CD и deploy-артефакты.
 
 ## Команды бота
 
@@ -228,17 +228,17 @@ python scripts/release_sync.py --tag v1.2.0 --write
 
 ## Деплой
 
-- Серверный скрипт деплоя: `manager.sh`.
-- Запуск: `./manager.sh dev` или `./manager.sh prod`.
+- Серверный скрипт деплоя в репозитории: `deploy/manager.sh`.
+- Запуск на сервере: `./deploy/manager.sh dev` или `./deploy/manager.sh prod`.
 - Скрипт ожидает env-файл на сервере по пути `$HOME/bot_{env}/.env` и валидирует обязательные ключи перед запуском контейнера.
 - `bot.db` и cookies хранятся вне репозитория в `$HOME/bot_{env}/data/{db,cookies}` и монтируются в контейнер как volumes.
-- В GitHub Actions deploy не управляет содержимым cookies: workflow подготавливает `$HOME/bot_{env}`, а `manager.sh` сам создает и монтирует `$HOME/bot_{env}/data/cookies` в контейнер как `/app/src/data/cookies` (read-only).
+- В GitHub Actions deploy не управляет содержимым cookies: workflow подготавливает `$HOME/bot_{env}`, а `deploy/manager.sh` сам создает и монтирует `$HOME/bot_{env}/data/cookies` в контейнер как `/app/src/data/cookies` (read-only).
 - Временные файлы создаются только внутри контейнера в `/app/src/data/runtime` (фиксированный путь), включая отдельные подпапки по handler-классам.
 - При старте бот инициализирует runtime-директории и удаляет устаревшие временные файлы; при остановке выполняется полная очистка временных файлов.
-- `manager.sh` общий для `dev` и `prod`: любые правки должны сохранять совместимость перезапуска обоих окружений.
+- `deploy/manager.sh` общий для `dev` и `prod`: любые правки должны сохранять совместимость перезапуска обоих окружений.
 - Rule: remote server access is forbidden for AI agents (SSH/RDP/WinRM/remote shell). Any server-side action is performed only by the user.
 - Encoding rule: UTF-8 with BOM is strongly discouraged; use plain UTF-8 without BOM.
-- `manager.sh` includes DB backup rotation: backups are written to `$HOME/bot_{env}/data/db/backups`, retention is controlled by `DB_BACKUP_KEEP_COUNT` (default `14`).
+- `deploy/manager.sh` includes DB backup rotation: backups are written to `$HOME/bot_{env}/data/db/backups`, retention is controlled by `DB_BACKUP_KEEP_COUNT` (default `14`).
 - Учитывай, что `prod` может временно отставать от `dev`, поэтому нельзя делать изменения, работающие только для одного окружения.
 
 ## Управление в чатах

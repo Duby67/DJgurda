@@ -8,6 +8,8 @@
 
 - `.github/`
   - GitHub Actions, AI-контекст и task-файл для AI-агента.
+- `deploy/`
+  - deploy-артефакты репозитория: `deploy/Dockerfile` и серверный deploy-скрипт.
 - `docs/`
   - поддерживаемая проектная документация и обзорные карты.
 - `local/`
@@ -43,11 +45,11 @@
 - `docs/repository-root-map.md`
   - этот обзорный файл.
 
-## Верхнеуровневые operational-файлы
+## Deploy-артефакты
 
-- `Dockerfile`
+- `deploy/Dockerfile`
   - сборка контейнера runtime-окружения.
-- `manager.sh`
+- `deploy/manager.sh`
   - серверный скрипт управления deploy и перезапуском контейнера.
 - `env.example`
   - эталон набора переменных окружения для локальной настройки.

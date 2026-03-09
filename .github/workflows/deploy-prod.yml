@@ -67,20 +67,21 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./deploy/Dockerfile
           push: true
           tags: |
             ghcr.io/${{ steps.repo_meta.outputs.repo_lc }}:latest
             ghcr.io/${{ steps.repo_meta.outputs.repo_lc }}:prod-${{ github.sha }}
           platforms: linux/amd64
 
-      - name: Copy manager.sh to server
+      - name: Copy deploy/manager.sh to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 228
-          source: "manager.sh"
+          source: "deploy/manager.sh"
           target: "/home/${{ secrets.SSH_USER }}/"
           overwrite: true
           strip_components: 0
@@ -107,5 +108,5 @@ jobs:
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ steps.repo_meta.outputs.owner_lc }} --password-stdin
             docker pull ghcr.io/${{ steps.repo_meta.outputs.repo_lc }}:latest
 
-            chmod +x /home/${{ secrets.SSH_USER }}/manager.sh
-            /home/${{ secrets.SSH_USER }}/manager.sh prod
+            chmod +x /home/${{ secrets.SSH_USER }}/deploy/manager.sh
+            /home/${{ secrets.SSH_USER }}/deploy/manager.sh prod

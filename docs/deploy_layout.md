@@ -12,7 +12,8 @@
 - `src/bot/lifespan/shutdown.py`
 - `src/middlewares/db/core.py`
 - `.github/workflows/deploy-*.yml`
-- `manager.sh`
+- `deploy/Dockerfile`
+- `deploy/manager.sh`
 
 ## Сервер (VPS)
 
@@ -20,7 +21,8 @@
 
 ```text
 /home/<SSH_USER>/
-├─ manager.sh
+├─ deploy/
+│  └─ manager.sh
 └─ bot_dev/
    ├─ .env
    ├─ data/
@@ -65,7 +67,7 @@
 └─ VKHandler/
 ```
 
-## Проброс volumes (из `manager.sh`)
+## Проброс volumes (из `deploy/manager.sh`)
 
 ```text
 <server>/data/db      -> /app/src/data/db
@@ -104,9 +106,9 @@
   - `cleanup_expired_runtime(MAX_AGE_SECONDS)` на startup удаляет устаревшие временные файлы;
   - `cleanup_all_runtime()` на shutdown удаляет все временные файлы.
 
-## Стадии деплоя в `manager.sh`
+## Стадии деплоя в `deploy/manager.sh`
 
-`manager.sh` общий для `dev` и `prod`.
+`deploy/manager.sh` общий для `dev` и `prod`.
 
 Скрипт выполняет деплой в фиксированном порядке:
 
