@@ -103,6 +103,9 @@ configure_environment() {
     esac
 
     DB_DIR="${BOT_DIR}/data/db"
+    DB_BACKUP_DIR="${BOT_DIR}/data/db/backups"
+    DB_FILE_HOST_PATH="${DB_DIR}/bot.db"
+    DB_BACKUP_KEEP_COUNT="${DB_BACKUP_KEEP_COUNT:-14}"
     COOKIES_DIR="${BOT_DIR}/data/cookies"
     ENV_FILE="${BOT_DIR}/.env"
 
@@ -195,7 +198,32 @@ preflight() {
 }
 
 prepare_runtime_dirs() {
-    mkdir -p "$DB_DIR" "$COOKIES_DIR" "$LOGS_DIR"
+    mkdir -p "$DB_DIR" "$DB_BACKUP_DIR" "$COOKIES_DIR" "$LOGS_DIR"
+}
+
+backup_database() {
+    local backup_ts
+    local backup_file
+
+    if [ ! -f "$DB_FILE_HOST_PATH" ]; then
+        log "INFO" "Database file not found, backup skipped: ${DB_FILE_HOST_PATH}"
+        return 0
+    fi
+
+    mkdir -p "$DB_BACKUP_DIR"
+
+    backup_ts="$(date '+%Y%m%d_%H%M%S')"
+    backup_file="${DB_BACKUP_DIR}/bot_${ENVIRONMENT}_${backup_ts}.db"
+
+    cp -p "$DB_FILE_HOST_PATH" "$backup_file"
+    log "INFO" "Database backup created: ${backup_file}"
+
+    if [ "$DB_BACKUP_KEEP_COUNT" -gt 0 ] 2>/dev/null; then
+        find "$DB_BACKUP_DIR" -maxdepth 1 -type f -name "bot_${ENVIRONMENT}_*.db" -printf '%T@ %p\n' \
+            | sort -nr \
+            | awk "NR>${DB_BACKUP_KEEP_COUNT} {print \$2}" \
+            | xargs -r rm -f
+    fi
 }
 
 stop_and_remove_container() {
@@ -272,6 +300,7 @@ main() {
     run_step "preflight" preflight
     run_step "prepare-runtime" prepare_runtime_dirs
     run_step "stop-container" stop_and_remove_container
+    run_step "backup-db" backup_database
     run_step "cleanup-cache" cleanup_runtime_cache
     run_step "start-container" start_container
 

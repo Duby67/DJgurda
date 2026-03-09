@@ -6,7 +6,8 @@ import logging
 from typing import List, Optional
 
 from .base import BaseHandler
-from src.handlers.resources import CoubHandler, InstagramHandler, TikTokHandler, VKHandler, YouTubeHandler
+from src.handlers.resources import CoubHandler, InstagramHandler, TikTokHandler, YouTubeHandler
+# from src.handlers.resources import VKHandler  # DEV-only: disabled for production deploy
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ ACTIVE_HANDLER_CLASSES = (
     YouTubeHandler,
     InstagramHandler,
     CoubHandler,
-    VKHandler,
+    # VKHandler,  # DEV-only: disabled for production deploy
 )
 
 
