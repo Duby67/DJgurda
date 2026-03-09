@@ -10,12 +10,12 @@ import uuid
 from pathlib import Path
 from typing import Dict, Optional
 
-from src.config import PROJECT_TEMP_DIR
+from src.config import COOKIES_DIR
 
 logger = logging.getLogger(__name__)
 
 _WARNED_KEYS: set[str] = set()
-_YTDLP_COOKIE_RUNTIME_DIR = PROJECT_TEMP_DIR / "_yt_dlp_cookies"
+_YTDLP_COOKIE_RUNTIME_DIR = COOKIES_DIR
 _MAX_RUNTIME_COPIES_PER_PROVIDER = 20
 
 
@@ -189,7 +189,7 @@ def _prune_old_runtime_copies(provider_key: str) -> None:
     """
     try:
         candidates = sorted(
-            _YTDLP_COOKIE_RUNTIME_DIR.glob(f"{provider_key}_*.txt"),
+            _YTDLP_COOKIE_RUNTIME_DIR.glob(f"runtime_{provider_key}_*.txt"),
             key=lambda path: path.stat().st_mtime if path.exists() else 0,
             reverse=True,
         )
@@ -219,7 +219,7 @@ def prepare_cookiefile_for_ytdlp(source_path: Path, provider_key: str) -> Option
 
     try:
         _YTDLP_COOKIE_RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-        runtime_copy_path = _YTDLP_COOKIE_RUNTIME_DIR / f"{safe_provider_key}_{uuid.uuid4().hex[:12]}.txt"
+        runtime_copy_path = _YTDLP_COOKIE_RUNTIME_DIR / f"runtime_{safe_provider_key}_{uuid.uuid4().hex[:12]}.txt"
         shutil.copy2(source_path, runtime_copy_path)
         _prune_old_runtime_copies(safe_provider_key)
         return runtime_copy_path
@@ -268,6 +268,35 @@ def build_ytdlp_cookiefile_opt(
         return {}
 
     return {"cookiefile": str(runtime_cookie_path)}
+
+
+def cleanup_runtime_cookiefile(cookiefile: Optional[Path | str]) -> None:
+    """
+    Удаляет runtime cookie-файл, если он был создан для yt-dlp.
+    """
+    if not cookiefile:
+        return
+
+    try:
+        runtime_path = Path(cookiefile).resolve()
+    except Exception:
+        return
+
+    try:
+        cookies_root = _YTDLP_COOKIE_RUNTIME_DIR.resolve()
+    except Exception:
+        cookies_root = _YTDLP_COOKIE_RUNTIME_DIR
+
+    if runtime_path.parent != cookies_root:
+        return
+
+    if not runtime_path.name.startswith("runtime_"):
+        return
+
+    try:
+        runtime_path.unlink(missing_ok=True)
+    except Exception:
+        return
 
 
 def parse_netscape_cookie_file(path: Path) -> Dict[str, str]:

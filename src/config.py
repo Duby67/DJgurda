@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import tempfile
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -69,7 +68,7 @@ BOT_TOKEN = _require_env("BOT_TOKEN")
 YANDEX_MUSIC_TOKEN = _require_env("YANDEX_MUSIC_TOKEN")
 
 BOT_TEMP_DIR_PATH = os.getenv("BOT_TEMP_DIR", "").strip()
-DEFAULT_TEMP_DIR = Path(tempfile.gettempdir()) / "djgurda" / "temp_files"
+DEFAULT_TEMP_DIR = (PROJECT_ROOT / "src" / "data" / "temp_files").resolve()
 PROJECT_TEMP_DIR = _resolve_path(BOT_TEMP_DIR_PATH) if BOT_TEMP_DIR_PATH else DEFAULT_TEMP_DIR
 
 DEFAULT_COOKIES_DIR = PROJECT_ROOT / "src" / "data" / "cookies"
@@ -94,7 +93,7 @@ def _resolve_cookie_path(env_name: str, fallback_filename: str) -> tuple[str, Pa
 YOUTUBE_COOKIES_ENABLED = _read_bool_env("YOUTUBE_COOKIES_ENABLED", default=True)
 YOUTUBE_COOKIES_PATH, YOUTUBE_COOKIES = _resolve_cookie_path(
     env_name="YOUTUBE_COOKIES_PATH",
-    fallback_filename="youtube_cookies.txt",
+    fallback_filename="www.youtube.com_cookies.txt",
 )
 
 INSTAGRAM_COOKIES_ENABLED = _read_bool_env("INSTAGRAM_COOKIES_ENABLED", default=True)

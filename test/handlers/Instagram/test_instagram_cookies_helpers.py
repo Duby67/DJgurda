@@ -42,7 +42,7 @@ def test_instagram_cookie_opts_disabled() -> None:
 
 
 def test_instagram_cookie_opts_valid_file(tmp_path: Path) -> None:
-    """При валидном cookie-файле должен возвращаться путь к runtime-копии."""
+    """При валидном cookie-файле должен возвращаться путь к временной копии."""
     cookie_file = tmp_path / "instagram_cookies.txt"
     cookie_file.write_text(
         "# Netscape HTTP Cookie File\n"
@@ -60,10 +60,10 @@ def test_instagram_cookie_opts_valid_file(tmp_path: Path) -> None:
     )
     assert "cookiefile" in opts
 
-    runtime_cookiefile = Path(str(opts["cookiefile"]))
-    assert runtime_cookiefile.exists()
-    assert runtime_cookiefile != cookie_file
-    assert runtime_cookiefile.read_text(encoding="utf-8") == cookie_file.read_text(encoding="utf-8")
+    temp_cookiefile = Path(str(opts["cookiefile"]))
+    assert temp_cookiefile.exists()
+    assert temp_cookiefile != cookie_file
+    assert temp_cookiefile.read_text(encoding="utf-8") == cookie_file.read_text(encoding="utf-8")
 
 
 def test_instagram_cookie_opts_placeholder(tmp_path: Path) -> None:

@@ -1,8 +1,8 @@
 # Deploy Layout
 
-## Схема расположения файлов (сервер и контейнер)
+## РЎС…РµРјР° СЂР°СЃРїРѕР»РѕР¶РµРЅРёСЏ С„Р°Р№Р»РѕРІ (СЃРµСЂРІРµСЂ Рё РєРѕРЅС‚РµР№РЅРµСЂ)
 
-Ниже схема основана на фактическом runtime-коде:
+РќРёР¶Рµ СЃС…РµРјР° РѕСЃРЅРѕРІР°РЅР° РЅР° С„Р°РєС‚РёС‡РµСЃРєРѕРј runtime-РєРѕРґРµ:
 
 - `src/config.py`
 - `src/utils/runtime_storage.py`
@@ -12,58 +12,58 @@
 - `.github/workflows/deploy-*.yml`
 - `manager.sh`
 
-## Сервер (VPS)
+## РЎРµСЂРІРµСЂ (VPS)
 
-Для `dev`:
+Р”Р»СЏ `dev`:
 
 ```text
 /home/<SSH_USER>/
-├─ manager.sh
-└─ bot_dev/
-   ├─ .env
-   ├─ data/
-   │  ├─ db/
-   │  │  └─ bot.db                  # внешняя SQLite база
-   │  └─ cookies/
-   │     ├─ youtube_cookies.txt     # опционально
-   │     ├─ instagram_cookies.txt   # опционально
-   │     └─ vk.com_cookies.txt      # опционально
-   └─ logs/
+в”њв”Ђ manager.sh
+в””в”Ђ bot_dev/
+   в”њв”Ђ .env
+   в”њв”Ђ data/
+   в”‚  в”њв”Ђ db/
+   в”‚  в”‚  в””в”Ђ bot.db                  # РІРЅРµС€РЅСЏСЏ SQLite Р±Р°Р·Р°
+   в”‚  в””в”Ђ cookies/
+   в”‚     в”њв”Ђ www.youtube.com_cookies.txt     # РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ
+   в”‚     в”њв”Ђ instagram_cookies.txt   # РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ
+   в”‚     в””в”Ђ vk.com_cookies.txt      # РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ
+   в””в”Ђ logs/
 ```
 
-Для `prod` аналогично:
+Р”Р»СЏ `prod` Р°РЅР°Р»РѕРіРёС‡РЅРѕ:
 
 ```text
 /home/<SSH_USER>/bot_prod/...
 ```
 
-## Docker контейнер
+## Docker РєРѕРЅС‚РµР№РЅРµСЂ
 
 ```text
 /app
-├─ src/
-│  └─ data/
-│     ├─ db/                        # volume mount с сервера
-│     │  └─ bot.db
-│     └─ cookies/                   # volume mount (read-only)
-│        ├─ youtube_cookies.txt
-│        ├─ instagram_cookies.txt
-│        └─ vk.com_cookies.txt
-└─ logs/                            # volume mount с сервера
+в”њв”Ђ src/
+в”‚  в””в”Ђ data/
+в”‚     в”њв”Ђ db/                        # volume mount СЃ СЃРµСЂРІРµСЂР°
+в”‚     в”‚  в””в”Ђ bot.db
+в”‚     в””в”Ђ cookies/                   # volume mount (read-only)
+в”‚        в”њв”Ђ www.youtube.com_cookies.txt
+в”‚        в”њв”Ђ instagram_cookies.txt
+в”‚        в””в”Ђ vk.com_cookies.txt
+в””в”Ђ logs/                            # volume mount СЃ СЃРµСЂРІРµСЂР°
 ```
 
-Временные файлы в контейнере хранятся вне `/app/src/data`:
+Р’СЂРµРјРµРЅРЅС‹Рµ С„Р°Р№Р»С‹ РІ РєРѕРЅС‚РµР№РЅРµСЂРµ С…СЂР°РЅСЏС‚СЃСЏ РІРЅРµ `/app/src/data`:
 
 ```text
-/tmp/djgurda/temp_files/            # значение BOT_TEMP_DIR в deploy
-├─ TikTokHandler/
-├─ YouTubeHandler/
-├─ InstagramHandler/
-├─ CoubHandler/
-└─ VKHandler/
+/tmp/djgurda/temp_files/            # Р·РЅР°С‡РµРЅРёРµ BOT_TEMP_DIR РІ deploy
+в”њв”Ђ TikTokHandler/
+в”њв”Ђ YouTubeHandler/
+в”њв”Ђ InstagramHandler/
+в”њв”Ђ CoubHandler/
+в””в”Ђ VKHandler/
 ```
 
-## Проброс volumes (из `manager.sh`)
+## РџСЂРѕР±СЂРѕСЃ volumes (РёР· `manager.sh`)
 
 ```text
 <server>/data/db      -> /app/src/data/db
@@ -71,58 +71,59 @@
 <server>/logs         -> /app/logs
 ```
 
-`temp_files` volume больше не используется.
+`temp_files` volume Р±РѕР»СЊС€Рµ РЅРµ РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ.
 
-## Контракт env путей
+## РљРѕРЅС‚СЂР°РєС‚ env РїСѓС‚РµР№
 
-- `BOT_DB_PATH=/app/src/data/db/bot.db` (обязательный)
-- `COOKIES_DIR=/app/src/data/cookies` (рекомендуемый)
-- `BOT_TEMP_DIR=/tmp/djgurda/temp_files` (в deploy задается workflow)
-- `*_COOKIES_PATH` опциональны как явный override:
+- `BOT_DB_PATH=/app/src/data/db/bot.db` (РѕР±СЏР·Р°С‚РµР»СЊРЅС‹Р№)
+- `COOKIES_DIR=/app/src/data/cookies` (СЂРµРєРѕРјРµРЅРґСѓРµРјС‹Р№)
+- `BOT_TEMP_DIR=/tmp/djgurda/temp_files` (РІ deploy Р·Р°РґР°РµС‚СЃСЏ workflow)
+- `*_COOKIES_PATH` РѕРїС†РёРѕРЅР°Р»СЊРЅС‹ РєР°Рє СЏРІРЅС‹Р№ override:
   - `YOUTUBE_COOKIES_PATH`
   - `INSTAGRAM_COOKIES_PATH`
   - `VK_COOKIES_PATH`
 
-## Как runtime использует пути
+## РљР°Рє runtime РёСЃРїРѕР»СЊР·СѓРµС‚ РїСѓС‚Рё
 
-- БД:
-  - читается в `src/config.py` (`DB_FILE`);
-  - используется в SQLAlchemy URL в `src/middlewares/db/core.py`.
+- Р‘Р”:
+  - С‡РёС‚Р°РµС‚СЃСЏ РІ `src/config.py` (`DB_FILE`);
+  - РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РІ SQLAlchemy URL РІ `src/middlewares/db/core.py`.
 
 - Cookies:
-  - приоритет у явных `*_COOKIES_PATH`;
-  - если `*_COOKIES_PATH` пуст, берется `<COOKIES_DIR>/<provider_file>`;
-  - провайдерные файлы: `youtube_cookies.txt`, `instagram_cookies.txt`, `vk.com_cookies.txt`;
-  - пустые/заглушечные cookies-файлы игнорируются соответствующими handler-утилитами.
+  - РїСЂРёРѕСЂРёС‚РµС‚ Сѓ СЏРІРЅС‹С… `*_COOKIES_PATH`;
+  - РµСЃР»Рё `*_COOKIES_PATH` РїСѓСЃС‚, Р±РµСЂРµС‚СЃСЏ `<COOKIES_DIR>/<provider_file>`;
+  - РїСЂРѕРІР°Р№РґРµСЂРЅС‹Рµ С„Р°Р№Р»С‹: `www.youtube.com_cookies.txt`, `instagram_cookies.txt`, `vk.com_cookies.txt`;
+  - РїСѓСЃС‚С‹Рµ/Р·Р°РіР»СѓС€РµС‡РЅС‹Рµ cookies-С„Р°Р№Р»С‹ РёРіРЅРѕСЂРёСЂСѓСЋС‚СЃСЏ СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓСЋС‰РёРјРё handler-СѓС‚РёР»РёС‚Р°РјРё.
 
 - Temp runtime storage:
-  - `ensure_runtime_storage(...)` на startup создает:
-    - родительскую директорию БД;
+  - `ensure_runtime_storage(...)` РЅР° startup СЃРѕР·РґР°РµС‚:
+    - СЂРѕРґРёС‚РµР»СЊСЃРєСѓСЋ РґРёСЂРµРєС‚РѕСЂРёСЋ Р‘Р”;
     - `BOT_TEMP_DIR`;
-    - подпапки по активным handler-классам;
-  - `cleanup_expired_temp_files(MAX_AGE_SECONDS)` на startup удаляет устаревшие временные файлы;
-  - `cleanup_all_temp_files()` на shutdown удаляет все временные файлы.
+    - РїРѕРґРїР°РїРєРё РїРѕ Р°РєС‚РёРІРЅС‹Рј handler-РєР»Р°СЃСЃР°Рј;
+  - `cleanup_expired_temp_files(MAX_AGE_SECONDS)` РЅР° startup СѓРґР°Р»СЏРµС‚ СѓСЃС‚Р°СЂРµРІС€РёРµ РІСЂРµРјРµРЅРЅС‹Рµ С„Р°Р№Р»С‹;
+  - `cleanup_all_temp_files()` РЅР° shutdown СѓРґР°Р»СЏРµС‚ РІСЃРµ РІСЂРµРјРµРЅРЅС‹Рµ С„Р°Р№Р»С‹.
 
-## Стадии деплоя в `manager.sh`
+## РЎС‚Р°РґРёРё РґРµРїР»РѕСЏ РІ `manager.sh`
 
-`manager.sh` общий для `dev` и `prod`.
+`manager.sh` РѕР±С‰РёР№ РґР»СЏ `dev` Рё `prod`.
 
-Скрипт выполняет деплой в фиксированном порядке:
+РЎРєСЂРёРїС‚ РІС‹РїРѕР»РЅСЏРµС‚ РґРµРїР»РѕР№ РІ С„РёРєСЃРёСЂРѕРІР°РЅРЅРѕРј РїРѕСЂСЏРґРєРµ:
 
 1. `acquire-lock`:
-   - захват глобального lock-файла (`$HOME/.cache/djgurda/deploy.lock`).
+   - Р·Р°С…РІР°С‚ РіР»РѕР±Р°Р»СЊРЅРѕРіРѕ lock-С„Р°Р№Р»Р° (`$HOME/.cache/djgurda/deploy.lock`).
 2. `preflight`:
-   - проверки `docker`, `flock`, доступности daemon;
-   - проверки окружения, `.env` и freeze-файлов;
-   - проверка обязательных env-ключей и `BOT_DB_PATH`.
+   - РїСЂРѕРІРµСЂРєРё `docker`, `flock`, РґРѕСЃС‚СѓРїРЅРѕСЃС‚Рё daemon;
+   - РїСЂРѕРІРµСЂРєРё РѕРєСЂСѓР¶РµРЅРёСЏ, `.env` Рё freeze-С„Р°Р№Р»РѕРІ;
+   - РїСЂРѕРІРµСЂРєР° РѕР±СЏР·Р°С‚РµР»СЊРЅС‹С… env-РєР»СЋС‡РµР№ Рё `BOT_DB_PATH`.
 3. `prepare-runtime`:
-   - создание серверных директорий `db`, `cookies`, `logs`.
+   - СЃРѕР·РґР°РЅРёРµ СЃРµСЂРІРµСЂРЅС‹С… РґРёСЂРµРєС‚РѕСЂРёР№ `db`, `cookies`, `logs`.
 4. `stop-container`:
-   - graceful-остановка (`docker stop --time 25`) и удаление контейнера.
+   - graceful-РѕСЃС‚Р°РЅРѕРІРєР° (`docker stop --time 25`) Рё СѓРґР°Р»РµРЅРёРµ РєРѕРЅС‚РµР№РЅРµСЂР°.
 5. `cleanup-cache`:
-   - очистка `.cache` + `docker system prune -f`.
+   - РѕС‡РёСЃС‚РєР° `.cache` + `docker system prune -f`.
 6. `start-container`:
-   - `docker run` с volume для `db/cookies/logs`;
-   - проверка, что контейнер запущен.
+   - `docker run` СЃ volume РґР»СЏ `db/cookies/logs`;
+   - РїСЂРѕРІРµСЂРєР°, С‡С‚Рѕ РєРѕРЅС‚РµР№РЅРµСЂ Р·Р°РїСѓС‰РµРЅ.
 7. `summary`:
-   - итоговая сводка по деплою.
+   - РёС‚РѕРіРѕРІР°СЏ СЃРІРѕРґРєР° РїРѕ РґРµРїР»РѕСЋ.
+

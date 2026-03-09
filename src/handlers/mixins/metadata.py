@@ -9,6 +9,7 @@ from typing import Any, Dict, Iterable, Optional
 import yt_dlp
 
 from .base import BaseMixin
+from src.utils.cookies import cleanup_runtime_cookiefile
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class MetadataMixin(BaseMixin):
             "geo_bypass": True,
         }
         merged_opts = self._build_ytdlp_opts(default_opts, ydl_opts)
+        cookiefile_path = merged_opts.get("cookiefile")
 
         await self._random_delay()
 
@@ -45,6 +47,8 @@ class MetadataMixin(BaseMixin):
         except Exception as exc:
             logger.exception("Failed to extract metadata for %s: %s", url, exc)
             return None
+        finally:
+            cleanup_runtime_cookiefile(cookiefile_path)
 
     @staticmethod
     def _extract_first_http_url(value: Any) -> Optional[str]:

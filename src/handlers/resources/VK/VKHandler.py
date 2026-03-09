@@ -16,7 +16,6 @@ from bs4 import BeautifulSoup
 
 from src.config import VK_COOKIES, VK_COOKIES_ENABLED
 from src.handlers.base import BaseHandler
-from src.handlers.mixins import AudioMixin
 from src.utils.cookies import CookieFile
 from .VKAudio import VKAudio
 from .VKPlaylist import VKPlaylist
@@ -24,7 +23,7 @@ from .VKPlaylist import VKPlaylist
 logger = logging.getLogger(__name__)
 
 
-class VKHandler(BaseHandler, AudioMixin, VKAudio, VKPlaylist):
+class VKHandler(BaseHandler, VKAudio, VKPlaylist):
     """
     Асинхронный обработчик VK Music:
     - одиночный трек (`audio`);

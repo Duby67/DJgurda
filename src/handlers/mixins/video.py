@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .base import BaseMixin
+from src.utils.cookies import cleanup_runtime_cookiefile
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ class VideoMixin(BaseMixin):
         video_id: Optional[str] = None,
         size_limit: Optional[int] = None,
         allow_format_fallback: bool = True,
+        cleanup_cookiefile: bool = True,
     ) -> Optional[Dict[str, Any]]:
         """
         Скачивает видео через yt-dlp.
@@ -68,6 +70,7 @@ class VideoMixin(BaseMixin):
             'geo_bypass': True,
         }
         merged_opts = self._build_ytdlp_opts(default_opts, ydl_opts)
+        cookiefile_path = merged_opts.get("cookiefile")
 
         file_path = None
         thumb_path = None
@@ -130,6 +133,7 @@ class VideoMixin(BaseMixin):
                         video_id=video_id,
                         size_limit=size_limit,
                         allow_format_fallback=False,
+                        cleanup_cookiefile=False,
                     )
 
             logger.exception("Failed to download video: %s", exc)
@@ -139,3 +143,6 @@ class VideoMixin(BaseMixin):
             if thumb_path and thumb_path.exists():
                 thumb_path.unlink(missing_ok=True)
             return None
+        finally:
+            if cleanup_cookiefile:
+                cleanup_runtime_cookiefile(cookiefile_path)

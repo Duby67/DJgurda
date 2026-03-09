@@ -1,287 +1,287 @@
 # Project Improvements
 
-## Цель файла
+## Р¦РµР»СЊ С„Р°Р№Р»Р°
 
-Собрать практичные предложения по улучшению проекта DJgurda Bot, чтобы использовать их как технический backlog.
+РЎРѕР±СЂР°С‚СЊ РїСЂР°РєС‚РёС‡РЅС‹Рµ РїСЂРµРґР»РѕР¶РµРЅРёСЏ РїРѕ СѓР»СѓС‡С€РµРЅРёСЋ РїСЂРѕРµРєС‚Р° DJgurda Bot, С‡С‚РѕР±С‹ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ РёС… РєР°Рє С‚РµС…РЅРёС‡РµСЃРєРёР№ backlog.
 
-## Метаданные backlog
+## РњРµС‚Р°РґР°РЅРЅС‹Рµ backlog
 
-- Последняя ревизия backlog: 2026-03-08 | version/tag: v1.2.2
+- РџРѕСЃР»РµРґРЅСЏСЏ СЂРµРІРёР·РёСЏ backlog: 2026-03-08 | version/tag: v1.2.2
 
-## Приоритет P0 (критично)
+## РџСЂРёРѕСЂРёС‚РµС‚ P0 (РєСЂРёС‚РёС‡РЅРѕ)
 
-### 1. Безопасность секретов и локальных файлов
+### 1. Р‘РµР·РѕРїР°СЃРЅРѕСЃС‚СЊ СЃРµРєСЂРµС‚РѕРІ Рё Р»РѕРєР°Р»СЊРЅС‹С… С„Р°Р№Р»РѕРІ
 
-- Статус (2026-03-07): частично выполнено.
-- Проблема: локальные секреты и служебные данные могут попадать в рабочий контекст.
-- Действие:
-  - Проверить `.gitignore` и исключить все чувствительные локальные артефакты. ✅ Выполнено.
-  - Убедиться, что `.env` не содержит посторонних строк и хранит только env-переменные.
-  - Ввести ротацию токенов при любом подозрении на утечку.
-- Результат: снижение риска компрометации доступа к боту и инфраструктуре.
+- РЎС‚Р°С‚СѓСЃ (2026-03-07): С‡Р°СЃС‚РёС‡РЅРѕ РІС‹РїРѕР»РЅРµРЅРѕ.
+- РџСЂРѕР±Р»РµРјР°: Р»РѕРєР°Р»СЊРЅС‹Рµ СЃРµРєСЂРµС‚С‹ Рё СЃР»СѓР¶РµР±РЅС‹Рµ РґР°РЅРЅС‹Рµ РјРѕРіСѓС‚ РїРѕРїР°РґР°С‚СЊ РІ СЂР°Р±РѕС‡РёР№ РєРѕРЅС‚РµРєСЃС‚.
+- Р”РµР№СЃС‚РІРёРµ:
+  - РџСЂРѕРІРµСЂРёС‚СЊ `.gitignore` Рё РёСЃРєР»СЋС‡РёС‚СЊ РІСЃРµ С‡СѓРІСЃС‚РІРёС‚РµР»СЊРЅС‹Рµ Р»РѕРєР°Р»СЊРЅС‹Рµ Р°СЂС‚РµС„Р°РєС‚С‹. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ.
+  - РЈР±РµРґРёС‚СЊСЃСЏ, С‡С‚Рѕ `.env` РЅРµ СЃРѕРґРµСЂР¶РёС‚ РїРѕСЃС‚РѕСЂРѕРЅРЅРёС… СЃС‚СЂРѕРє Рё С…СЂР°РЅРёС‚ С‚РѕР»СЊРєРѕ env-РїРµСЂРµРјРµРЅРЅС‹Рµ.
+  - Р’РІРµСЃС‚Рё СЂРѕС‚Р°С†РёСЋ С‚РѕРєРµРЅРѕРІ РїСЂРё Р»СЋР±РѕРј РїРѕРґРѕР·СЂРµРЅРёРё РЅР° СѓС‚РµС‡РєСѓ.
+- Р РµР·СѓР»СЊС‚Р°С‚: СЃРЅРёР¶РµРЅРёРµ СЂРёСЃРєР° РєРѕРјРїСЂРѕРјРµС‚Р°С†РёРё РґРѕСЃС‚СѓРїР° Рє Р±РѕС‚Сѓ Рё РёРЅС„СЂР°СЃС‚СЂСѓРєС‚СѓСЂРµ.
 
-## Приоритет P1 (высокий)
+## РџСЂРёРѕСЂРёС‚РµС‚ P1 (РІС‹СЃРѕРєРёР№)
 
-### 2. Разграничение прав на команды управления
+### 2. Р Р°Р·РіСЂР°РЅРёС‡РµРЅРёРµ РїСЂР°РІ РЅР° РєРѕРјР°РЅРґС‹ СѓРїСЂР°РІР»РµРЅРёСЏ
 
-- Статус (2026-03-07): в работе (текущая политика зафиксирована, но может быть пересмотрена).
-- Проблема: `/start` и `/stop` доступны всем участникам чата (сейчас это осознанно).  
-  Проверка кода подтвердила, что при `bot_enabled=false` бот не обрабатывает другие сообщения и команды, кроме `/start`, `/stop`, `/toggle_bot` (через `BotEnabledMiddleware`).
-- Действие:
-  - Определить политику доступа: оставить как есть или ограничить администраторами.
-  - Если ограничивать: добавить проверку роли через Telegram API.
-- Результат: контроль над поведением бота в активных чатах.
+- РЎС‚Р°С‚СѓСЃ (2026-03-07): РІ СЂР°Р±РѕС‚Рµ (С‚РµРєСѓС‰Р°СЏ РїРѕР»РёС‚РёРєР° Р·Р°С„РёРєСЃРёСЂРѕРІР°РЅР°, РЅРѕ РјРѕР¶РµС‚ Р±С‹С‚СЊ РїРµСЂРµСЃРјРѕС‚СЂРµРЅР°).
+- РџСЂРѕР±Р»РµРјР°: `/start` Рё `/stop` РґРѕСЃС‚СѓРїРЅС‹ РІСЃРµРј СѓС‡Р°СЃС‚РЅРёРєР°Рј С‡Р°С‚Р° (СЃРµР№С‡Р°СЃ СЌС‚Рѕ РѕСЃРѕР·РЅР°РЅРЅРѕ).  
+  РџСЂРѕРІРµСЂРєР° РєРѕРґР° РїРѕРґС‚РІРµСЂРґРёР»Р°, С‡С‚Рѕ РїСЂРё `bot_enabled=false` Р±РѕС‚ РЅРµ РѕР±СЂР°Р±Р°С‚С‹РІР°РµС‚ РґСЂСѓРіРёРµ СЃРѕРѕР±С‰РµРЅРёСЏ Рё РєРѕРјР°РЅРґС‹, РєСЂРѕРјРµ `/start`, `/stop`, `/toggle_bot` (С‡РµСЂРµР· `BotEnabledMiddleware`).
+- Р”РµР№СЃС‚РІРёРµ:
+  - РћРїСЂРµРґРµР»РёС‚СЊ РїРѕР»РёС‚РёРєСѓ РґРѕСЃС‚СѓРїР°: РѕСЃС‚Р°РІРёС‚СЊ РєР°Рє РµСЃС‚СЊ РёР»Рё РѕРіСЂР°РЅРёС‡РёС‚СЊ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°РјРё.
+  - Р•СЃР»Рё РѕРіСЂР°РЅРёС‡РёРІР°С‚СЊ: РґРѕР±Р°РІРёС‚СЊ РїСЂРѕРІРµСЂРєСѓ СЂРѕР»Рё С‡РµСЂРµР· Telegram API.
+- Р РµР·СѓР»СЊС‚Р°С‚: РєРѕРЅС‚СЂРѕР»СЊ РЅР°Рґ РїРѕРІРµРґРµРЅРёРµРј Р±РѕС‚Р° РІ Р°РєС‚РёРІРЅС‹С… С‡Р°С‚Р°С….
 
-### 3. Стратегия по неактивным handlers
+### 3. РЎС‚СЂР°С‚РµРіРёСЏ РїРѕ РЅРµР°РєС‚РёРІРЅС‹Рј handlers
 
-- Статус (2026-03-08): частично выполнено.
-- Проблема: в коде есть YouTube/Instagram/YandexMusic/VK handlers; после подключения YouTube/Instagram/VK в runtime остается неактивным YandexMusic.
-- Действие:
-  - Подключить готовые обработчики YouTube/Instagram в `ServiceManager` с минимальным риском для текущего TikTok pipeline. ✅ Выполнено.
-  - Подключить `VKHandler` в `ServiceManager` с поддержкой `audio`/`playlist`, безопасными VK cookies и локальными smoke-проверками по шаблону `test/handlers/<Source>`. ✅ Выполнено (`src/handlers/resources/VK/*`, `src/handlers/manager.py`, `test/handlers/VK/*`, `src/config.py`, `env.example`).
-  - Для VK Music стабилизировать extraction: использовать API-first цепочку `reload_audios`/`load_section`, декодировать `audio_api_unavailable`, поддержать HLS-загрузку трека и подтвердить локальным smoke-прогоном `4/4`. ✅ Выполнено (`src/handlers/resources/VK/VKHandler.py`, `test/handlers/VK/test_vk_handlers_local.py`).
-  - Выбрать подход: поэтапное включение или архивирование оставшихся неиспользуемых обработчиков.
-  - Для включаемых источников добавить критерии readiness и чеклист.
-- Результат: меньше технического долга и понятный roadmap по источникам.
+- РЎС‚Р°С‚СѓСЃ (2026-03-08): С‡Р°СЃС‚РёС‡РЅРѕ РІС‹РїРѕР»РЅРµРЅРѕ.
+- РџСЂРѕР±Р»РµРјР°: РІ РєРѕРґРµ РµСЃС‚СЊ YouTube/Instagram/YandexMusic/VK handlers; РїРѕСЃР»Рµ РїРѕРґРєР»СЋС‡РµРЅРёСЏ YouTube/Instagram/VK РІ runtime РѕСЃС‚Р°РµС‚СЃСЏ РЅРµР°РєС‚РёРІРЅС‹Рј YandexMusic.
+- Р”РµР№СЃС‚РІРёРµ:
+  - РџРѕРґРєР»СЋС‡РёС‚СЊ РіРѕС‚РѕРІС‹Рµ РѕР±СЂР°Р±РѕС‚С‡РёРєРё YouTube/Instagram РІ `ServiceManager` СЃ РјРёРЅРёРјР°Р»СЊРЅС‹Рј СЂРёСЃРєРѕРј РґР»СЏ С‚РµРєСѓС‰РµРіРѕ TikTok pipeline. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ.
+  - РџРѕРґРєР»СЋС‡РёС‚СЊ `VKHandler` РІ `ServiceManager` СЃ РїРѕРґРґРµСЂР¶РєРѕР№ `audio`/`playlist`, Р±РµР·РѕРїР°СЃРЅС‹РјРё VK cookies Рё Р»РѕРєР°Р»СЊРЅС‹РјРё smoke-РїСЂРѕРІРµСЂРєР°РјРё РїРѕ С€Р°Р±Р»РѕРЅСѓ `test/handlers/<Source>`. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/handlers/resources/VK/*`, `src/handlers/manager.py`, `test/handlers/VK/*`, `src/config.py`, `env.example`).
+  - Р”Р»СЏ VK Music СЃС‚Р°Р±РёР»РёР·РёСЂРѕРІР°С‚СЊ extraction: РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ API-first С†РµРїРѕС‡РєСѓ `reload_audios`/`load_section`, РґРµРєРѕРґРёСЂРѕРІР°С‚СЊ `audio_api_unavailable`, РїРѕРґРґРµСЂР¶Р°С‚СЊ HLS-Р·Р°РіСЂСѓР·РєСѓ С‚СЂРµРєР° Рё РїРѕРґС‚РІРµСЂРґРёС‚СЊ Р»РѕРєР°Р»СЊРЅС‹Рј smoke-РїСЂРѕРіРѕРЅРѕРј `4/4`. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/handlers/resources/VK/VKHandler.py`, `test/handlers/VK/test_vk_handlers_local.py`).
+  - Р’С‹Р±СЂР°С‚СЊ РїРѕРґС…РѕРґ: РїРѕСЌС‚Р°РїРЅРѕРµ РІРєР»СЋС‡РµРЅРёРµ РёР»Рё Р°СЂС…РёРІРёСЂРѕРІР°РЅРёРµ РѕСЃС‚Р°РІС€РёС…СЃСЏ РЅРµРёСЃРїРѕР»СЊР·СѓРµРјС‹С… РѕР±СЂР°Р±РѕС‚С‡РёРєРѕРІ.
+  - Р”Р»СЏ РІРєР»СЋС‡Р°РµРјС‹С… РёСЃС‚РѕС‡РЅРёРєРѕРІ РґРѕР±Р°РІРёС‚СЊ РєСЂРёС‚РµСЂРёРё readiness Рё С‡РµРєР»РёСЃС‚.
+- Р РµР·СѓР»СЊС‚Р°С‚: РјРµРЅСЊС€Рµ С‚РµС…РЅРёС‡РµСЃРєРѕРіРѕ РґРѕР»РіР° Рё РїРѕРЅСЏС‚РЅС‹Р№ roadmap РїРѕ РёСЃС‚РѕС‡РЅРёРєР°Рј.
 
-## Приоритет P2 (средний)
+## РџСЂРёРѕСЂРёС‚РµС‚ P2 (СЃСЂРµРґРЅРёР№)
 
-### 4. Улучшение конфигурационного контракта
+### 4. РЈР»СѓС‡С€РµРЅРёРµ РєРѕРЅС„РёРіСѓСЂР°С†РёРѕРЅРЅРѕРіРѕ РєРѕРЅС‚СЂР°РєС‚Р°
 
-- Статус (2026-03-08): в работе (частично выполнено).
-- Проблема: `src/config.py` требует токены даже для неактивных интеграций.
-- Действие:
-  - Разделить обязательные и условно-обязательные env-переменные.
-  - Для неактивных интеграций добавить lazy-проверки только при их использовании.
-  - Синхронизировать `manager.sh` с runtime-контрактом YouTube cookies:
-    - при `YOUTUBE_COOKIES_ENABLED=false` не требовать жестко `YOUTUBE_COOKIES_PATH` в preflight. ✅ Выполнено (`manager.sh`);
-    - не создавать `youtube_cookies.txt` автоматически, если cookies выключены. ✅ Выполнено (`manager.sh`, `.github/workflows/deploy-dev.yml`, `.github/workflows/deploy-prod.yml`).
-  - Добавить единый `COOKIES_DIR` и auto-discovery `youtube_cookies.txt` / `instagram_cookies.txt` / `vk.com_cookies.txt` при пустых `*_COOKIES_PATH`. ✅ Выполнено (`src/config.py`, `env.example`, `README.md`, `.github/ai_context.md`).
-  - Перевести локальный источник оригинальных cookies в `local/cookies`, добавить автокопирование в `src/data/cookies` для smoke-тестов handlers и использовать для `yt-dlp` только временные рабочие копии cookie-файлов (без модификации оригиналов). ✅ Выполнено (`local/sync_cookies.cmd`, `test/handlers/_local_cookie_setup.py`, `test/handlers/*/test_*_handlers_local.py`, `src/handlers/resources/cookie_runtime.py`, `src/utils/cookies.py`, `README.md`, `.github/ai_context.md`, `env.example`).
-  - В deploy отказаться от избыточной логики копирования cookies в workflow: создавать/монтировать `$HOME/bot_{env}/data/cookies` централизованно в `manager.sh`, содержимое папки управляется на сервере отдельно. ✅ Выполнено (`.github/workflows/deploy-dev.yml`, `.github/workflows/deploy-prod.yml`, `manager.sh`).
-  - Убрать legacy-создание временных директорий из Docker/deploy и полагаться на runtime-проверки/создание директорий в Python-коде. ✅ Выполнено (`Dockerfile`, `manager.sh`, `src/handlers/mixins/base.py`).
-  - Централизовать lifecycle runtime-хранилища: подготовка `BOT_TEMP_DIR` + per-handler temp-папок на startup, очистка устаревших временных файлов на startup и полная очистка temp на shutdown; хранить temp вне репозитория (по умолчанию системный temp-dir, в deploy `/tmp/djgurda/temp_files`). ✅ Выполнено (`src/config.py`, `src/utils/runtime_storage.py`, `src/bot/lifespan/startup.py`, `src/bot/lifespan/shutdown.py`, `src/handlers/manager.py`, `README.md`, `.github/ai_context.md`).
-  - Унифицировать cookie-логику обработчиков: убрать дублирование `src/handlers/resources/{YouTube,Instagram,VK}/cookies.py`, вынести общий слой в `src/utils/cookies.py` (валидация/placeholder-check/runtime-copy/warn-once) и подключать его через базовый handler/mixin. Для VK оставить только специфичный парсинг cookies в dict для HTTP-запросов. ✅ Выполнено (`src/utils/cookies.py`, `src/handlers/mixins/base.py`, `src/handlers/resources/cookie_runtime.py`, удалены legacy-файлы `src/handlers/resources/{YouTube,Instagram,VK}/cookies.py`, `src/handlers/resources/YouTube/{YouTubeShorts.py,YouTubeChannel.py}`, `src/handlers/resources/Instagram/{InstagramHandler.py,InstagramReels.py,InstagramMediaGroup.py,InstagramStories.py,InstagramProfile.py}`, `src/handlers/resources/VK/VKHandler.py`, `test/handlers/Instagram/test_instagram_cookies_helpers.py`).
-  - Уточнить нейтральный интерфейс cookies: выделить общий объект-обертку для исходного файла, создавать runtime-копии per request и использовать единый контракт в handlers/миксинах. ✅ Выполнено (`src/utils/cookies.py`, `src/handlers/resources/Instagram/InstagramHandler.py`, `src/handlers/resources/YouTube/YouTubeHandler.py`, `src/handlers/resources/YouTube/YouTubeShorts.py`, `src/handlers/resources/YouTube/YouTubeChannel.py`, `src/handlers/resources/VK/VKHandler.py`).
-  - Добавить поддержку TikTok cookies по общей схеме (enabled/path + runtime-копии для yt-dlp). ✅ Выполнено (`src/config.py`, `env.example`, `README.md`, `.github/ai_context.md`, `src/handlers/resources/TikTok/TikTokHandler.py`, `src/handlers/resources/TikTok/TikTokVideo.py`, `src/handlers/resources/TikTok/TikTokPhoto.py`, `test/handlers/_local_cookie_setup.py`).
-  - Разнести VK-обработчики на отдельные mixin-классы `VKAudio` и `VKPlaylist`. ✅ Выполнено (`src/handlers/resources/VK/VKAudio.py`, `src/handlers/resources/VK/VKPlaylist.py`, `src/handlers/resources/VK/VKHandler.py`).
-- Результат: проще локальный запуск и меньше ложных падений на старте.
+- РЎС‚Р°С‚СѓСЃ (2026-03-08): РІ СЂР°Р±РѕС‚Рµ (С‡Р°СЃС‚РёС‡РЅРѕ РІС‹РїРѕР»РЅРµРЅРѕ).
+- РџСЂРѕР±Р»РµРјР°: `src/config.py` С‚СЂРµР±СѓРµС‚ С‚РѕРєРµРЅС‹ РґР°Р¶Рµ РґР»СЏ РЅРµР°РєС‚РёРІРЅС‹С… РёРЅС‚РµРіСЂР°С†РёР№.
+- Р”РµР№СЃС‚РІРёРµ:
+  - Р Р°Р·РґРµР»РёС‚СЊ РѕР±СЏР·Р°С‚РµР»СЊРЅС‹Рµ Рё СѓСЃР»РѕРІРЅРѕ-РѕР±СЏР·Р°С‚РµР»СЊРЅС‹Рµ env-РїРµСЂРµРјРµРЅРЅС‹Рµ.
+  - Р”Р»СЏ РЅРµР°РєС‚РёРІРЅС‹С… РёРЅС‚РµРіСЂР°С†РёР№ РґРѕР±Р°РІРёС‚СЊ lazy-РїСЂРѕРІРµСЂРєРё С‚РѕР»СЊРєРѕ РїСЂРё РёС… РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРё.
+  - РЎРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°С‚СЊ `manager.sh` СЃ runtime-РєРѕРЅС‚СЂР°РєС‚РѕРј YouTube cookies:
+    - РїСЂРё `YOUTUBE_COOKIES_ENABLED=false` РЅРµ С‚СЂРµР±РѕРІР°С‚СЊ Р¶РµСЃС‚РєРѕ `YOUTUBE_COOKIES_PATH` РІ preflight. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`manager.sh`);
+    - РЅРµ СЃРѕР·РґР°РІР°С‚СЊ `www.youtube.com_cookies.txt` Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё, РµСЃР»Рё cookies РІС‹РєР»СЋС‡РµРЅС‹. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`manager.sh`, `.github/workflows/deploy-dev.yml`, `.github/workflows/deploy-prod.yml`).
+  - Р”РѕР±Р°РІРёС‚СЊ РµРґРёРЅС‹Р№ `COOKIES_DIR` Рё auto-discovery `www.youtube.com_cookies.txt` / `instagram_cookies.txt` / `vk.com_cookies.txt` РїСЂРё РїСѓСЃС‚С‹С… `*_COOKIES_PATH`. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/config.py`, `env.example`, `README.md`, `.github/ai_context.md`).
+  - РџРµСЂРµРІРµСЃС‚Рё Р»РѕРєР°Р»СЊРЅС‹Р№ РёСЃС‚РѕС‡РЅРёРє РѕСЂРёРіРёРЅР°Р»СЊРЅС‹С… cookies РІ `local/cookies`, РґРѕР±Р°РІРёС‚СЊ Р°РІС‚РѕРєРѕРїРёСЂРѕРІР°РЅРёРµ РІ `src/data/cookies` РґР»СЏ smoke-С‚РµСЃС‚РѕРІ handlers Рё РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ РґР»СЏ `yt-dlp` С‚РѕР»СЊРєРѕ РІСЂРµРјРµРЅРЅС‹Рµ СЂР°Р±РѕС‡РёРµ РєРѕРїРёРё cookie-С„Р°Р№Р»РѕРІ (Р±РµР· РјРѕРґРёС„РёРєР°С†РёРё РѕСЂРёРіРёРЅР°Р»РѕРІ). вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`local/sync_cookies.cmd`, `test/handlers/_local_cookie_setup.py`, `test/handlers/*/test_*_handlers_local.py`, `src/utils/cookies.py`, `README.md`, `.github/ai_context.md`, `env.example`).
+  - Р’ deploy РѕС‚РєР°Р·Р°С‚СЊСЃСЏ РѕС‚ РёР·Р±С‹С‚РѕС‡РЅРѕР№ Р»РѕРіРёРєРё РєРѕРїРёСЂРѕРІР°РЅРёСЏ cookies РІ workflow: СЃРѕР·РґР°РІР°С‚СЊ/РјРѕРЅС‚РёСЂРѕРІР°С‚СЊ `$HOME/bot_{env}/data/cookies` С†РµРЅС‚СЂР°Р»РёР·РѕРІР°РЅРЅРѕ РІ `manager.sh`, СЃРѕРґРµСЂР¶РёРјРѕРµ РїР°РїРєРё СѓРїСЂР°РІР»СЏРµС‚СЃСЏ РЅР° СЃРµСЂРІРµСЂРµ РѕС‚РґРµР»СЊРЅРѕ. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`.github/workflows/deploy-dev.yml`, `.github/workflows/deploy-prod.yml`, `manager.sh`).
+  - РЈР±СЂР°С‚СЊ legacy-СЃРѕР·РґР°РЅРёРµ РІСЂРµРјРµРЅРЅС‹С… РґРёСЂРµРєС‚РѕСЂРёР№ РёР· Docker/deploy Рё РїРѕР»Р°РіР°С‚СЊСЃСЏ РЅР° runtime-РїСЂРѕРІРµСЂРєРё/СЃРѕР·РґР°РЅРёРµ РґРёСЂРµРєС‚РѕСЂРёР№ РІ Python-РєРѕРґРµ. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`Dockerfile`, `manager.sh`, `src/handlers/mixins/base.py`).
+  - Р¦РµРЅС‚СЂР°Р»РёР·РѕРІР°С‚СЊ lifecycle runtime-С…СЂР°РЅРёР»РёС‰Р°: РїРѕРґРіРѕС‚РѕРІРєР° `BOT_TEMP_DIR` + per-handler temp-РїР°РїРѕРє РЅР° startup, РѕС‡РёСЃС‚РєР° СѓСЃС‚Р°СЂРµРІС€РёС… РІСЂРµРјРµРЅРЅС‹С… С„Р°Р№Р»РѕРІ РЅР° startup Рё РїРѕР»РЅР°СЏ РѕС‡РёСЃС‚РєР° temp РЅР° shutdown; С…СЂР°РЅРёС‚СЊ temp РІРЅРµ СЂРµРїРѕР·РёС‚РѕСЂРёСЏ (РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ СЃРёСЃС‚РµРјРЅС‹Р№ temp-dir, РІ deploy `/tmp/djgurda/temp_files`). вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/config.py`, `src/utils/runtime_storage.py`, `src/bot/lifespan/startup.py`, `src/bot/lifespan/shutdown.py`, `src/handlers/manager.py`, `README.md`, `.github/ai_context.md`).
+  - РЈРЅРёС„РёС†РёСЂРѕРІР°С‚СЊ cookie-Р»РѕРіРёРєСѓ РѕР±СЂР°Р±РѕС‚С‡РёРєРѕРІ: СѓР±СЂР°С‚СЊ РґСѓР±Р»РёСЂРѕРІР°РЅРёРµ `src/handlers/resources/{YouTube,Instagram,VK}/cookies.py`, РІС‹РЅРµСЃС‚Рё РѕР±С‰РёР№ СЃР»РѕР№ РІ `src/utils/cookies.py` (РІР°Р»РёРґР°С†РёСЏ/placeholder-check/runtime-copy/warn-once) Рё РїРѕРґРєР»СЋС‡Р°С‚СЊ РµРіРѕ С‡РµСЂРµР· Р±Р°Р·РѕРІС‹Р№ handler/mixin. Р”Р»СЏ VK РѕСЃС‚Р°РІРёС‚СЊ С‚РѕР»СЊРєРѕ СЃРїРµС†РёС„РёС‡РЅС‹Р№ РїР°СЂСЃРёРЅРі cookies РІ dict РґР»СЏ HTTP-Р·Р°РїСЂРѕСЃРѕРІ. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/utils/cookies.py`, `src/handlers/mixins/base.py`, СѓРґР°Р»РµРЅС‹ legacy-С„Р°Р№Р»С‹ `src/handlers/resources/{YouTube,Instagram,VK}/cookies.py`, `src/handlers/resources/YouTube/{YouTubeShorts.py,YouTubeChannel.py}`, `src/handlers/resources/Instagram/{InstagramHandler.py,InstagramReels.py,InstagramMediaGroup.py,InstagramStories.py,InstagramProfile.py}`, `src/handlers/resources/VK/VKHandler.py`, `test/handlers/Instagram/test_instagram_cookies_helpers.py`).
+  - РЈС‚РѕС‡РЅРёС‚СЊ РЅРµР№С‚СЂР°Р»СЊРЅС‹Р№ РёРЅС‚РµСЂС„РµР№СЃ cookies: РІС‹РґРµР»РёС‚СЊ РѕР±С‰РёР№ РѕР±СЉРµРєС‚-РѕР±РµСЂС‚РєСѓ РґР»СЏ РёСЃС…РѕРґРЅРѕРіРѕ С„Р°Р№Р»Р°, СЃРѕР·РґР°РІР°С‚СЊ runtime-РєРѕРїРёРё per request Рё РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ РµРґРёРЅС‹Р№ РєРѕРЅС‚СЂР°РєС‚ РІ handlers/РјРёРєСЃРёРЅР°С…. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/utils/cookies.py`, `src/handlers/resources/Instagram/InstagramHandler.py`, `src/handlers/resources/YouTube/YouTubeHandler.py`, `src/handlers/resources/YouTube/YouTubeShorts.py`, `src/handlers/resources/YouTube/YouTubeChannel.py`, `src/handlers/resources/VK/VKHandler.py`).
+  - Р”РѕР±Р°РІРёС‚СЊ РїРѕРґРґРµСЂР¶РєСѓ TikTok cookies РїРѕ РѕР±С‰РµР№ СЃС…РµРјРµ (enabled/path + runtime-РєРѕРїРёРё РґР»СЏ yt-dlp). вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/config.py`, `env.example`, `README.md`, `.github/ai_context.md`, `src/handlers/resources/TikTok/TikTokHandler.py`, `src/handlers/resources/TikTok/TikTokVideo.py`, `src/handlers/resources/TikTok/TikTokPhoto.py`, `test/handlers/_local_cookie_setup.py`).
+  - Р Р°Р·РЅРµСЃС‚Рё VK-РѕР±СЂР°Р±РѕС‚С‡РёРєРё РЅР° РѕС‚РґРµР»СЊРЅС‹Рµ mixin-РєР»Р°СЃСЃС‹ `VKAudio` Рё `VKPlaylist`. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/handlers/resources/VK/VKAudio.py`, `src/handlers/resources/VK/VKPlaylist.py`, `src/handlers/resources/VK/VKHandler.py`).
+- Р РµР·СѓР»СЊС‚Р°С‚: РїСЂРѕС‰Рµ Р»РѕРєР°Р»СЊРЅС‹Р№ Р·Р°РїСѓСЃРє Рё РјРµРЅСЊС€Рµ Р»РѕР¶РЅС‹С… РїР°РґРµРЅРёР№ РЅР° СЃС‚Р°СЂС‚Рµ.
 
-### 5. Метрики пользовательской активности (пульс бота)
+### 5. РњРµС‚СЂРёРєРё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊСЃРєРѕР№ Р°РєС‚РёРІРЅРѕСЃС‚Рё (РїСѓР»СЊСЃ Р±РѕС‚Р°)
 
-- Статус (2026-03-07): открыто.
-- Проблема: сейчас нет продуктовой картины, как часто и кем используется бот.
-- Действие:
-  - Собирать DAU/WAU/MAU по `user_id` (по командам и обработкам ссылок).
-  - Считать новых пользователей в день и долю returning users.
-  - Считать активные чаты в день (`chat_id` с >=1 событием).
-  - Собирать число входящих сообщений с URL и число успешно обработанных ссылок.
-- Примеры графиков:
+- РЎС‚Р°С‚СѓСЃ (2026-03-07): РѕС‚РєСЂС‹С‚Рѕ.
+- РџСЂРѕР±Р»РµРјР°: СЃРµР№С‡Р°СЃ РЅРµС‚ РїСЂРѕРґСѓРєС‚РѕРІРѕР№ РєР°СЂС‚РёРЅС‹, РєР°Рє С‡Р°СЃС‚Рѕ Рё РєРµРј РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ Р±РѕС‚.
+- Р”РµР№СЃС‚РІРёРµ:
+  - РЎРѕР±РёСЂР°С‚СЊ DAU/WAU/MAU РїРѕ `user_id` (РїРѕ РєРѕРјР°РЅРґР°Рј Рё РѕР±СЂР°Р±РѕС‚РєР°Рј СЃСЃС‹Р»РѕРє).
+  - РЎС‡РёС‚Р°С‚СЊ РЅРѕРІС‹С… РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ РІ РґРµРЅСЊ Рё РґРѕР»СЋ returning users.
+  - РЎС‡РёС‚Р°С‚СЊ Р°РєС‚РёРІРЅС‹Рµ С‡Р°С‚С‹ РІ РґРµРЅСЊ (`chat_id` СЃ >=1 СЃРѕР±С‹С‚РёРµРј).
+  - РЎРѕР±РёСЂР°С‚СЊ С‡РёСЃР»Рѕ РІС…РѕРґСЏС‰РёС… СЃРѕРѕР±С‰РµРЅРёР№ СЃ URL Рё С‡РёСЃР»Рѕ СѓСЃРїРµС€РЅРѕ РѕР±СЂР°Р±РѕС‚Р°РЅРЅС‹С… СЃСЃС‹Р»РѕРє.
+- РџСЂРёРјРµСЂС‹ РіСЂР°С„РёРєРѕРІ:
   - users per day
   - new users vs returning users
   - active chats per day
-- Результат: понимание реального роста и удержания.
+- Р РµР·СѓР»СЊС‚Р°С‚: РїРѕРЅРёРјР°РЅРёРµ СЂРµР°Р»СЊРЅРѕРіРѕ СЂРѕСЃС‚Р° Рё СѓРґРµСЂР¶Р°РЅРёСЏ.
 
-### 6. Метрики использования команд
+### 6. РњРµС‚СЂРёРєРё РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ РєРѕРјР°РЅРґ
 
-- Статус (2026-03-07): открыто.
-- Проблема: нет данных, какие команды реально полезны, а какие не используются.
-- Действие:
-  - Вести счетчик по командам:
+- РЎС‚Р°С‚СѓСЃ (2026-03-07): РѕС‚РєСЂС‹С‚Рѕ.
+- РџСЂРѕР±Р»РµРјР°: РЅРµС‚ РґР°РЅРЅС‹С…, РєР°РєРёРµ РєРѕРјР°РЅРґС‹ СЂРµР°Р»СЊРЅРѕ РїРѕР»РµР·РЅС‹, Р° РєР°РєРёРµ РЅРµ РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ.
+- Р”РµР№СЃС‚РІРёРµ:
+  - Р’РµСЃС‚Рё СЃС‡РµС‚С‡РёРє РїРѕ РєРѕРјР°РЅРґР°Рј:
     - `/start`, `/stop`, `/help`, `/info`, `/statistics`,
     - `/toggle_bot`, `/toggle_errors`, `/toggle_notifications`,
     - `/enable_errors`, `/disable_errors`, `/enable_notifications`, `/disable_notifications`.
-  - Добавить метрику `command_error_rate` (ошибки / вызовы команды).
-  - Выводить top commands и команды с нулевым использованием за период.
-- Пример отчета:
+  - Р”РѕР±Р°РІРёС‚СЊ РјРµС‚СЂРёРєСѓ `command_error_rate` (РѕС€РёР±РєРё / РІС‹Р·РѕРІС‹ РєРѕРјР°РЅРґС‹).
+  - Р’С‹РІРѕРґРёС‚СЊ top commands Рё РєРѕРјР°РЅРґС‹ СЃ РЅСѓР»РµРІС‹Рј РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµРј Р·Р° РїРµСЂРёРѕРґ.
+- РџСЂРёРјРµСЂ РѕС‚С‡РµС‚Р°:
   - `/start` 340
   - `/help` 120
   - `/statistics` 90
   - `/toggle_notifications` 15
-- Результат: продуктовые решения по UX команд на основе данных.
+- Р РµР·СѓР»СЊС‚Р°С‚: РїСЂРѕРґСѓРєС‚РѕРІС‹Рµ СЂРµС€РµРЅРёСЏ РїРѕ UX РєРѕРјР°РЅРґ РЅР° РѕСЃРЅРѕРІРµ РґР°РЅРЅС‹С….
 
-### 7. Ошибки и отказоустойчивость
+### 7. РћС€РёР±РєРё Рё РѕС‚РєР°Р·РѕСѓСЃС‚РѕР№С‡РёРІРѕСЃС‚СЊ
 
-- Статус (2026-03-08): в работе (частично: закрыты задачи по TikTok/YouTube/Instagram и добавлен COUB video pipeline).
-- Проблема: ошибки видны в логах, но нет агрегированной картины по типам и частоте.
-- Действие:
-  - Нормализовать TikTok URL перед обработкой: удалять трекинговые query-параметры (`_r`, `_t`), не затрагивая остальные параметры. ✅ Выполнено.
-  - Устранить предупреждения валидатора GitHub Actions по неявным env-контекстам (`REPO_LC`, `OWNER_LC`) в deploy workflow через явные step outputs.
-  - Для TikTok `media_group` добавить fallback-получение фото+аудио через альтернативный API (когда `yt-dlp` не отдает фото) и отправку в порядке: сначала аудио без caption, затем фото-альбом с caption. ✅ Выполнено.
-  - Для TikTok `media_group` использовать музыкальные метаданные трека (title/performer) в аудио, а информацию о посте возвращать в caption альбома. ✅ Выполнено.
-  - Для TikTok `media_group` при отправке аудио пробовать скачивать обложку трека из метаданных (`TikWM`/`yt-dlp`); если обложка недоступна или не скачалась, отправлять аудио без thumbnail. ✅ Выполнено.
-  - В caption всегда удалять хэштеги из заголовка контента; если после очистки заголовок пустой, использовать нейтральный fallback-заголовок. ✅ Выполнено.
-  - Для video-обработчиков добавить fallback повторной загрузки с `format=best`, если `yt-dlp` вернул `Requested format is not available`. ✅ Выполнено (`src/handlers/mixins/video.py`).
-  - Для TikTok video расширить цепочку выбора форматов, чтобы не падать на узком фильтре `height/ext`. ✅ Выполнено (`src/handlers/resources/TikTok/TikTokVideo.py`).
-  - Для `resolve_url` добавить распаковку interstitial URL (`consent.youtube.com`, `l.instagram.com`) с поддержкой абсолютных и относительных `continue/u` параметров. ✅ Выполнено (`src/utils/url.py`).
-  - Универсализировать `_normalize_unwrapped_candidate`: относительные пути (`/path`) нормализуются через `fallback_origin` текущего interstitial-домена, без хардкода `youtube.com` внутри функции. ✅ Выполнено (`src/utils/url.py`).
-  - Для YouTube cookies убрать безусловное использование `cookiefile`: включать только при `YOUTUBE_COOKIES_ENABLED=true`, а заглушечный/пустой файл автоматически игнорировать с диагностикой в логах. ✅ Выполнено (`src/utils/cookies.py`, `src/handlers/resources/YouTube/YouTubeShorts.py`, `src/handlers/resources/YouTube/YouTubeChannel.py`, `src/config.py`).
-  - Для YouTube cookies вернуть безопасный auto-режим по умолчанию (`YOUTUBE_COOKIES_ENABLED=true`): валидный файл применяется автоматически, заглушка игнорируется, `false` отключает cookies принудительно. ✅ Выполнено (`src/config.py`, `src/utils/cookies.py`).
-  - Для YouTube channel исправить расчет `🎬 Видео`: приоритет отдать `channel_video_count`/`video_count`, а `playlist_count` использовать только как fallback, чтобы не занижать общее число видео канала. ✅ Выполнено (`src/handlers/resources/YouTube/YouTubeChannel.py`).
-  - Для YouTube channel извлекать метаданные с приоритетом вкладки `/videos` и переносить счетчики из нее, чтобы избежать ложных значений вида `🎬 Видео: 2` на главной вкладке канала. ✅ Выполнено (`src/handlers/resources/YouTube/YouTubeChannel.py`, `test/handlers/YouTube/test_youtube_channel_video_count.py`).
-  - Для деплоя заменить принудительное завершение контейнера (`docker rm -f`) на graceful-остановку (`docker stop --time 25`) с последующим удалением, чтобы `on_shutdown` успевал отправлять сообщение «Бот выключается...». ✅ Выполнено (`manager.sh`).
-  - Усилить `on_shutdown`: отправка уведомления администратору не зависит от успешности чтения чатов из БД; ошибки получения чатов и закрытия БД логируются отдельно без срыва отправки уведомления. ✅ Выполнено (`src/bot/lifespan/shutdown.py`).
-  - Для Instagram profile добавить устойчивый fallback: при сбое `yt-dlp` extractor пробовать `web_profile_info` API по username и использовать канонический profile URL c завершающим `/`. ✅ Выполнено (`src/handlers/resources/Instagram/InstagramProfile.py`, `test/handlers/Instagram/test_instagram_profile_helpers.py`).
-  - Для Instagram `media_group` исправить обработку каруселей: удалять `img_index` из URL, сохранять несколько фото/видео без перезаписи файлов и поддерживать дополнительные аудиофайлы (`audios`) в общем pipeline отправки/cleanup. ✅ Выполнено (`src/handlers/resources/Instagram/InstagramMediaGroup.py`, `src/handlers/mixins/media_group.py`, `src/bot/processing/media_processor.py`, `src/handlers/base.py`, `test/handlers/Instagram/test_instagram_media_group_helpers.py`, `test/handlers/test_cleanup_helpers.py`).
-  - Для Instagram handlers добавить безопасный auto-режим cookies (`INSTAGRAM_COOKIES_ENABLED/INSTAGRAM_COOKIES_PATH`) и подключить его в stories/reels/media_group/profile; для stories добавить явный warning про возможную необходимость авторизации. ✅ Выполнено (`src/config.py`, `src/utils/cookies.py`, `src/handlers/resources/Instagram/InstagramHandler.py`, `src/handlers/resources/Instagram/InstagramStories.py`, `src/handlers/resources/Instagram/InstagramReels.py`, `src/handlers/resources/Instagram/InstagramMediaGroup.py`, `src/handlers/resources/Instagram/InstagramProfile.py`, `test/handlers/Instagram/test_instagram_cookies_helpers.py`).
-  - Добавить runtime-поддержку COUB (`https://coub.com/view/<id>`) через единый pipeline handlers, включая регистрацию в `ServiceManager` и smoke-проверки по шаблону `test/handlers/<Source>`. ✅ Выполнено (`src/handlers/manager.py`, `src/handlers/resources/Coub/*`, `test/handlers/Coub/test_coub_handlers_local.py`, `test/handlers/Coub/Coub_urls.py`).
-  - Для COUB video реализовать каскад источников `segments -> share -> file_versions/ytdlp`, валидацию `permalink == requested_id`, приоритет no-watermark пути через `segments` и fallback-деградацию без падения отправки. ✅ Выполнено (`src/handlers/resources/Coub/CoubVideo.py`).
-  - Для COUB video выровнять длительность итогового MP4 по оригинальной аудиодорожке (audio-led): зацикливать видеоряд до длины аудио и подтверждать наличие audio/video потоков в smoke-проверке. ✅ Выполнено (`src/handlers/resources/Coub/CoubVideo.py`, `test/handlers/Coub/test_coub_handlers_local.py`).
-  - Улучшить метод получения COUB video без watermark: усилить приоритет raw/segments-источников, расширить эвристику фильтрации branded/share URL и добавить диагностику выбранного source для ускоренного разбора проблемных кейсов.
-  - Собирать `exceptions_per_hour`, `error_rate`, `handler_failure_rate`.
-  - Вести топ ошибок по типу/источнику:
-    - `ValueError`, `TelegramTimeoutError`, ошибки БД, ошибки загрузки контента.
-  - Разделять ошибки по этапам:
+- РЎС‚Р°С‚СѓСЃ (2026-03-08): РІ СЂР°Р±РѕС‚Рµ (С‡Р°СЃС‚РёС‡РЅРѕ: Р·Р°РєСЂС‹С‚С‹ Р·Р°РґР°С‡Рё РїРѕ TikTok/YouTube/Instagram Рё РґРѕР±Р°РІР»РµРЅ COUB video pipeline).
+- РџСЂРѕР±Р»РµРјР°: РѕС€РёР±РєРё РІРёРґРЅС‹ РІ Р»РѕРіР°С…, РЅРѕ РЅРµС‚ Р°РіСЂРµРіРёСЂРѕРІР°РЅРЅРѕР№ РєР°СЂС‚РёРЅС‹ РїРѕ С‚РёРїР°Рј Рё С‡Р°СЃС‚РѕС‚Рµ.
+- Р”РµР№СЃС‚РІРёРµ:
+  - РќРѕСЂРјР°Р»РёР·РѕРІР°С‚СЊ TikTok URL РїРµСЂРµРґ РѕР±СЂР°Р±РѕС‚РєРѕР№: СѓРґР°Р»СЏС‚СЊ С‚СЂРµРєРёРЅРіРѕРІС‹Рµ query-РїР°СЂР°РјРµС‚СЂС‹ (`_r`, `_t`), РЅРµ Р·Р°С‚СЂР°РіРёРІР°СЏ РѕСЃС‚Р°Р»СЊРЅС‹Рµ РїР°СЂР°РјРµС‚СЂС‹. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ.
+  - РЈСЃС‚СЂР°РЅРёС‚СЊ РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёСЏ РІР°Р»РёРґР°С‚РѕСЂР° GitHub Actions РїРѕ РЅРµСЏРІРЅС‹Рј env-РєРѕРЅС‚РµРєСЃС‚Р°Рј (`REPO_LC`, `OWNER_LC`) РІ deploy workflow С‡РµСЂРµР· СЏРІРЅС‹Рµ step outputs.
+  - Р”Р»СЏ TikTok `media_group` РґРѕР±Р°РІРёС‚СЊ fallback-РїРѕР»СѓС‡РµРЅРёРµ С„РѕС‚Рѕ+Р°СѓРґРёРѕ С‡РµСЂРµР· Р°Р»СЊС‚РµСЂРЅР°С‚РёРІРЅС‹Р№ API (РєРѕРіРґР° `yt-dlp` РЅРµ РѕС‚РґР°РµС‚ С„РѕС‚Рѕ) Рё РѕС‚РїСЂР°РІРєСѓ РІ РїРѕСЂСЏРґРєРµ: СЃРЅР°С‡Р°Р»Р° Р°СѓРґРёРѕ Р±РµР· caption, Р·Р°С‚РµРј С„РѕС‚Рѕ-Р°Р»СЊР±РѕРј СЃ caption. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ.
+  - Р”Р»СЏ TikTok `media_group` РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ РјСѓР·С‹РєР°Р»СЊРЅС‹Рµ РјРµС‚Р°РґР°РЅРЅС‹Рµ С‚СЂРµРєР° (title/performer) РІ Р°СѓРґРёРѕ, Р° РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ РїРѕСЃС‚Рµ РІРѕР·РІСЂР°С‰Р°С‚СЊ РІ caption Р°Р»СЊР±РѕРјР°. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ.
+  - Р”Р»СЏ TikTok `media_group` РїСЂРё РѕС‚РїСЂР°РІРєРµ Р°СѓРґРёРѕ РїСЂРѕР±РѕРІР°С‚СЊ СЃРєР°С‡РёРІР°С‚СЊ РѕР±Р»РѕР¶РєСѓ С‚СЂРµРєР° РёР· РјРµС‚Р°РґР°РЅРЅС‹С… (`TikWM`/`yt-dlp`); РµСЃР»Рё РѕР±Р»РѕР¶РєР° РЅРµРґРѕСЃС‚СѓРїРЅР° РёР»Рё РЅРµ СЃРєР°С‡Р°Р»Р°СЃСЊ, РѕС‚РїСЂР°РІР»СЏС‚СЊ Р°СѓРґРёРѕ Р±РµР· thumbnail. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ.
+  - Р’ caption РІСЃРµРіРґР° СѓРґР°Р»СЏС‚СЊ С…СЌС€С‚РµРіРё РёР· Р·Р°РіРѕР»РѕРІРєР° РєРѕРЅС‚РµРЅС‚Р°; РµСЃР»Рё РїРѕСЃР»Рµ РѕС‡РёСЃС‚РєРё Р·Р°РіРѕР»РѕРІРѕРє РїСѓСЃС‚РѕР№, РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ РЅРµР№С‚СЂР°Р»СЊРЅС‹Р№ fallback-Р·Р°РіРѕР»РѕРІРѕРє. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ.
+  - Р”Р»СЏ video-РѕР±СЂР°Р±РѕС‚С‡РёРєРѕРІ РґРѕР±Р°РІРёС‚СЊ fallback РїРѕРІС‚РѕСЂРЅРѕР№ Р·Р°РіСЂСѓР·РєРё СЃ `format=best`, РµСЃР»Рё `yt-dlp` РІРµСЂРЅСѓР» `Requested format is not available`. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/handlers/mixins/video.py`).
+  - Р”Р»СЏ TikTok video СЂР°СЃС€РёСЂРёС‚СЊ С†РµРїРѕС‡РєСѓ РІС‹Р±РѕСЂР° С„РѕСЂРјР°С‚РѕРІ, С‡С‚РѕР±С‹ РЅРµ РїР°РґР°С‚СЊ РЅР° СѓР·РєРѕРј С„РёР»СЊС‚СЂРµ `height/ext`. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/handlers/resources/TikTok/TikTokVideo.py`).
+  - Р”Р»СЏ `resolve_url` РґРѕР±Р°РІРёС‚СЊ СЂР°СЃРїР°РєРѕРІРєСѓ interstitial URL (`consent.youtube.com`, `l.instagram.com`) СЃ РїРѕРґРґРµСЂР¶РєРѕР№ Р°Р±СЃРѕР»СЋС‚РЅС‹С… Рё РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅС‹С… `continue/u` РїР°СЂР°РјРµС‚СЂРѕРІ. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/utils/url.py`).
+  - РЈРЅРёРІРµСЂСЃР°Р»РёР·РёСЂРѕРІР°С‚СЊ `_normalize_unwrapped_candidate`: РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅС‹Рµ РїСѓС‚Рё (`/path`) РЅРѕСЂРјР°Р»РёР·СѓСЋС‚СЃСЏ С‡РµСЂРµР· `fallback_origin` С‚РµРєСѓС‰РµРіРѕ interstitial-РґРѕРјРµРЅР°, Р±РµР· С…Р°СЂРґРєРѕРґР° `youtube.com` РІРЅСѓС‚СЂРё С„СѓРЅРєС†РёРё. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/utils/url.py`).
+  - Р”Р»СЏ YouTube cookies СѓР±СЂР°С‚СЊ Р±РµР·СѓСЃР»РѕРІРЅРѕРµ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ `cookiefile`: РІРєР»СЋС‡Р°С‚СЊ С‚РѕР»СЊРєРѕ РїСЂРё `YOUTUBE_COOKIES_ENABLED=true`, Р° Р·Р°РіР»СѓС€РµС‡РЅС‹Р№/РїСѓСЃС‚РѕР№ С„Р°Р№Р» Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РёРіРЅРѕСЂРёСЂРѕРІР°С‚СЊ СЃ РґРёР°РіРЅРѕСЃС‚РёРєРѕР№ РІ Р»РѕРіР°С…. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/utils/cookies.py`, `src/handlers/resources/YouTube/YouTubeShorts.py`, `src/handlers/resources/YouTube/YouTubeChannel.py`, `src/config.py`).
+  - Р”Р»СЏ YouTube cookies РІРµСЂРЅСѓС‚СЊ Р±РµР·РѕРїР°СЃРЅС‹Р№ auto-СЂРµР¶РёРј РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ (`YOUTUBE_COOKIES_ENABLED=true`): РІР°Р»РёРґРЅС‹Р№ С„Р°Р№Р» РїСЂРёРјРµРЅСЏРµС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё, Р·Р°РіР»СѓС€РєР° РёРіРЅРѕСЂРёСЂСѓРµС‚СЃСЏ, `false` РѕС‚РєР»СЋС‡Р°РµС‚ cookies РїСЂРёРЅСѓРґРёС‚РµР»СЊРЅРѕ. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/config.py`, `src/utils/cookies.py`).
+  - Р”Р»СЏ YouTube channel РёСЃРїСЂР°РІРёС‚СЊ СЂР°СЃС‡РµС‚ `рџЋ¬ Р’РёРґРµРѕ`: РїСЂРёРѕСЂРёС‚РµС‚ РѕС‚РґР°С‚СЊ `channel_video_count`/`video_count`, Р° `playlist_count` РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ С‚РѕР»СЊРєРѕ РєР°Рє fallback, С‡С‚РѕР±С‹ РЅРµ Р·Р°РЅРёР¶Р°С‚СЊ РѕР±С‰РµРµ С‡РёСЃР»Рѕ РІРёРґРµРѕ РєР°РЅР°Р»Р°. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/handlers/resources/YouTube/YouTubeChannel.py`).
+  - Р”Р»СЏ YouTube channel РёР·РІР»РµРєР°С‚СЊ РјРµС‚Р°РґР°РЅРЅС‹Рµ СЃ РїСЂРёРѕСЂРёС‚РµС‚РѕРј РІРєР»Р°РґРєРё `/videos` Рё РїРµСЂРµРЅРѕСЃРёС‚СЊ СЃС‡РµС‚С‡РёРєРё РёР· РЅРµРµ, С‡С‚РѕР±С‹ РёР·Р±РµР¶Р°С‚СЊ Р»РѕР¶РЅС‹С… Р·РЅР°С‡РµРЅРёР№ РІРёРґР° `рџЋ¬ Р’РёРґРµРѕ: 2` РЅР° РіР»Р°РІРЅРѕР№ РІРєР»Р°РґРєРµ РєР°РЅР°Р»Р°. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/handlers/resources/YouTube/YouTubeChannel.py`, `test/handlers/YouTube/test_youtube_channel_video_count.py`).
+  - Р”Р»СЏ РґРµРїР»РѕСЏ Р·Р°РјРµРЅРёС‚СЊ РїСЂРёРЅСѓРґРёС‚РµР»СЊРЅРѕРµ Р·Р°РІРµСЂС€РµРЅРёРµ РєРѕРЅС‚РµР№РЅРµСЂР° (`docker rm -f`) РЅР° graceful-РѕСЃС‚Р°РЅРѕРІРєСѓ (`docker stop --time 25`) СЃ РїРѕСЃР»РµРґСѓСЋС‰РёРј СѓРґР°Р»РµРЅРёРµРј, С‡С‚РѕР±С‹ `on_shutdown` СѓСЃРїРµРІР°Р» РѕС‚РїСЂР°РІР»СЏС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ В«Р‘РѕС‚ РІС‹РєР»СЋС‡Р°РµС‚СЃСЏ...В». вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`manager.sh`).
+  - РЈСЃРёР»РёС‚СЊ `on_shutdown`: РѕС‚РїСЂР°РІРєР° СѓРІРµРґРѕРјР»РµРЅРёСЏ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂСѓ РЅРµ Р·Р°РІРёСЃРёС‚ РѕС‚ СѓСЃРїРµС€РЅРѕСЃС‚Рё С‡С‚РµРЅРёСЏ С‡Р°С‚РѕРІ РёР· Р‘Р”; РѕС€РёР±РєРё РїРѕР»СѓС‡РµРЅРёСЏ С‡Р°С‚РѕРІ Рё Р·Р°РєСЂС‹С‚РёСЏ Р‘Р” Р»РѕРіРёСЂСѓСЋС‚СЃСЏ РѕС‚РґРµР»СЊРЅРѕ Р±РµР· СЃСЂС‹РІР° РѕС‚РїСЂР°РІРєРё СѓРІРµРґРѕРјР»РµРЅРёСЏ. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/bot/lifespan/shutdown.py`).
+  - Р”Р»СЏ Instagram profile РґРѕР±Р°РІРёС‚СЊ СѓСЃС‚РѕР№С‡РёРІС‹Р№ fallback: РїСЂРё СЃР±РѕРµ `yt-dlp` extractor РїСЂРѕР±РѕРІР°С‚СЊ `web_profile_info` API РїРѕ username Рё РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ РєР°РЅРѕРЅРёС‡РµСЃРєРёР№ profile URL c Р·Р°РІРµСЂС€Р°СЋС‰РёРј `/`. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/handlers/resources/Instagram/InstagramProfile.py`, `test/handlers/Instagram/test_instagram_profile_helpers.py`).
+  - Р”Р»СЏ Instagram `media_group` РёСЃРїСЂР°РІРёС‚СЊ РѕР±СЂР°Р±РѕС‚РєСѓ РєР°СЂСѓСЃРµР»РµР№: СѓРґР°Р»СЏС‚СЊ `img_index` РёР· URL, СЃРѕС…СЂР°РЅСЏС‚СЊ РЅРµСЃРєРѕР»СЊРєРѕ С„РѕС‚Рѕ/РІРёРґРµРѕ Р±РµР· РїРµСЂРµР·Р°РїРёСЃРё С„Р°Р№Р»РѕРІ Рё РїРѕРґРґРµСЂР¶РёРІР°С‚СЊ РґРѕРїРѕР»РЅРёС‚РµР»СЊРЅС‹Рµ Р°СѓРґРёРѕС„Р°Р№Р»С‹ (`audios`) РІ РѕР±С‰РµРј pipeline РѕС‚РїСЂР°РІРєРё/cleanup. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/handlers/resources/Instagram/InstagramMediaGroup.py`, `src/handlers/mixins/media_group.py`, `src/bot/processing/media_processor.py`, `src/handlers/base.py`, `test/handlers/Instagram/test_instagram_media_group_helpers.py`, `test/handlers/test_cleanup_helpers.py`).
+  - Р”Р»СЏ Instagram handlers РґРѕР±Р°РІРёС‚СЊ Р±РµР·РѕРїР°СЃРЅС‹Р№ auto-СЂРµР¶РёРј cookies (`INSTAGRAM_COOKIES_ENABLED/INSTAGRAM_COOKIES_PATH`) Рё РїРѕРґРєР»СЋС‡РёС‚СЊ РµРіРѕ РІ stories/reels/media_group/profile; РґР»СЏ stories РґРѕР±Р°РІРёС‚СЊ СЏРІРЅС‹Р№ warning РїСЂРѕ РІРѕР·РјРѕР¶РЅСѓСЋ РЅРµРѕР±С…РѕРґРёРјРѕСЃС‚СЊ Р°РІС‚РѕСЂРёР·Р°С†РёРё. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/config.py`, `src/utils/cookies.py`, `src/handlers/resources/Instagram/InstagramHandler.py`, `src/handlers/resources/Instagram/InstagramStories.py`, `src/handlers/resources/Instagram/InstagramReels.py`, `src/handlers/resources/Instagram/InstagramMediaGroup.py`, `src/handlers/resources/Instagram/InstagramProfile.py`, `test/handlers/Instagram/test_instagram_cookies_helpers.py`).
+  - Р”РѕР±Р°РІРёС‚СЊ runtime-РїРѕРґРґРµСЂР¶РєСѓ COUB (`https://coub.com/view/<id>`) С‡РµСЂРµР· РµРґРёРЅС‹Р№ pipeline handlers, РІРєР»СЋС‡Р°СЏ СЂРµРіРёСЃС‚СЂР°С†РёСЋ РІ `ServiceManager` Рё smoke-РїСЂРѕРІРµСЂРєРё РїРѕ С€Р°Р±Р»РѕРЅСѓ `test/handlers/<Source>`. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/handlers/manager.py`, `src/handlers/resources/Coub/*`, `test/handlers/Coub/test_coub_handlers_local.py`, `test/handlers/Coub/Coub_urls.py`).
+  - Р”Р»СЏ COUB video СЂРµР°Р»РёР·РѕРІР°С‚СЊ РєР°СЃРєР°Рґ РёСЃС‚РѕС‡РЅРёРєРѕРІ `segments -> share -> file_versions/ytdlp`, РІР°Р»РёРґР°С†РёСЋ `permalink == requested_id`, РїСЂРёРѕСЂРёС‚РµС‚ no-watermark РїСѓС‚Рё С‡РµСЂРµР· `segments` Рё fallback-РґРµРіСЂР°РґР°С†РёСЋ Р±РµР· РїР°РґРµРЅРёСЏ РѕС‚РїСЂР°РІРєРё. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/handlers/resources/Coub/CoubVideo.py`).
+  - Р”Р»СЏ COUB video РІС‹СЂРѕРІРЅСЏС‚СЊ РґР»РёС‚РµР»СЊРЅРѕСЃС‚СЊ РёС‚РѕРіРѕРІРѕРіРѕ MP4 РїРѕ РѕСЂРёРіРёРЅР°Р»СЊРЅРѕР№ Р°СѓРґРёРѕРґРѕСЂРѕР¶РєРµ (audio-led): Р·Р°С†РёРєР»РёРІР°С‚СЊ РІРёРґРµРѕСЂСЏРґ РґРѕ РґР»РёРЅС‹ Р°СѓРґРёРѕ Рё РїРѕРґС‚РІРµСЂР¶РґР°С‚СЊ РЅР°Р»РёС‡РёРµ audio/video РїРѕС‚РѕРєРѕРІ РІ smoke-РїСЂРѕРІРµСЂРєРµ. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`src/handlers/resources/Coub/CoubVideo.py`, `test/handlers/Coub/test_coub_handlers_local.py`).
+  - РЈР»СѓС‡С€РёС‚СЊ РјРµС‚РѕРґ РїРѕР»СѓС‡РµРЅРёСЏ COUB video Р±РµР· watermark: СѓСЃРёР»РёС‚СЊ РїСЂРёРѕСЂРёС‚РµС‚ raw/segments-РёСЃС‚РѕС‡РЅРёРєРѕРІ, СЂР°СЃС€РёСЂРёС‚СЊ СЌРІСЂРёСЃС‚РёРєСѓ С„РёР»СЊС‚СЂР°С†РёРё branded/share URL Рё РґРѕР±Р°РІРёС‚СЊ РґРёР°РіРЅРѕСЃС‚РёРєСѓ РІС‹Р±СЂР°РЅРЅРѕРіРѕ source РґР»СЏ СѓСЃРєРѕСЂРµРЅРЅРѕРіРѕ СЂР°Р·Р±РѕСЂР° РїСЂРѕР±Р»РµРјРЅС‹С… РєРµР№СЃРѕРІ.
+  - РЎРѕР±РёСЂР°С‚СЊ `exceptions_per_hour`, `error_rate`, `handler_failure_rate`.
+  - Р’РµСЃС‚Рё С‚РѕРї РѕС€РёР±РѕРє РїРѕ С‚РёРїСѓ/РёСЃС‚РѕС‡РЅРёРєСѓ:
+    - `ValueError`, `TelegramTimeoutError`, РѕС€РёР±РєРё Р‘Р”, РѕС€РёР±РєРё Р·Р°РіСЂСѓР·РєРё РєРѕРЅС‚РµРЅС‚Р°.
+  - Р Р°Р·РґРµР»СЏС‚СЊ РѕС€РёР±РєРё РїРѕ СЌС‚Р°РїР°Рј:
     - resolve URL,
     - handler.process,
-    - отправка в Telegram,
+    - РѕС‚РїСЂР°РІРєР° РІ Telegram,
     - update_stats.
-- Результат: быстрый поиск сломанных сценариев и инфраструктурных проблем.
+- Р РµР·СѓР»СЊС‚Р°С‚: Р±С‹СЃС‚СЂС‹Р№ РїРѕРёСЃРє СЃР»РѕРјР°РЅРЅС‹С… СЃС†РµРЅР°СЂРёРµРІ Рё РёРЅС„СЂР°СЃС‚СЂСѓРєС‚СѓСЂРЅС‹С… РїСЂРѕР±Р»РµРј.
 
-### 8. Производительность обработки
+### 8. РџСЂРѕРёР·РІРѕРґРёС‚РµР»СЊРЅРѕСЃС‚СЊ РѕР±СЂР°Р±РѕС‚РєРё
 
-- Статус (2026-03-07): открыто.
-- Проблема: неизвестно, где тратится время (сеть, API, БД, хендлеры).
-- Действие:
-  - Мерить:
-    - `response_time` (полный цикл обработки ссылки),
-    - latency Telegram API вызовов,
-    - время DB-операций,
-    - `handler_execution_time` по каждому источнику.
-  - Добавить агрегаты: avg / p95 / p99.
-- Пример:
+- РЎС‚Р°С‚СѓСЃ (2026-03-07): РѕС‚РєСЂС‹С‚Рѕ.
+- РџСЂРѕР±Р»РµРјР°: РЅРµРёР·РІРµСЃС‚РЅРѕ, РіРґРµ С‚СЂР°С‚РёС‚СЃСЏ РІСЂРµРјСЏ (СЃРµС‚СЊ, API, Р‘Р”, С…РµРЅРґР»РµСЂС‹).
+- Р”РµР№СЃС‚РІРёРµ:
+  - РњРµСЂРёС‚СЊ:
+    - `response_time` (РїРѕР»РЅС‹Р№ С†РёРєР» РѕР±СЂР°Р±РѕС‚РєРё СЃСЃС‹Р»РєРё),
+    - latency Telegram API РІС‹Р·РѕРІРѕРІ,
+    - РІСЂРµРјСЏ DB-РѕРїРµСЂР°С†РёР№,
+    - `handler_execution_time` РїРѕ РєР°Р¶РґРѕРјСѓ РёСЃС‚РѕС‡РЅРёРєСѓ.
+  - Р”РѕР±Р°РІРёС‚СЊ Р°РіСЂРµРіР°С‚С‹: avg / p95 / p99.
+- РџСЂРёРјРµСЂ:
   - avg response time: 120ms
   - p95 response time: 420ms
-- Результат: понятные точки оптимизации и SLO для бота.
+- Р РµР·СѓР»СЊС‚Р°С‚: РїРѕРЅСЏС‚РЅС‹Рµ С‚РѕС‡РєРё РѕРїС‚РёРјРёР·Р°С†РёРё Рё SLO РґР»СЏ Р±РѕС‚Р°.
 
-### 9. Системные метрики контейнера/сервера
+### 9. РЎРёСЃС‚РµРјРЅС‹Рµ РјРµС‚СЂРёРєРё РєРѕРЅС‚РµР№РЅРµСЂР°/СЃРµСЂРІРµСЂР°
 
-- Статус (2026-03-07): открыто.
-- Проблема: без системных метрик тяжело увидеть деградацию до падений.
-- Действие:
-  - Собирать CPU, RAM, open file descriptors, network I/O.
-  - Для async-нагрузки добавить event loop lag и размер очереди задач обработки.
-  - Отслеживать число активных одновременных обработок (с учетом `Semaphore(3)`).
-- Примечание: queue size в явном виде сейчас отсутствует в архитектуре, потребуется внедрение слоя очередей/метрик.
-- Результат: раннее обнаружение перегрузок и узких мест.
+- РЎС‚Р°С‚СѓСЃ (2026-03-07): РѕС‚РєСЂС‹С‚Рѕ.
+- РџСЂРѕР±Р»РµРјР°: Р±РµР· СЃРёСЃС‚РµРјРЅС‹С… РјРµС‚СЂРёРє С‚СЏР¶РµР»Рѕ СѓРІРёРґРµС‚СЊ РґРµРіСЂР°РґР°С†РёСЋ РґРѕ РїР°РґРµРЅРёР№.
+- Р”РµР№СЃС‚РІРёРµ:
+  - РЎРѕР±РёСЂР°С‚СЊ CPU, RAM, open file descriptors, network I/O.
+  - Р”Р»СЏ async-РЅР°РіСЂСѓР·РєРё РґРѕР±Р°РІРёС‚СЊ event loop lag Рё СЂР°Р·РјРµСЂ РѕС‡РµСЂРµРґРё Р·Р°РґР°С‡ РѕР±СЂР°Р±РѕС‚РєРё.
+  - РћС‚СЃР»РµР¶РёРІР°С‚СЊ С‡РёСЃР»Рѕ Р°РєС‚РёРІРЅС‹С… РѕРґРЅРѕРІСЂРµРјРµРЅРЅС‹С… РѕР±СЂР°Р±РѕС‚РѕРє (СЃ СѓС‡РµС‚РѕРј `Semaphore(3)`).
+- РџСЂРёРјРµС‡Р°РЅРёРµ: queue size РІ СЏРІРЅРѕРј РІРёРґРµ СЃРµР№С‡Р°СЃ РѕС‚СЃСѓС‚СЃС‚РІСѓРµС‚ РІ Р°СЂС…РёС‚РµРєС‚СѓСЂРµ, РїРѕС‚СЂРµР±СѓРµС‚СЃСЏ РІРЅРµРґСЂРµРЅРёРµ СЃР»РѕСЏ РѕС‡РµСЂРµРґРµР№/РјРµС‚СЂРёРє.
+- Р РµР·СѓР»СЊС‚Р°С‚: СЂР°РЅРЅРµРµ РѕР±РЅР°СЂСѓР¶РµРЅРёРµ РїРµСЂРµРіСЂСѓР·РѕРє Рё СѓР·РєРёС… РјРµСЃС‚.
 
-### 10. Архитектурная карта проекта (Python/бот-контур)
+### 10. РђСЂС…РёС‚РµРєС‚СѓСЂРЅР°СЏ РєР°СЂС‚Р° РїСЂРѕРµРєС‚Р° (Python/Р±РѕС‚-РєРѕРЅС‚СѓСЂ)
 
-- Статус (2026-03-07): открыто.
-- Проблема: текущая архитектура понятна по коду, но нет единой визуальной схемы потока данных и ответственности модулей.
-- Действие:
-  - Зафиксировать карту уровня приложения (L1/L2), например:
+- РЎС‚Р°С‚СѓСЃ (2026-03-07): РѕС‚РєСЂС‹С‚Рѕ.
+- РџСЂРѕР±Р»РµРјР°: С‚РµРєСѓС‰Р°СЏ Р°СЂС…РёС‚РµРєС‚СѓСЂР° РїРѕРЅСЏС‚РЅР° РїРѕ РєРѕРґСѓ, РЅРѕ РЅРµС‚ РµРґРёРЅРѕР№ РІРёР·СѓР°Р»СЊРЅРѕР№ СЃС…РµРјС‹ РїРѕС‚РѕРєР° РґР°РЅРЅС‹С… Рё РѕС‚РІРµС‚СЃС‚РІРµРЅРЅРѕСЃС‚Рё РјРѕРґСѓР»РµР№.
+- Р”РµР№СЃС‚РІРёРµ:
+  - Р—Р°С„РёРєСЃРёСЂРѕРІР°С‚СЊ РєР°СЂС‚Сѓ СѓСЂРѕРІРЅСЏ РїСЂРёР»РѕР¶РµРЅРёСЏ (L1/L2), РЅР°РїСЂРёРјРµСЂ:
     - `User -> Telegram API -> aiogram Bot/Dispatcher -> Routers -> Handlers -> DB layer`.
-  - Для текущего проекта отдельно отметить точки:
-    - `network calls`: `aiohttp` resolve URL, `yt-dlp`, Telegram API send methods, внешние API handlers;
-    - `state transitions`: команды `/start`/`/stop` и toggle-команды (изменение `bot_enabled/errors_enabled/notifications_enabled`);
-    - `data writes`: `update_stats`, `set_*_enabled`, создание/обновление записей в БД.
-  - Добавить схему в отдельный md-файл (или секцию в `README`) и поддерживать вместе с архитектурными изменениями.
-  - Проверить и зафиксировать цепочку формирования обработчиков: `mixins -> source_mixin -> source_Handler -> media_router`.
-- Результат: быстрее ревью архитектуры, легче выявлять странности в маршруте данных.
+  - Р”Р»СЏ С‚РµРєСѓС‰РµРіРѕ РїСЂРѕРµРєС‚Р° РѕС‚РґРµР»СЊРЅРѕ РѕС‚РјРµС‚РёС‚СЊ С‚РѕС‡РєРё:
+    - `network calls`: `aiohttp` resolve URL, `yt-dlp`, Telegram API send methods, РІРЅРµС€РЅРёРµ API handlers;
+    - `state transitions`: РєРѕРјР°РЅРґС‹ `/start`/`/stop` Рё toggle-РєРѕРјР°РЅРґС‹ (РёР·РјРµРЅРµРЅРёРµ `bot_enabled/errors_enabled/notifications_enabled`);
+    - `data writes`: `update_stats`, `set_*_enabled`, СЃРѕР·РґР°РЅРёРµ/РѕР±РЅРѕРІР»РµРЅРёРµ Р·Р°РїРёСЃРµР№ РІ Р‘Р”.
+  - Р”РѕР±Р°РІРёС‚СЊ СЃС…РµРјСѓ РІ РѕС‚РґРµР»СЊРЅС‹Р№ md-С„Р°Р№Р» (РёР»Рё СЃРµРєС†РёСЋ РІ `README`) Рё РїРѕРґРґРµСЂР¶РёРІР°С‚СЊ РІРјРµСЃС‚Рµ СЃ Р°СЂС…РёС‚РµРєС‚СѓСЂРЅС‹РјРё РёР·РјРµРЅРµРЅРёСЏРјРё.
+  - РџСЂРѕРІРµСЂРёС‚СЊ Рё Р·Р°С„РёРєСЃРёСЂРѕРІР°С‚СЊ С†РµРїРѕС‡РєСѓ С„РѕСЂРјРёСЂРѕРІР°РЅРёСЏ РѕР±СЂР°Р±РѕС‚С‡РёРєРѕРІ: `mixins -> source_mixin -> source_Handler -> media_router`.
+- Р РµР·СѓР»СЊС‚Р°С‚: Р±С‹СЃС‚СЂРµРµ СЂРµРІСЊСЋ Р°СЂС…РёС‚РµРєС‚СѓСЂС‹, Р»РµРіС‡Рµ РІС‹СЏРІР»СЏС‚СЊ СЃС‚СЂР°РЅРЅРѕСЃС‚Рё РІ РјР°СЂС€СЂСѓС‚Рµ РґР°РЅРЅС‹С….
 
-### 11. Dependency graph модулей
+### 11. Dependency graph РјРѕРґСѓР»РµР№
 
-- Статус (2026-03-07): открыто.
-- Проблема: зависимости между модулями не визуализированы; сложно быстро увидеть избыточные связи.
-- Действие:
-  - Построить граф импортов для `src/` (например, `pydeps`/`snakefood`/`import-linter` + Graphviz).
-  - Проверять и фиксировать желаемые уровни зависимостей:
+- РЎС‚Р°С‚СѓСЃ (2026-03-07): РѕС‚РєСЂС‹С‚Рѕ.
+- РџСЂРѕР±Р»РµРјР°: Р·Р°РІРёСЃРёРјРѕСЃС‚Рё РјРµР¶РґСѓ РјРѕРґСѓР»СЏРјРё РЅРµ РІРёР·СѓР°Р»РёР·РёСЂРѕРІР°РЅС‹; СЃР»РѕР¶РЅРѕ Р±С‹СЃС‚СЂРѕ СѓРІРёРґРµС‚СЊ РёР·Р±С‹С‚РѕС‡РЅС‹Рµ СЃРІСЏР·Рё.
+- Р”РµР№СЃС‚РІРёРµ:
+  - РџРѕСЃС‚СЂРѕРёС‚СЊ РіСЂР°С„ РёРјРїРѕСЂС‚РѕРІ РґР»СЏ `src/` (РЅР°РїСЂРёРјРµСЂ, `pydeps`/`snakefood`/`import-linter` + Graphviz).
+  - РџСЂРѕРІРµСЂСЏС‚СЊ Рё С„РёРєСЃРёСЂРѕРІР°С‚СЊ Р¶РµР»Р°РµРјС‹Рµ СѓСЂРѕРІРЅРё Р·Р°РІРёСЃРёРјРѕСЃС‚РµР№:
     - `bot/commands`, `bot/processing` -> `handlers` / `utils` / `middlewares.db`
-    - `handlers` -> `mixins` / `utils` / интеграции
+    - `handlers` -> `mixins` / `utils` / РёРЅС‚РµРіСЂР°С†РёРё
     - `db.processing` -> `db.models` -> `db.core`
-  - Для текущего проекта адаптировать слой `services/repositories`:
-    - роль сервисного слоя частично выполняют `bot/processing` и `handlers/manager`;
-    - роль repository-слоя частично выполняют `middlewares/db/processing`.
-- Результат: прозрачные зависимости, меньше риска циклических импортов и сильной связности.
+  - Р”Р»СЏ С‚РµРєСѓС‰РµРіРѕ РїСЂРѕРµРєС‚Р° Р°РґР°РїС‚РёСЂРѕРІР°С‚СЊ СЃР»РѕР№ `services/repositories`:
+    - СЂРѕР»СЊ СЃРµСЂРІРёСЃРЅРѕРіРѕ СЃР»РѕСЏ С‡Р°СЃС‚РёС‡РЅРѕ РІС‹РїРѕР»РЅСЏСЋС‚ `bot/processing` Рё `handlers/manager`;
+    - СЂРѕР»СЊ repository-СЃР»РѕСЏ С‡Р°СЃС‚РёС‡РЅРѕ РІС‹РїРѕР»РЅСЏСЋС‚ `middlewares/db/processing`.
+- Р РµР·СѓР»СЊС‚Р°С‚: РїСЂРѕР·СЂР°С‡РЅС‹Рµ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё, РјРµРЅСЊС€Рµ СЂРёСЃРєР° С†РёРєР»РёС‡РµСЃРєРёС… РёРјРїРѕСЂС‚РѕРІ Рё СЃРёР»СЊРЅРѕР№ СЃРІСЏР·РЅРѕСЃС‚Рё.
 
-### 12. Метрики сложности кода
+### 12. РњРµС‚СЂРёРєРё СЃР»РѕР¶РЅРѕСЃС‚Рё РєРѕРґР°
 
-- Статус (2026-03-07): открыто.
-- Проблема: без code metrics сложно понимать, какие модули становятся “горячими точками” техдолга.
-- Действие:
-  - Добавить измерение:
-    - `cyclomatic complexity` (например, `radon cc`);
+- РЎС‚Р°С‚СѓСЃ (2026-03-07): РѕС‚РєСЂС‹С‚Рѕ.
+- РџСЂРѕР±Р»РµРјР°: Р±РµР· code metrics СЃР»РѕР¶РЅРѕ РїРѕРЅРёРјР°С‚СЊ, РєР°РєРёРµ РјРѕРґСѓР»Рё СЃС‚Р°РЅРѕРІСЏС‚СЃСЏ вЂњРіРѕСЂСЏС‡РёРјРё С‚РѕС‡РєР°РјРёвЂќ С‚РµС…РґРѕР»РіР°.
+- Р”РµР№СЃС‚РІРёРµ:
+  - Р”РѕР±Р°РІРёС‚СЊ РёР·РјРµСЂРµРЅРёРµ:
+    - `cyclomatic complexity` (РЅР°РїСЂРёРјРµСЂ, `radon cc`);
     - `maintainability index` (`radon mi`);
     - `lines per module` (`cloc`/`scc`);
-    - `module coupling` (через import graph / lint rules).
-  - Ввести пороговые значения и отчеты в CI для `dev`.
-  - По покрытию тестами:
-    - сейчас `tests/` в legacy-статусе;
-    - метрику `test coverage` включать после возврата тестового контура.
-- Результат: управляемый рост кода и раннее обнаружение переусложненных модулей.
+    - `module coupling` (С‡РµСЂРµР· import graph / lint rules).
+  - Р’РІРµСЃС‚Рё РїРѕСЂРѕРіРѕРІС‹Рµ Р·РЅР°С‡РµРЅРёСЏ Рё РѕС‚С‡РµС‚С‹ РІ CI РґР»СЏ `dev`.
+  - РџРѕ РїРѕРєСЂС‹С‚РёСЋ С‚РµСЃС‚Р°РјРё:
+    - СЃРµР№С‡Р°СЃ `tests/` РІ legacy-СЃС‚Р°С‚СѓСЃРµ;
+    - РјРµС‚СЂРёРєСѓ `test coverage` РІРєР»СЋС‡Р°С‚СЊ РїРѕСЃР»Рµ РІРѕР·РІСЂР°С‚Р° С‚РµСЃС‚РѕРІРѕРіРѕ РєРѕРЅС‚СѓСЂР°.
+- Р РµР·СѓР»СЊС‚Р°С‚: СѓРїСЂР°РІР»СЏРµРјС‹Р№ СЂРѕСЃС‚ РєРѕРґР° Рё СЂР°РЅРЅРµРµ РѕР±РЅР°СЂСѓР¶РµРЅРёРµ РїРµСЂРµСѓСЃР»РѕР¶РЅРµРЅРЅС‹С… РјРѕРґСѓР»РµР№.
 
-### 13. Воронки сценариев (Flow analytics / conversion funnel)
+### 13. Р’РѕСЂРѕРЅРєРё СЃС†РµРЅР°СЂРёРµРІ (Flow analytics / conversion funnel)
 
-- Статус (2026-03-07): открыто.
-- Проблема: нет количественной картины, где пользователи “теряются” в сценариях использования.
-- Действие:
-  - Определить ключевые воронки, релевантные текущему боту:
-    - команда `/start` -> отправка ссылки -> resolve URL -> обработка handler -> отправка результата;
-    - входящее сообщение с URL -> `split_into_blocks` -> `get_handler` -> `process_block` -> success/fail;
-    - команды управления (`/toggle_*`) -> изменение настройки -> подтверждение пользователю.
-  - Для каждого шага считать вход/выход и drop-off.
-  - Строить dashboard с этапами и конверсией по этапам.
-- Пример:
+- РЎС‚Р°С‚СѓСЃ (2026-03-07): РѕС‚РєСЂС‹С‚Рѕ.
+- РџСЂРѕР±Р»РµРјР°: РЅРµС‚ РєРѕР»РёС‡РµСЃС‚РІРµРЅРЅРѕР№ РєР°СЂС‚РёРЅС‹, РіРґРµ РїРѕР»СЊР·РѕРІР°С‚РµР»Рё вЂњС‚РµСЂСЏСЋС‚СЃСЏвЂќ РІ СЃС†РµРЅР°СЂРёСЏС… РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ.
+- Р”РµР№СЃС‚РІРёРµ:
+  - РћРїСЂРµРґРµР»РёС‚СЊ РєР»СЋС‡РµРІС‹Рµ РІРѕСЂРѕРЅРєРё, СЂРµР»РµРІР°РЅС‚РЅС‹Рµ С‚РµРєСѓС‰РµРјСѓ Р±РѕС‚Сѓ:
+    - РєРѕРјР°РЅРґР° `/start` -> РѕС‚РїСЂР°РІРєР° СЃСЃС‹Р»РєРё -> resolve URL -> РѕР±СЂР°Р±РѕС‚РєР° handler -> РѕС‚РїСЂР°РІРєР° СЂРµР·СѓР»СЊС‚Р°С‚Р°;
+    - РІС…РѕРґСЏС‰РµРµ СЃРѕРѕР±С‰РµРЅРёРµ СЃ URL -> `split_into_blocks` -> `get_handler` -> `process_block` -> success/fail;
+    - РєРѕРјР°РЅРґС‹ СѓРїСЂР°РІР»РµРЅРёСЏ (`/toggle_*`) -> РёР·РјРµРЅРµРЅРёРµ РЅР°СЃС‚СЂРѕР№РєРё -> РїРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ.
+  - Р”Р»СЏ РєР°Р¶РґРѕРіРѕ С€Р°РіР° СЃС‡РёС‚Р°С‚СЊ РІС…РѕРґ/РІС‹С…РѕРґ Рё drop-off.
+  - РЎС‚СЂРѕРёС‚СЊ dashboard СЃ СЌС‚Р°РїР°РјРё Рё РєРѕРЅРІРµСЂСЃРёРµР№ РїРѕ СЌС‚Р°РїР°Рј.
+- РџСЂРёРјРµСЂ:
   - start: 1000
   - sent_link: 800
   - resolved: 520
   - processed: 410
   - delivered: 400
-- Результат: видно, где ломается UX/интеграции и что упрощать в первую очередь.
+- Р РµР·СѓР»СЊС‚Р°С‚: РІРёРґРЅРѕ, РіРґРµ Р»РѕРјР°РµС‚СЃСЏ UX/РёРЅС‚РµРіСЂР°С†РёРё Рё С‡С‚Рѕ СѓРїСЂРѕС‰Р°С‚СЊ РІ РїРµСЂРІСѓСЋ РѕС‡РµСЂРµРґСЊ.
 
-## Приоритет P3 (дальше)
+## РџСЂРёРѕСЂРёС‚РµС‚ P3 (РґР°Р»СЊС€Рµ)
 
-### 14. Возврат к тестам как отдельная фаза
+### 14. Р’РѕР·РІСЂР°С‚ Рє С‚РµСЃС‚Р°Рј РєР°Рє РѕС‚РґРµР»СЊРЅР°СЏ С„Р°Р·Р°
 
-- Статус (2026-03-08): частично выполнено.
-- Проблема: `tests/` сейчас legacy и не участвует в актуальном контуре.
-- Действие:
-  - При готовности вернуть минимальный smoke-набор:
+- РЎС‚Р°С‚СѓСЃ (2026-03-08): С‡Р°СЃС‚РёС‡РЅРѕ РІС‹РїРѕР»РЅРµРЅРѕ.
+- РџСЂРѕР±Р»РµРјР°: `tests/` СЃРµР№С‡Р°СЃ legacy Рё РЅРµ СѓС‡Р°СЃС‚РІСѓРµС‚ РІ Р°РєС‚СѓР°Р»СЊРЅРѕРј РєРѕРЅС‚СѓСЂРµ.
+- Р”РµР№СЃС‚РІРёРµ:
+  - РџСЂРё РіРѕС‚РѕРІРЅРѕСЃС‚Рё РІРµСЂРЅСѓС‚СЊ РјРёРЅРёРјР°Р»СЊРЅС‹Р№ smoke-РЅР°Р±РѕСЂ:
     - startup/shutdown,
     - middleware gate,
-    - базовая обработка URL.
-  - Добавить локальный интеграционный сценарий проверки `TikTokHandler` на реальных ссылках (`video`, `profile`, `media_group`) с явным отчетом по результатам. ✅ Выполнено (`test/handlers/TikTok/test_tiktok_handlers_local.py`, проверка 3/3 успешна).
-  - Реорганизовать прототип в `test/handlers/TikTok`: вынести тестовые URL в отдельный файл `TikTok_urls` с комментариями и использовать его как источник данных для smoke-теста handlers. ✅ Выполнено (`test/handlers/TikTok/TikTok_urls.py`).
-  - Зафиксировать в `README.md` и `.github/ai_context.md`, что для будущих проверок работоспособности handlers используется прототип: `test/handlers/TikTok/test_tiktok_handlers_local.py` + `test/handlers/TikTok/TikTok_urls.py`. ✅ Выполнено.
-  - Добавить отдельный smoke-тест `test/handlers/YouTube/test_youtube_handlers_local.py` и источник ссылок `test/handlers/YouTube/YouTube_urls.py` для кейсов `shorts`/`channel`. ✅ Выполнено.
-  - Добавить отдельный smoke-тест `test/handlers/Instagram/test_instagram_handlers_local.py` и источник ссылок `test/handlers/Instagram/Instagram_urls.py` для кейсов `reels`/`media_group`/`stories`/`profile`. ✅ Выполнено.
-  - Добавить отдельный smoke-тест `test/handlers/VK/test_vk_handlers_local.py` и источник ссылок `test/handlers/VK/VK_urls.py` для кейсов `audio`/`playlist` VK Music. ✅ Выполнено.
-  - Зафиксировать единое правило именования источника тестовых ссылок как `<Source>_urls.py` для новых smoke-тестов handlers. ✅ Выполнено.
-  - Перенести структуру локальных smoke-тестов handlers в единый путь `test/handlers/*`. ✅ Выполнено.
-  - Обновить TikTok video smoke-ссылку на кейс `https://www.tiktok.com/t/ZP8XA8HA8/`, который воспроизводил ошибку формата. ✅ Выполнено (`test/handlers/TikTok/TikTok_urls.py`).
-  - Добавить кейсы для interstitial-URL:
-    - YouTube consent (absolute + relative `continue`) ✅ Выполнено (`test/handlers/YouTube/YouTube_urls.py`);
-    - Instagram wrapped (absolute + relative `u`) ✅ Выполнено (`test/handlers/Instagram/Instagram_urls.py`).
-  - Добавить в markdown-документацию правило-шаблон для будущих handler smoke-тестов (структура теста и обязательные шаги). ✅ Выполнено.
-  - Перенести правило `Handler Smoke-Тестов` из `README.md` в `.github/ai_context.md` как контекстное правило для агентов. ✅ Выполнено.
-  - Добавить правило эскалации: если скрипт/тулза не запускается из-за ограничений среды (sandbox/права/сеть), запрашивать повышение прав. ✅ Выполнено (`.github/ai_context.md`).
-  - Убрать режим `--classify-only` из smoke-скриптов handlers и запускать их только в полном режиме обработки. ✅ Выполнено (`test/handlers/YouTube/test_youtube_handlers_local.py`, `test/handlers/Instagram/test_instagram_handlers_local.py`).
-  - Зафиксировать правило запуска тестов: любые тесты (`pytest`, smoke-скрипты) выполнять только с повышенными правами после явного запроса пользователю. ✅ Выполнено (`README.md`, `.github/ai_context.md`).
-  - Убрать `PytestCollectionWarning` в `test/handlers/*`:
-    - переименовать dataclass-модели (`TestCase`, `TestResult`) в имена без префикса `Test` или явно исключить их из сбора pytest.
-  - Разделить smoke-скрипты и unit-тесты по разным маскам запуска в CI, чтобы `pytest` не пытался автоматически собирать сценарные CLI-скрипты как тестовые классы.
-  - Провести аудит fallback для TikTok caption после очистки хэштегов и гарантировать корректный fallback даже при пустом/невалидном title. ✅ Выполнено.
-  - Запускать эти тесты в CI для `dev`.
-- Результат: снижение регрессий при развитии функционала.
+    - Р±Р°Р·РѕРІР°СЏ РѕР±СЂР°Р±РѕС‚РєР° URL.
+  - Р”РѕР±Р°РІРёС‚СЊ Р»РѕРєР°Р»СЊРЅС‹Р№ РёРЅС‚РµРіСЂР°С†РёРѕРЅРЅС‹Р№ СЃС†РµРЅР°СЂРёР№ РїСЂРѕРІРµСЂРєРё `TikTokHandler` РЅР° СЂРµР°Р»СЊРЅС‹С… СЃСЃС‹Р»РєР°С… (`video`, `profile`, `media_group`) СЃ СЏРІРЅС‹Рј РѕС‚С‡РµС‚РѕРј РїРѕ СЂРµР·СѓР»СЊС‚Р°С‚Р°Рј. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`test/handlers/TikTok/test_tiktok_handlers_local.py`, РїСЂРѕРІРµСЂРєР° 3/3 СѓСЃРїРµС€РЅР°).
+  - Р РµРѕСЂРіР°РЅРёР·РѕРІР°С‚СЊ РїСЂРѕС‚РѕС‚РёРї РІ `test/handlers/TikTok`: РІС‹РЅРµСЃС‚Рё С‚РµСЃС‚РѕРІС‹Рµ URL РІ РѕС‚РґРµР»СЊРЅС‹Р№ С„Р°Р№Р» `TikTok_urls` СЃ РєРѕРјРјРµРЅС‚Р°СЂРёСЏРјРё Рё РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ РµРіРѕ РєР°Рє РёСЃС‚РѕС‡РЅРёРє РґР°РЅРЅС‹С… РґР»СЏ smoke-С‚РµСЃС‚Р° handlers. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`test/handlers/TikTok/TikTok_urls.py`).
+  - Р—Р°С„РёРєСЃРёСЂРѕРІР°С‚СЊ РІ `README.md` Рё `.github/ai_context.md`, С‡С‚Рѕ РґР»СЏ Р±СѓРґСѓС‰РёС… РїСЂРѕРІРµСЂРѕРє СЂР°Р±РѕС‚РѕСЃРїРѕСЃРѕР±РЅРѕСЃС‚Рё handlers РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂРѕС‚РѕС‚РёРї: `test/handlers/TikTok/test_tiktok_handlers_local.py` + `test/handlers/TikTok/TikTok_urls.py`. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ.
+  - Р”РѕР±Р°РІРёС‚СЊ РѕС‚РґРµР»СЊРЅС‹Р№ smoke-С‚РµСЃС‚ `test/handlers/YouTube/test_youtube_handlers_local.py` Рё РёСЃС‚РѕС‡РЅРёРє СЃСЃС‹Р»РѕРє `test/handlers/YouTube/YouTube_urls.py` РґР»СЏ РєРµР№СЃРѕРІ `shorts`/`channel`. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ.
+  - Р”РѕР±Р°РІРёС‚СЊ РѕС‚РґРµР»СЊРЅС‹Р№ smoke-С‚РµСЃС‚ `test/handlers/Instagram/test_instagram_handlers_local.py` Рё РёСЃС‚РѕС‡РЅРёРє СЃСЃС‹Р»РѕРє `test/handlers/Instagram/Instagram_urls.py` РґР»СЏ РєРµР№СЃРѕРІ `reels`/`media_group`/`stories`/`profile`. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ.
+  - Р”РѕР±Р°РІРёС‚СЊ РѕС‚РґРµР»СЊРЅС‹Р№ smoke-С‚РµСЃС‚ `test/handlers/VK/test_vk_handlers_local.py` Рё РёСЃС‚РѕС‡РЅРёРє СЃСЃС‹Р»РѕРє `test/handlers/VK/VK_urls.py` РґР»СЏ РєРµР№СЃРѕРІ `audio`/`playlist` VK Music. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ.
+  - Р—Р°С„РёРєСЃРёСЂРѕРІР°С‚СЊ РµРґРёРЅРѕРµ РїСЂР°РІРёР»Рѕ РёРјРµРЅРѕРІР°РЅРёСЏ РёСЃС‚РѕС‡РЅРёРєР° С‚РµСЃС‚РѕРІС‹С… СЃСЃС‹Р»РѕРє РєР°Рє `<Source>_urls.py` РґР»СЏ РЅРѕРІС‹С… smoke-С‚РµСЃС‚РѕРІ handlers. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ.
+  - РџРµСЂРµРЅРµСЃС‚Рё СЃС‚СЂСѓРєС‚СѓСЂСѓ Р»РѕРєР°Р»СЊРЅС‹С… smoke-С‚РµСЃС‚РѕРІ handlers РІ РµРґРёРЅС‹Р№ РїСѓС‚СЊ `test/handlers/*`. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ.
+  - РћР±РЅРѕРІРёС‚СЊ TikTok video smoke-СЃСЃС‹Р»РєСѓ РЅР° РєРµР№СЃ `https://www.tiktok.com/t/ZP8XA8HA8/`, РєРѕС‚РѕСЂС‹Р№ РІРѕСЃРїСЂРѕРёР·РІРѕРґРёР» РѕС€РёР±РєСѓ С„РѕСЂРјР°С‚Р°. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`test/handlers/TikTok/TikTok_urls.py`).
+  - Р”РѕР±Р°РІРёС‚СЊ РєРµР№СЃС‹ РґР»СЏ interstitial-URL:
+    - YouTube consent (absolute + relative `continue`) вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`test/handlers/YouTube/YouTube_urls.py`);
+    - Instagram wrapped (absolute + relative `u`) вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`test/handlers/Instagram/Instagram_urls.py`).
+  - Р”РѕР±Р°РІРёС‚СЊ РІ markdown-РґРѕРєСѓРјРµРЅС‚Р°С†РёСЋ РїСЂР°РІРёР»Рѕ-С€Р°Р±Р»РѕРЅ РґР»СЏ Р±СѓРґСѓС‰РёС… handler smoke-С‚РµСЃС‚РѕРІ (СЃС‚СЂСѓРєС‚СѓСЂР° С‚РµСЃС‚Р° Рё РѕР±СЏР·Р°С‚РµР»СЊРЅС‹Рµ С€Р°РіРё). вњ… Р’С‹РїРѕР»РЅРµРЅРѕ.
+  - РџРµСЂРµРЅРµСЃС‚Рё РїСЂР°РІРёР»Рѕ `Handler Smoke-РўРµСЃС‚РѕРІ` РёР· `README.md` РІ `.github/ai_context.md` РєР°Рє РєРѕРЅС‚РµРєСЃС‚РЅРѕРµ РїСЂР°РІРёР»Рѕ РґР»СЏ Р°РіРµРЅС‚РѕРІ. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ.
+  - Р”РѕР±Р°РІРёС‚СЊ РїСЂР°РІРёР»Рѕ СЌСЃРєР°Р»Р°С†РёРё: РµСЃР»Рё СЃРєСЂРёРїС‚/С‚СѓР»Р·Р° РЅРµ Р·Р°РїСѓСЃРєР°РµС‚СЃСЏ РёР·-Р·Р° РѕРіСЂР°РЅРёС‡РµРЅРёР№ СЃСЂРµРґС‹ (sandbox/РїСЂР°РІР°/СЃРµС‚СЊ), Р·Р°РїСЂР°С€РёРІР°С‚СЊ РїРѕРІС‹С€РµРЅРёРµ РїСЂР°РІ. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`.github/ai_context.md`).
+  - РЈР±СЂР°С‚СЊ СЂРµР¶РёРј `--classify-only` РёР· smoke-СЃРєСЂРёРїС‚РѕРІ handlers Рё Р·Р°РїСѓСЃРєР°С‚СЊ РёС… С‚РѕР»СЊРєРѕ РІ РїРѕР»РЅРѕРј СЂРµР¶РёРјРµ РѕР±СЂР°Р±РѕС‚РєРё. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`test/handlers/YouTube/test_youtube_handlers_local.py`, `test/handlers/Instagram/test_instagram_handlers_local.py`).
+  - Р—Р°С„РёРєСЃРёСЂРѕРІР°С‚СЊ РїСЂР°РІРёР»Рѕ Р·Р°РїСѓСЃРєР° С‚РµСЃС‚РѕРІ: Р»СЋР±С‹Рµ С‚РµСЃС‚С‹ (`pytest`, smoke-СЃРєСЂРёРїС‚С‹) РІС‹РїРѕР»РЅСЏС‚СЊ С‚РѕР»СЊРєРѕ СЃ РїРѕРІС‹С€РµРЅРЅС‹РјРё РїСЂР°РІР°РјРё РїРѕСЃР»Рµ СЏРІРЅРѕРіРѕ Р·Р°РїСЂРѕСЃР° РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ (`README.md`, `.github/ai_context.md`).
+  - РЈР±СЂР°С‚СЊ `PytestCollectionWarning` РІ `test/handlers/*`:
+    - РїРµСЂРµРёРјРµРЅРѕРІР°С‚СЊ dataclass-РјРѕРґРµР»Рё (`TestCase`, `TestResult`) РІ РёРјРµРЅР° Р±РµР· РїСЂРµС„РёРєСЃР° `Test` РёР»Рё СЏРІРЅРѕ РёСЃРєР»СЋС‡РёС‚СЊ РёС… РёР· СЃР±РѕСЂР° pytest.
+  - Р Р°Р·РґРµР»РёС‚СЊ smoke-СЃРєСЂРёРїС‚С‹ Рё unit-С‚РµСЃС‚С‹ РїРѕ СЂР°Р·РЅС‹Рј РјР°СЃРєР°Рј Р·Р°РїСѓСЃРєР° РІ CI, С‡С‚РѕР±С‹ `pytest` РЅРµ РїС‹С‚Р°Р»СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё СЃРѕР±РёСЂР°С‚СЊ СЃС†РµРЅР°СЂРЅС‹Рµ CLI-СЃРєСЂРёРїС‚С‹ РєР°Рє С‚РµСЃС‚РѕРІС‹Рµ РєР»Р°СЃСЃС‹.
+  - РџСЂРѕРІРµСЃС‚Рё Р°СѓРґРёС‚ fallback РґР»СЏ TikTok caption РїРѕСЃР»Рµ РѕС‡РёСЃС‚РєРё С…СЌС€С‚РµРіРѕРІ Рё РіР°СЂР°РЅС‚РёСЂРѕРІР°С‚СЊ РєРѕСЂСЂРµРєС‚РЅС‹Р№ fallback РґР°Р¶Рµ РїСЂРё РїСѓСЃС‚РѕРј/РЅРµРІР°Р»РёРґРЅРѕРј title. вњ… Р’С‹РїРѕР»РЅРµРЅРѕ.
+  - Р—Р°РїСѓСЃРєР°С‚СЊ СЌС‚Рё С‚РµСЃС‚С‹ РІ CI РґР»СЏ `dev`.
+- Р РµР·СѓР»СЊС‚Р°С‚: СЃРЅРёР¶РµРЅРёРµ СЂРµРіСЂРµСЃСЃРёР№ РїСЂРё СЂР°Р·РІРёС‚РёРё С„СѓРЅРєС†РёРѕРЅР°Р»Р°.
 
-### 15. Гигиена проверок качества
+### 15. Р“РёРіРёРµРЅР° РїСЂРѕРІРµСЂРѕРє РєР°С‡РµСЃС‚РІР°
 
-- Статус (2026-03-07): открыто.
-- Проблема: локальная проверка markdownlint цепляет `venv/Lib/site-packages/**/LICENSE.md` и дает шум, не относящийся к проектному коду.
-- Действие:
-  - Уточнить `.markdownlintignore` и/или команду запуска lint так, чтобы надежно исключать `venv/**` и другие внешние директории.
-  - Зафиксировать в `README`/`.github/ai_context.md` каноническую команду lint только для поддерживаемых markdown-файлов репозитория.
-  - Добавить отдельный check `python -m compileall src test` в CI как быстрый синтаксический smoke.
-- Результат: предсказуемые проверки качества без ложных срабатываний и быстрее обратная связь в dev-потоке.
+- РЎС‚Р°С‚СѓСЃ (2026-03-07): РѕС‚РєСЂС‹С‚Рѕ.
+- РџСЂРѕР±Р»РµРјР°: Р»РѕРєР°Р»СЊРЅР°СЏ РїСЂРѕРІРµСЂРєР° markdownlint С†РµРїР»СЏРµС‚ `venv/Lib/site-packages/**/LICENSE.md` Рё РґР°РµС‚ С€СѓРј, РЅРµ РѕС‚РЅРѕСЃСЏС‰РёР№СЃСЏ Рє РїСЂРѕРµРєС‚РЅРѕРјСѓ РєРѕРґСѓ.
+- Р”РµР№СЃС‚РІРёРµ:
+  - РЈС‚РѕС‡РЅРёС‚СЊ `.markdownlintignore` Рё/РёР»Рё РєРѕРјР°РЅРґСѓ Р·Р°РїСѓСЃРєР° lint С‚Р°Рє, С‡С‚РѕР±С‹ РЅР°РґРµР¶РЅРѕ РёСЃРєР»СЋС‡Р°С‚СЊ `venv/**` Рё РґСЂСѓРіРёРµ РІРЅРµС€РЅРёРµ РґРёСЂРµРєС‚РѕСЂРёРё.
+  - Р—Р°С„РёРєСЃРёСЂРѕРІР°С‚СЊ РІ `README`/`.github/ai_context.md` РєР°РЅРѕРЅРёС‡РµСЃРєСѓСЋ РєРѕРјР°РЅРґСѓ lint С‚РѕР»СЊРєРѕ РґР»СЏ РїРѕРґРґРµСЂР¶РёРІР°РµРјС‹С… markdown-С„Р°Р№Р»РѕРІ СЂРµРїРѕР·РёС‚РѕСЂРёСЏ.
+  - Р”РѕР±Р°РІРёС‚СЊ РѕС‚РґРµР»СЊРЅС‹Р№ check `python -m compileall src test` РІ CI РєР°Рє Р±С‹СЃС‚СЂС‹Р№ СЃРёРЅС‚Р°РєСЃРёС‡РµСЃРєРёР№ smoke.
+- Р РµР·СѓР»СЊС‚Р°С‚: РїСЂРµРґСЃРєР°Р·СѓРµРјС‹Рµ РїСЂРѕРІРµСЂРєРё РєР°С‡РµСЃС‚РІР° Р±РµР· Р»РѕР¶РЅС‹С… СЃСЂР°Р±Р°С‚С‹РІР°РЅРёР№ Рё Р±С‹СЃС‚СЂРµРµ РѕР±СЂР°С‚РЅР°СЏ СЃРІСЏР·СЊ РІ dev-РїРѕС‚РѕРєРµ.
 
-## Исключено из backlog (выполнено)
+## РСЃРєР»СЋС‡РµРЅРѕ РёР· backlog (РІС‹РїРѕР»РЅРµРЅРѕ)
 
-- Валидация env перед запуском деплоя. ✅
-- Улучшение наблюдаемости деплоя. ✅
-- Формализация release notes. ✅
+- Р’Р°Р»РёРґР°С†РёСЏ env РїРµСЂРµРґ Р·Р°РїСѓСЃРєРѕРј РґРµРїР»РѕСЏ. вњ…
+- РЈР»СѓС‡С€РµРЅРёРµ РЅР°Р±Р»СЋРґР°РµРјРѕСЃС‚Рё РґРµРїР»РѕСЏ. вњ…
+- Р¤РѕСЂРјР°Р»РёР·Р°С†РёСЏ release notes. вњ…
 
-## Рекомендуемый порядок внедрения
+## Р РµРєРѕРјРµРЅРґСѓРµРјС‹Р№ РїРѕСЂСЏРґРѕРє РІРЅРµРґСЂРµРЅРёСЏ
 
 1. P0.1
 2. P1.3 -> P1.2
@@ -290,4 +290,5 @@
 5. P2.10 -> P2.11
 6. P2.12 -> P2.13
 7. P2.4
-8. P3.14 (когда команда вернется к тестовому контуру)
+8. P3.14 (РєРѕРіРґР° РєРѕРјР°РЅРґР° РІРµСЂРЅРµС‚СЃСЏ Рє С‚РµСЃС‚РѕРІРѕРјСѓ РєРѕРЅС‚СѓСЂСѓ)
+

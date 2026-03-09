@@ -315,9 +315,9 @@ class VKPlaylist:
         Формирует текст превью плейлиста для Telegram.
         """
         lines = [
-            f"🎵 {playlist_title}",
-            f"👤 {owner}",
-            f"🎼 Треков: {track_count}",
+            f"{playlist_title}",
+            f"Автор: {owner}",
+            f"Треков: {track_count}",
         ]
 
         if tracks:
@@ -326,7 +326,7 @@ class VKPlaylist:
             for index, track in enumerate(tracks[:5], start=1):
                 title = str(track.get("title") or "VK Track")
                 performer = str(track.get("performer") or "Unknown")
-                lines.append(f"{index}. {performer} — {title}")
+                lines.append(f"{index}. {performer} - {title}")
 
         return "\n".join(lines)
 

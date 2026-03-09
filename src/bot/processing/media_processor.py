@@ -199,8 +199,7 @@ async def process_block(
         
         finally:
             # Очищаем временные файлы
-            if file_info:
-                handler.cleanup(file_info)
+            handler.cleanup(file_info or {})
                 
     except Exception as exc:
         if await get_errors_enabled(chat_id):

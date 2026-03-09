@@ -9,14 +9,14 @@ import shutil
 from pathlib import Path
 
 COOKIE_FILENAMES = (
-    "youtube_cookies.txt",
+    "www.youtube.com_cookies.txt",
     "instagram_cookies.txt",
     "tiktok_cookies.txt",
     "vk.com_cookies.txt",
 )
 
 
-def prepare_local_cookie_runtime(project_root: Path) -> None:
+def prepare_local_cookies(project_root: Path) -> None:
     """
     Подготавливает рабочие cookies для локальных smoke-тестов.
 

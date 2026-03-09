@@ -15,6 +15,8 @@ import aiohttp
 import yt_dlp
 from bs4 import BeautifulSoup
 
+from src.utils.cookies import cleanup_runtime_cookiefile
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,6 +24,15 @@ class VKAudio:
     """
     Миксин для обработки одиночных треков VK Music.
     """
+
+    def _ensure_vk_runtime_dirs(self) -> None:
+        """
+        Гарантирует наличие runtime-директории для операций VK.
+        """
+        try:
+            self.temp_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
 
     @classmethod
     def _looks_like_audio_tuple(cls, value: Any) -> bool:
@@ -402,6 +413,7 @@ class VKAudio:
         """
         Скачивает HLS-аудио через yt-dlp (без использования как основного extractor).
         """
+        self._ensure_vk_runtime_dirs()
         base_path = self._generate_unique_path(track_token, suffix="")
         output_template = f"{base_path}.%(ext)s"
 
@@ -421,13 +433,17 @@ class VKAudio:
                 "Accept-Language": "ru,en-US;q=0.9,en;q=0.8",
             },
         })
+        cookiefile_path = ydl_opts.get("cookiefile")
 
         def _download() -> Optional[Path]:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(hls_url, download=True)
-                if not isinstance(info, dict):
-                    return None
-                return Path(ydl.prepare_filename(info))
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(hls_url, download=True)
+                    if not isinstance(info, dict):
+                        return None
+                    return Path(ydl.prepare_filename(info))
+            finally:
+                cleanup_runtime_cookiefile(cookiefile_path)
 
         try:
             downloaded_path = await asyncio.to_thread(_download)
@@ -469,6 +485,7 @@ class VKAudio:
             ),
         })
         ydl_opts.update(self._build_vk_cookie_opts())
+        cookiefile_path = ydl_opts.get("cookiefile")
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = await asyncio.to_thread(ydl.extract_info, url, download=False)
@@ -489,6 +506,8 @@ class VKAudio:
                         return fmt_url
         except Exception as exc:
             logger.warning("VK yt-dlp fallback failed for %s: %s", url, exc)
+        finally:
+            cleanup_runtime_cookiefile(cookiefile_path)
         return None
 
     async def _download_audio_stream(
@@ -506,6 +525,7 @@ class VKAudio:
             if hls_path:
                 return hls_path
 
+        self._ensure_vk_runtime_dirs()
         path_suffix = Path(urlsplit(audio_url).path).suffix.lower()
         suffix = path_suffix if path_suffix in self.AUDIO_EXTENSIONS else ".mp3"
         file_path = self._generate_unique_path(track_token, suffix=suffix)
@@ -735,6 +755,7 @@ class VKAudio:
             logger.error("VK audio download failed for %s", canonical_url)
             return None
 
+        self._ensure_vk_runtime_dirs()
         cover_path: Optional[Path] = None
         cover_url = metadata.get("cover_url")
         if isinstance(cover_url, str) and cover_url.startswith(("http://", "https://")):

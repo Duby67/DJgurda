@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .base import BaseMixin
+from src.utils.cookies import cleanup_runtime_cookiefile
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ class MediaGroupMixin(BaseMixin):
             'ignoreerrors': True,  # Продолжать при ошибках загрузки отдельных элементов
         }
         merged_opts = self._build_ytdlp_opts(default_opts, ydl_opts)
+        cookiefile_path = merged_opts.get("cookiefile")
 
         downloaded_files = []
         file_paths_to_cleanup = []  # для удаления в случае ошибки
@@ -149,3 +151,5 @@ class MediaGroupMixin(BaseMixin):
                 if file_path.exists():
                     file_path.unlink(missing_ok=True)
             return None
+        finally:
+            cleanup_runtime_cookiefile(cookiefile_path)
