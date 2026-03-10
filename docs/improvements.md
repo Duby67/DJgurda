@@ -304,7 +304,7 @@
 
 ### 13.5 COUB stage migration на typed-контракт
 
-- Статус (2026-03-10): в работе в scope `.github/ai-agent-technical-task.md` (кодовая миграция выполнена, smoke-прогон ожидает отдельного подтверждения пользователя).
+- Статус (2026-03-10): частично выполнено в scope `.github/ai-agent-technical-task.md` (кодовая миграция и реальный smoke-прогон выполнены, но этап не закрыт по итоговому результату smoke).
 - Проблема: COUB-контур оставался legacy-boundary (`dict[file_info]` + зависимость от MRO через множественное наследование `CoubHandler`).
 - Выполнено:
   - `CoubHandler.process()` переведен на прямой возврат `MediaResult`; MRO-цепочка `CoubHandler(BaseHandler, CoubVideo)` удалена. ✅ (`src/handlers/resources/Coub/CoubHandler.py`).
@@ -312,10 +312,12 @@
   - Классификация и normalizer URL вынесены в явный внутренний API Coub-модуля. ✅ (`src/handlers/resources/Coub/CoubUrlService.py`).
   - Ветка `video` переписана на прямой `MediaResult`. ✅ (`src/handlers/resources/Coub/CoubVideo.py`).
   - Локальный COUB smoke-скрипт адаптирован под typed-результат с сохранением compatibility для legacy формата и проверкой потоков `video+audio` через `ffprobe`. ✅ (`test/handlers/Coub/test_coub_handlers_local.py`).
-- Ограничения валидации:
-  - Полный smoke-прогон COUB не запускался в рамках этого шага, так как для тестов требуется отдельный явный запрос пользователя.
+- Валидация:
   - Выполнена синтаксическая проверка: `./venv/Scripts/python.exe -m compileall src/handlers/resources/Coub test/handlers/Coub`.
-- Результат: COUB переведен на явную typed-границу `CoubHandler -> typed processor/dependencies -> MediaResult`; для полного закрытия этапа остается выполнить реальный smoke-прогон.
+  - Выполнен реальный smoke-прогон: `./venv/Scripts/python.exe test/handlers/Coub/test_coub_handlers_local.py --timeout 180` -> `passed: 3`, `failed: 1` (`video_view`, `video_view_2gq2qz`, `video_view_2lm7gh` = `OK`; `video_view_seyrj` = `FAIL`).
+  - Диагностика: для кейса `seyrj` download pipeline исчерпан; `yt-dlp` вернул `Requested format is not available`, после fallback `format=best` итоговый `handler.process` вернул `None`.
+  - Техническое ограничение окружения: `ffprobe` отсутствует, поэтому проверка наличия `audio/video` потоков в smoke была пропущена.
+- Результат: COUB переведен на явную typed-границу `CoubHandler -> typed processor/dependencies -> MediaResult`; этап остается частично закрытым до стабилизации smoke-результата.
 
 ## Приоритет P3 (дальше)
 
