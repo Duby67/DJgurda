@@ -11,7 +11,15 @@ from pathlib import Path
 from typing import Any, Iterable, Optional, Protocol
 
 from src.config import INSTAGRAM_COOKIES, INSTAGRAM_COOKIES_ENABLED
-from src.handlers.mixins import MediaGroupMixin, MetadataMixin, PhotoMixin, VideoMixin
+from src.handlers.infrastructure import (
+    DelayPolicyService,
+    HttpFileService,
+    RuntimePathService,
+    YtdlpMediaGroupService,
+    YtdlpMetadataService,
+    YtdlpOptionBuilder,
+    YtdlpVideoService,
+)
 from src.utils.cookies import CookieFile
 
 
@@ -96,26 +104,39 @@ class InstagramCookieOptionsProvider:
         return self._instagram_cookies.build_ytdlp_opts()
 
 
-class InstagramMediaGateway(VideoMixin, MediaGroupMixin, MetadataMixin, PhotoMixin):
-    """
-    Реализация low-level операций Instagram через существующие mixins.
-
-    Mixins используются только как внутренний механизм этого gateway-объекта,
-    а не как публичный runtime-контракт handler-а.
-    """
+class InstagramMediaGateway:
+    """Реализация low-level операций Instagram через composition-сервисы."""
 
     def __init__(self, runtime_dir: Path) -> None:
-        super().__init__()
-        self.temp_dir = runtime_dir
-        self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self._runtime_paths = RuntimePathService(runtime_dir=runtime_dir)
+        self._delay_policy = DelayPolicyService()
+        self._option_builder = YtdlpOptionBuilder(scope=self.__class__.__name__)
+        self._video_service = YtdlpVideoService(
+            runtime_paths=self._runtime_paths,
+            delay_policy=self._delay_policy,
+            option_builder=self._option_builder,
+        )
+        self._media_group_service = YtdlpMediaGroupService(
+            runtime_paths=self._runtime_paths,
+            delay_policy=self._delay_policy,
+            option_builder=self._option_builder,
+            default_size_limit=self._video_service.video_limit,
+        )
+        self._metadata_service = YtdlpMetadataService(
+            delay_policy=self._delay_policy,
+            option_builder=self._option_builder,
+        )
+        self._http_service = HttpFileService(delay_policy=self._delay_policy)
+        self.video_limit = self._video_service.video_limit
+        self.photo_limit = self._http_service.photo_limit
 
     def extract_video_id(self, url: str) -> str:
         """Извлекает video id из URL."""
-        return self._extract_video_id(url)
+        return self._runtime_paths.extract_video_id(url)
 
     def generate_unique_path(self, identifier: str, *, suffix: str = "") -> Path:
         """Генерирует уникальный runtime-путь."""
-        return self._generate_unique_path(identifier, suffix=suffix)
+        return self._runtime_paths.generate_unique_path(identifier, suffix=suffix)
 
     async def download_video(
         self,
@@ -125,7 +146,7 @@ class InstagramMediaGateway(VideoMixin, MediaGroupMixin, MetadataMixin, PhotoMix
         video_id: str,
     ) -> Optional[dict[str, Any]]:
         """Скачивает видео через yt-dlp."""
-        return await self._download_video(url, ydl_opts, video_id=video_id)
+        return await self._video_service.download_video(url, ydl_opts, video_id=video_id)
 
     async def download_media_group(
         self,
@@ -136,7 +157,12 @@ class InstagramMediaGateway(VideoMixin, MediaGroupMixin, MetadataMixin, PhotoMix
         size_limit: Optional[int] = None,
     ) -> Optional[list[dict[str, Any]]]:
         """Скачивает элементы медиа-группы."""
-        return await self._download_media_group(url, ydl_opts, group_id=group_id, size_limit=size_limit)
+        return await self._media_group_service.download_media_group(
+            url,
+            ydl_opts,
+            group_id=group_id,
+            size_limit=size_limit,
+        )
 
     async def extract_metadata(
         self,
@@ -144,7 +170,7 @@ class InstagramMediaGateway(VideoMixin, MediaGroupMixin, MetadataMixin, PhotoMix
         ydl_opts: dict[str, Any],
     ) -> Optional[dict[str, Any]]:
         """Извлекает метаданные через yt-dlp."""
-        return await self._extract_metadata(url, ydl_opts)
+        return await self._metadata_service.extract_metadata(url, ydl_opts)
 
     def pick_thumbnail_url(
         self,
@@ -153,7 +179,7 @@ class InstagramMediaGateway(VideoMixin, MediaGroupMixin, MetadataMixin, PhotoMix
         candidate_keys: Iterable[str],
     ) -> Optional[str]:
         """Возвращает URL миниатюры из metadata payload."""
-        return self._pick_thumbnail_url(info, candidate_keys=candidate_keys)
+        return self._metadata_service.pick_thumbnail_url(info, candidate_keys=candidate_keys)
 
     async def download_photo(
         self,
@@ -163,4 +189,4 @@ class InstagramMediaGateway(VideoMixin, MediaGroupMixin, MetadataMixin, PhotoMix
         size_limit: Optional[int] = None,
     ) -> bool:
         """Скачивает изображение."""
-        return await self._download_photo(image_url, dest_path, size_limit=size_limit)
+        return await self._http_service.download_photo(image_url, dest_path, size_limit=size_limit)

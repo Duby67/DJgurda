@@ -11,7 +11,14 @@ from pathlib import Path
 from typing import Any, Optional, Protocol
 
 from src.config import TIKTOK_COOKIES, TIKTOK_COOKIES_ENABLED
-from src.handlers.mixins import AudioMixin, MediaGroupMixin, PhotoMixin, VideoMixin
+from src.handlers.infrastructure import (
+    DelayPolicyService,
+    HttpFileService,
+    RuntimePathService,
+    YtdlpMediaGroupService,
+    YtdlpOptionBuilder,
+    YtdlpVideoService,
+)
 from src.utils.cookies import CookieFile
 
 
@@ -102,30 +109,39 @@ class TikTokCookieOptionsProvider:
         return self._tiktok_cookies.build_ytdlp_opts()
 
 
-class TikTokMediaGateway(VideoMixin, PhotoMixin, AudioMixin, MediaGroupMixin):
-    """
-    Реализация low-level операций TikTok через существующие mixins.
-
-    Mixins используются только как внутренний механизм этого gateway-объекта,
-    а не как публичный runtime-контракт handler-а.
-    """
+class TikTokMediaGateway:
+    """Реализация low-level операций TikTok через composition-сервисы."""
 
     def __init__(self, runtime_dir: Path) -> None:
-        super().__init__()
-        self.temp_dir = runtime_dir
-        self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self._runtime_paths = RuntimePathService(runtime_dir=runtime_dir)
+        self._delay_policy = DelayPolicyService()
+        self._option_builder = YtdlpOptionBuilder(scope=self.__class__.__name__)
+        self._video_service = YtdlpVideoService(
+            runtime_paths=self._runtime_paths,
+            delay_policy=self._delay_policy,
+            option_builder=self._option_builder,
+        )
+        self._media_group_service = YtdlpMediaGroupService(
+            runtime_paths=self._runtime_paths,
+            delay_policy=self._delay_policy,
+            option_builder=self._option_builder,
+            default_size_limit=self._video_service.video_limit,
+        )
+        self._http_service = HttpFileService(delay_policy=self._delay_policy)
+        self.photo_limit = self._http_service.photo_limit
+        self.audio_limit = self._http_service.audio_limit
 
     async def random_delay(self, *, min_sec: float = 1, max_sec: float = 3) -> None:
         """Выполняет случайную задержку между сетевыми запросами."""
-        await self._random_delay(min_sec=min_sec, max_sec=max_sec)
+        await self._delay_policy.random_delay(min_sec=min_sec, max_sec=max_sec)
 
     def extract_video_id(self, url: str) -> str:
         """Извлекает video id из URL."""
-        return self._extract_video_id(url)
+        return self._runtime_paths.extract_video_id(url)
 
     def generate_unique_path(self, identifier: str, *, suffix: str = "") -> Path:
         """Генерирует уникальный runtime-путь."""
-        return self._generate_unique_path(identifier, suffix=suffix)
+        return self._runtime_paths.generate_unique_path(identifier, suffix=suffix)
 
     async def download_video(
         self,
@@ -135,7 +151,7 @@ class TikTokMediaGateway(VideoMixin, PhotoMixin, AudioMixin, MediaGroupMixin):
         video_id: str,
     ) -> Optional[dict[str, Any]]:
         """Скачивает видео через yt-dlp."""
-        return await self._download_video(url, ydl_opts, video_id=video_id)
+        return await self._video_service.download_video(url, ydl_opts, video_id=video_id)
 
     async def download_media_group(
         self,
@@ -146,7 +162,12 @@ class TikTokMediaGateway(VideoMixin, PhotoMixin, AudioMixin, MediaGroupMixin):
         size_limit: Optional[int] = None,
     ) -> Optional[list[dict[str, Any]]]:
         """Скачивает все элементы медиа-группы."""
-        return await self._download_media_group(url, ydl_opts, group_id=group_id, size_limit=size_limit)
+        return await self._media_group_service.download_media_group(
+            url,
+            ydl_opts,
+            group_id=group_id,
+            size_limit=size_limit,
+        )
 
     async def download_photo(
         self,
@@ -156,7 +177,7 @@ class TikTokMediaGateway(VideoMixin, PhotoMixin, AudioMixin, MediaGroupMixin):
         size_limit: Optional[int] = None,
     ) -> bool:
         """Скачивает изображение."""
-        return await self._download_photo(image_url, dest_path, size_limit=size_limit)
+        return await self._http_service.download_photo(image_url, dest_path, size_limit=size_limit)
 
     async def download_audio(
         self,
@@ -166,7 +187,7 @@ class TikTokMediaGateway(VideoMixin, PhotoMixin, AudioMixin, MediaGroupMixin):
         size_limit: Optional[int] = None,
     ) -> bool:
         """Скачивает аудио."""
-        return await self._download_audio(url, dest_path, size_limit=size_limit)
+        return await self._http_service.download_audio(url, dest_path, size_limit=size_limit)
 
     async def download_thumbnail(
         self,
@@ -176,4 +197,4 @@ class TikTokMediaGateway(VideoMixin, PhotoMixin, AudioMixin, MediaGroupMixin):
         size_limit: Optional[int] = None,
     ) -> bool:
         """Скачивает миниатюру/обложку."""
-        return await self._download_thumbnail(url, dest_path, size_limit=size_limit)
+        return await self._http_service.download_thumbnail(url, dest_path, size_limit=size_limit)

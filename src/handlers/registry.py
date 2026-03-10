@@ -14,6 +14,12 @@ from src.handlers.resources.YouTube import YouTubeHandler
 
 HandlerFactory = Callable[[], BaseHandler]
 
+# Явная фиксация source-статусов вне stable runtime-контура.
+_NON_RUNTIME_SOURCE_STATUSES: dict[str, str] = {
+    "YandexMusic": "legacy",
+    "VK": "in_development",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class HandlerDescriptor:
@@ -85,6 +91,10 @@ def _default_descriptors() -> tuple[HandlerDescriptor, ...]:
     Возвращает дефолтный runtime-набор descriptor-объектов.
 
     Важно: новые handlers добавляются декларативно через этот список.
+
+    В intentionally excluded non-runtime зоне:
+    - `YandexMusic` остается в статусе legacy;
+    - `VK` остается в статусе in_development.
     """
     return (
         HandlerDescriptor(
@@ -144,3 +154,8 @@ def get_default_handler_registry() -> HandlerRegistry:
     if _DEFAULT_HANDLER_REGISTRY is None:
         _DEFAULT_HANDLER_REGISTRY = HandlerRegistry(_default_descriptors())
     return _DEFAULT_HANDLER_REGISTRY
+
+
+def get_non_runtime_source_statuses() -> dict[str, str]:
+    """Возвращает статусы источников, исключенных из stable runtime."""
+    return dict(_NON_RUNTIME_SOURCE_STATUSES)
