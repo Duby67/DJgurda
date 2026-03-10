@@ -269,6 +269,22 @@
   - Выполнена синтаксическая проверка: `python -m compileall src test/handlers/YouTube`.
 - Результат: YouTube стал первым source handler с прямой typed-границей `YouTubeHandler -> MediaResult`, при сохранении текущего runtime-реестра и без расширения scope на другие источники.
 
+### 13.3 TikTok stage migration на typed-контракт
+
+- Статус (2026-03-10): выполнено в scope `.github/ai-agent-technical-task.md` (включая реальный smoke-прогон TikTok).
+- Проблема: TikTok-контур оставался legacy-boundary (`dict[file_info]` + зависимость от MRO через множественное наследование `TikTokHandler`).
+- Выполнено:
+  - `TikTokHandler.process()` переведен на прямой возврат `MediaResult`; MRO-цепочка `TikTokHandler(BaseHandler, TikTokVideo, TikTokPhoto, TikTokProfile)` удалена. ✅ (`src/handlers/resources/TikTok/TikTokHandler.py`).
+  - Вынесены explicit dependencies для TikTok (`cookies/options provider` + `media gateway`) без скрытого MRO-контракта. ✅ (`src/handlers/resources/TikTok/TikTokDependencies.py`).
+  - Классификация и normalizer URL вынесены в явный внутренний API TikTok-модуля. ✅ (`src/handlers/resources/TikTok/TikTokUrlService.py`).
+  - Ветки `video`, `photo/media_group`, `profile` переписаны на прямой `MediaResult`. ✅ (`src/handlers/resources/TikTok/TikTokVideo.py`, `src/handlers/resources/TikTok/TikTokPhoto.py`, `src/handlers/resources/TikTok/TikTokProfile.py`).
+  - Локальный TikTok smoke-скрипт адаптирован под typed-результат с сохранением compatibility для legacy формата. ✅ (`test/handlers/TikTok/test_tiktok_handlers_local.py`).
+- Валидация:
+  - Выполнена синтаксическая проверка: `./venv/Scripts/python.exe -m compileall src/handlers/resources/TikTok test/handlers/TikTok`.
+  - Выполнен реальный smoke-прогон: `./venv/Scripts/python.exe test/handlers/TikTok/test_tiktok_handlers_local.py --timeout 180` -> `passed: 3`, `failed: 0`.
+  - Диагностика: placeholder TikTok cookies корректно проигнорирован (`tiktok_cookies.txt`).
+- Результат: TikTok переведен на явную typed-границу `TikTokHandler -> typed processors/dependencies -> MediaResult`; этап закрыт с подтвержденным smoke-прогоном.
+
 ## Приоритет P3 (дальше)
 
 ### 14. Возврат к тестам как отдельная фаза

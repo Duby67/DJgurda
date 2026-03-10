@@ -1,47 +1,52 @@
 """
 Главный обработчик для платформы TikTok.
 
-Определяет тип контента по URL и направляет на соответствующий обработчик.
+Определяет тип контента по URL и направляет в typed-процессоры.
 """
 
-import re
-import logging
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-from typing import Optional, Dict, Any
+from __future__ import annotations
 
-from .TikTokVideo import TikTokVideo
+import logging
+import re
+from typing import Optional
+
+from src.config import PROJECT_TEMP_DIR
+from src.handlers.base import BaseHandler
+from src.handlers.contracts import MediaResult
+
+from .TikTokDependencies import TikTokCookieOptionsProvider, TikTokMediaGateway
 from .TikTokPhoto import TikTokPhoto
 from .TikTokProfile import TikTokProfile
-from src.handlers.base import BaseHandler
-from src.config import TIKTOK_COOKIES, TIKTOK_COOKIES_ENABLED
-from src.utils.cookies import CookieFile
+from .TikTokUrlService import TikTokUrlService
+from .TikTokVideo import TikTokVideo
 
 logger = logging.getLogger(__name__)
 
-class TikTokHandler(BaseHandler, TikTokVideo, TikTokPhoto, TikTokProfile):
-    """
-    Обработчик контента с TikTok.
-    
-    Наследует функциональность от специализированных классов для разных типов контента.
-    """
-    
-    # Паттерн для определения URL TikTok
+
+class TikTokHandler(BaseHandler):
+    """Обработчик контента TikTok (`video`, `profile`, `media_group`)."""
+
     PATTERN = re.compile(
-        r'https?://(?:www\.|m\.)?(?:tiktok\.com|vt\.tiktok\.com|vm\.tiktok\.com)\S+'
+        r"https?://(?:www\.|m\.)?(?:tiktok\.com|vt\.tiktok\.com|vm\.tiktok\.com)\S+"
     )
-    TRACKING_QUERY_PARAMS = frozenset({"_r", "_t"})
 
     def __init__(self) -> None:
-        super().__init__()
-        self._tiktok_cookies = CookieFile(
-            provider_key="tiktok",
-            provider_name="TikTok",
-            enabled=TIKTOK_COOKIES_ENABLED,
-            cookie_path=TIKTOK_COOKIES,
-            path_env_name="TIKTOK_COOKIES_PATH",
-            runtime_dir=self.temp_dir,
-            log=logger,
+        self._runtime_dir = PROJECT_TEMP_DIR / self.__class__.__name__
+        self._runtime_dir.mkdir(parents=True, exist_ok=True)
+
+        self._url_service = TikTokUrlService()
+        self._options_provider = TikTokCookieOptionsProvider(runtime_dir=self._runtime_dir)
+        self._media_gateway = TikTokMediaGateway(runtime_dir=self._runtime_dir)
+
+        self._video_processor = TikTokVideo(
+            media_gateway=self._media_gateway,
+            options_provider=self._options_provider,
         )
+        self._photo_processor = TikTokPhoto(
+            media_gateway=self._media_gateway,
+            options_provider=self._options_provider,
+        )
+        self._profile_processor = TikTokProfile(media_gateway=self._media_gateway)
 
     @property
     def pattern(self) -> re.Pattern:
@@ -53,62 +58,26 @@ class TikTokHandler(BaseHandler, TikTokVideo, TikTokPhoto, TikTokProfile):
         """Возвращает название источника."""
         return "TikTok"
 
-    def _build_tiktok_cookie_opts(self) -> Dict[str, str]:
-        """
-        Единая точка подключения TikTok cookies для yt-dlp.
-        """
-        return self._tiktok_cookies.build_ytdlp_opts()
-
-    def _normalize_tiktok_url(self, url: str) -> str:
-        """
-        Удаляет трекинговые query-параметры TikTok, не затрагивая остальные.
-        """
-        parts = urlsplit(url)
-        if not parts.query:
-            return url
-
-        query_items = parse_qsl(parts.query, keep_blank_values=True)
-        filtered_items = [
-            (key, value)
-            for key, value in query_items
-            if key not in self.TRACKING_QUERY_PARAMS
-        ]
-
-        if len(filtered_items) == len(query_items):
-            return url
-
-        normalized_query = urlencode(filtered_items, doseq=True)
-        return urlunsplit((
-            parts.scheme,
-            parts.netloc,
-            parts.path,
-            normalized_query,
-            parts.fragment,
-        ))
-
-    async def process(self, url: str, context: str, resolved_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """
-        Обрабатывает URL TikTok и возвращает информацию о контенте.
-        
-        Аргументы:
-            url: Исходный URL
-            context: Контекст сообщения
-            resolved_url: Разрешенный URL (после редиректов)
-            
-        Возвращает:
-            Словарь с информацией о контенте или None при ошибке
-        """
+    async def process(
+        self,
+        url: str,
+        context: str,
+        resolved_url: Optional[str] = None,
+    ) -> Optional[MediaResult]:
+        """Основной вход в обработчик TikTok."""
         target_url = resolved_url or url
-        normalized_url = self._normalize_tiktok_url(target_url)
+        normalized_url = self._url_service.normalize(target_url)
         if normalized_url != target_url:
             logger.debug("Normalized TikTok URL: %s -> %s", target_url, normalized_url)
         target_url = normalized_url
-        
-        # Определяем тип контента по пути URL
-        if '/photo/' in target_url:
-            return await self._process_tiktok_photo(target_url, context)
-        elif '/video/' in target_url:
-            return await self._process_tiktok_video(target_url, context)
-        else:
-            # Предполагаем, что это профиль
-            return await self._process_tiktok_profile(target_url, context)
+
+        content_type = self._url_service.detect_content_type(target_url)
+        if content_type == "photo":
+            logger.info("TikTok URL classified as photo/media_group: %s", target_url)
+            return await self._photo_processor.process(target_url, context, original_url=url)
+        if content_type == "video":
+            logger.info("TikTok URL classified as video: %s", target_url)
+            return await self._video_processor.process(target_url, context, original_url=url)
+
+        logger.info("TikTok URL classified as profile: %s", target_url)
+        return await self._profile_processor.process(target_url, context, original_url=url)

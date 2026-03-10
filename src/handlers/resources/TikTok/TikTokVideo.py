@@ -1,64 +1,72 @@
 """
-Обработчик видео контента TikTok.
+Процессор видео-контента TikTok.
 """
 
+from __future__ import annotations
+
 import re
-import logging
-from typing import Optional, Dict, Any
+from typing import Any, Optional
 
-from src.handlers.mixins import VideoMixin
+from src.handlers.contracts import ContentType, MediaResult
 
-logger = logging.getLogger(__name__)
+from .TikTokDependencies import TikTokMediaGatewayProtocol, TikTokOptionsProviderProtocol
 
-class TikTokVideo(VideoMixin):
-    """
-    Миксин для обработки видео с TikTok.
-    """
-    
-    async def _process_tiktok_video(
+
+class TikTokVideo:
+    """Процессор для скачивания и подготовки TikTok видео."""
+
+    VIDEO_ID_PATTERN = re.compile(r"/(\d+)[?/]?")
+
+    def __init__(
+        self,
+        *,
+        media_gateway: TikTokMediaGatewayProtocol,
+        options_provider: TikTokOptionsProviderProtocol,
+    ) -> None:
+        self._media_gateway = media_gateway
+        self._options_provider = options_provider
+
+    async def process(
         self,
         url: str,
         context: str,
-        resolved_url: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Обрабатывает видео с TikTok.
-        
-        Аргументы:
-            url: URL видео
-            context: Контекст сообщения
-            resolved_url: Разрешенный URL
-            
-        Возвращает:
-            Словарь с информацией о видео или None при ошибке
-        """
-        target_url = resolved_url or url
-        
-        # Извлекаем ID видео из URL
-        video_id_match = re.search(r'/(\d+)[?/]?', target_url)
-        video_id = video_id_match.group(1) if video_id_match else self._extract_video_id(target_url)
+        original_url: str,
+    ) -> Optional[MediaResult]:
+        """Скачивает видео и возвращает typed `MediaResult`."""
+        video_id_match = self.VIDEO_ID_PATTERN.search(url)
+        video_id = (
+            video_id_match.group(1)
+            if video_id_match
+            else self._media_gateway.extract_video_id(url)
+        )
 
-        # Опции для yt-dlp
-        ydl_opts = {
+        ydl_opts: dict[str, Any] = {
             # Для части TikTok-постов метаданные форматов неполные
             # (например, без height/ext), поэтому оставляем мягкий fallback до `best`.
-            'format': 'best[height<=1080][ext=mp4]/best[height<=1080]/best[ext=mp4]/best',
-            'writethumbnail': True,
+            "format": "best[height<=1080][ext=mp4]/best[height<=1080]/best[ext=mp4]/best",
+            "writethumbnail": True,
         }
-        ydl_opts.update(self._build_tiktok_cookie_opts())
+        ydl_opts.update(self._options_provider.build_ytdlp_opts())
 
-        result = await self._download_video(target_url, ydl_opts, video_id=video_id)
+        result = await self._media_gateway.download_video(url, ydl_opts, video_id=video_id)
         if not result:
             return None
 
-        info = result['info']
-        return {
-            'type': 'video',
-            'source_name': 'TikTok',
-            'file_path': result['file_path'],
-            'thumbnail_path': result['thumbnail_path'],
-            'title': info.get('title', 'TikTok Video'),
-            'uploader': info.get('uploader', info.get('channel', 'Unknown')),
-            'original_url': url,
-            'context': context,
-        }
+        info = result.get("info") if isinstance(result, dict) else None
+        if not isinstance(info, dict):
+            info = {}
+
+        file_path = result.get("file_path")
+        if file_path is None:
+            return None
+
+        return MediaResult(
+            content_type=ContentType.VIDEO,
+            source_name="TikTok",
+            original_url=original_url,
+            context=context,
+            title=info.get("title", "TikTok Video"),
+            uploader=info.get("uploader", info.get("channel", "Unknown")),
+            main_file_path=file_path,
+            thumbnail_path=result.get("thumbnail_path"),
+        )
