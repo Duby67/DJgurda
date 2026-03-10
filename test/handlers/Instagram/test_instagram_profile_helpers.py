@@ -19,26 +19,24 @@ os.environ.setdefault("BOT_TOKEN", "local-test-token")
 os.environ.setdefault("YANDEX_MUSIC_TOKEN", "local-test-token")
 os.environ.setdefault("YOUTUBE_COOKIES_ENABLED", "false")
 
-from src.handlers.resources.Instagram.InstagramHandler import InstagramHandler
+from src.handlers.resources.Instagram.InstagramProfile import InstagramProfile
 
 
 def test_extract_username_from_profile_url_with_query() -> None:
     """
     Username должен корректно извлекаться из profile URL с query-параметрами.
     """
-    handler = InstagramHandler()
     url = "https://www.instagram.com/photo_by_malyshev?igsh=aGg5bHU3eTNjZ2Zk"
 
-    assert handler._extract_username_from_url(url) == "photo_by_malyshev"
+    assert InstagramProfile.extract_username_from_url(url) == "photo_by_malyshev"
 
 
 def test_build_canonical_profile_url() -> None:
     """
     Канонический URL профиля всегда завершается на `/`.
     """
-    handler = InstagramHandler()
     assert (
-        handler._build_canonical_profile_url("photo_by_malyshev")
+        InstagramProfile.build_canonical_profile_url("photo_by_malyshev")
         == "https://www.instagram.com/photo_by_malyshev/"
     )
 
@@ -47,7 +45,6 @@ def test_build_metadata_from_web_profile_user() -> None:
     """
     Payload web_profile_info должен корректно маппиться в формат metadata.
     """
-    handler = InstagramHandler()
     payload = {
         "full_name": "Photo By Malyshev",
         "biography": "Test bio",
@@ -56,7 +53,7 @@ def test_build_metadata_from_web_profile_user() -> None:
         "edge_owner_to_timeline_media": {"count": 678},
     }
 
-    metadata = handler._build_metadata_from_web_profile_user(
+    metadata = InstagramProfile.build_metadata_from_web_profile_user(
         user_payload=payload,
         username="photo_by_malyshev",
     )
@@ -68,4 +65,3 @@ def test_build_metadata_from_web_profile_user() -> None:
     assert metadata["media_count"] == 678
     assert metadata["thumbnail"] == "https://example.com/avatar.jpg"
     assert metadata["webpage_url"] == "https://www.instagram.com/photo_by_malyshev/"
-

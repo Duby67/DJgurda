@@ -19,17 +19,16 @@ os.environ.setdefault("BOT_TOKEN", "local-test-token")
 os.environ.setdefault("YANDEX_MUSIC_TOKEN", "local-test-token")
 os.environ.setdefault("YOUTUBE_COOKIES_ENABLED", "false")
 
-from src.handlers.resources.Instagram.InstagramHandler import InstagramHandler
+from src.handlers.resources.Instagram.InstagramMediaGroup import InstagramMediaGroup
 
 
 def test_normalize_media_group_url_drops_img_index() -> None:
     """
     Параметр img_index должен удаляться, чтобы обработка шла по всей карусели.
     """
-    handler = InstagramHandler()
     url = "https://www.instagram.com/p/DVk2sEcDPwp/?img_index=1&foo=bar"
 
-    normalized = handler._normalize_media_group_url(url)
+    normalized = InstagramMediaGroup.normalize_media_group_url(url)
     assert normalized == "https://www.instagram.com/p/DVk2sEcDPwp/?foo=bar"
 
 
@@ -37,9 +36,7 @@ def test_normalize_media_group_url_keeps_non_img_index_params() -> None:
     """
     Нецелевые query-параметры должны сохраняться.
     """
-    handler = InstagramHandler()
     url = "https://www.instagram.com/p/DVk2sEcDPwp/?foo=bar&baz=1"
 
-    normalized = handler._normalize_media_group_url(url)
+    normalized = InstagramMediaGroup.normalize_media_group_url(url)
     assert normalized == "https://www.instagram.com/p/DVk2sEcDPwp/?foo=bar&baz=1"
-

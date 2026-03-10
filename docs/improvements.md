@@ -285,6 +285,22 @@
   - Диагностика: placeholder TikTok cookies корректно проигнорирован (`tiktok_cookies.txt`).
 - Результат: TikTok переведен на явную typed-границу `TikTokHandler -> typed processors/dependencies -> MediaResult`; этап закрыт с подтвержденным smoke-прогоном.
 
+### 13.4 Instagram stage migration на typed-контракт
+
+- Статус (2026-03-10): в работе в scope `.github/ai-agent-technical-task.md` (кодовая миграция выполнена, smoke-прогон ожидает отдельного подтверждения пользователя).
+- Проблема: Instagram-контур оставался legacy-boundary (`dict[file_info]` + зависимость от MRO через множественное наследование `InstagramHandler`).
+- Выполнено:
+  - `InstagramHandler.process()` переведен на прямой возврат `MediaResult`; MRO-цепочка `InstagramHandler(BaseHandler, InstagramReels, InstagramMediaGroup, InstagramStories, InstagramProfile)` удалена. ✅ (`src/handlers/resources/Instagram/InstagramHandler.py`).
+  - Вынесены explicit dependencies для Instagram (`cookies/options provider` + `media gateway`) без скрытого MRO-контракта. ✅ (`src/handlers/resources/Instagram/InstagramDependencies.py`).
+  - Классификация и normalizer URL вынесены в явный внутренний API Instagram-модуля. ✅ (`src/handlers/resources/Instagram/InstagramUrlService.py`).
+  - Ветки `reels`, `media_group`, `stories`, `profile` переписаны на прямой `MediaResult`. ✅ (`src/handlers/resources/Instagram/InstagramReels.py`, `src/handlers/resources/Instagram/InstagramMediaGroup.py`, `src/handlers/resources/Instagram/InstagramStories.py`, `src/handlers/resources/Instagram/InstagramProfile.py`).
+  - Локальный Instagram smoke-скрипт адаптирован под typed-результат с сохранением compatibility для legacy формата. ✅ (`test/handlers/Instagram/test_instagram_handlers_local.py`).
+  - Unit-тесты helper-логики Instagram адаптированы под новую архитектурную границу (статические helper API процессоров вместо доступа через MRO handler-а). ✅ (`test/handlers/Instagram/test_instagram_media_group_helpers.py`, `test/handlers/Instagram/test_instagram_profile_helpers.py`).
+- Ограничения валидации:
+  - Полный smoke-прогон Instagram не запускался в рамках этого шага, так как для тестов требуется отдельный явный запрос пользователя.
+  - Выполнена синтаксическая проверка: `./venv/Scripts/python.exe -m compileall src/handlers/resources/Instagram test/handlers/Instagram`.
+- Результат: Instagram переведен на явную typed-границу `InstagramHandler -> typed processors/dependencies -> MediaResult`; для полного закрытия этапа остается выполнить реальный smoke-прогон.
+
 ## Приоритет P3 (дальше)
 
 ### 14. Возврат к тестам как отдельная фаза

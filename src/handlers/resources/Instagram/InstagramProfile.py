@@ -1,32 +1,41 @@
 """
-Обработчик профилей Instagram.
+Процессор профилей Instagram.
 """
+
+from __future__ import annotations
 
 import html
 import logging
 import re
+from typing import Any, Optional
 from urllib.parse import quote
-from typing import Any, Dict, Optional
 
 import aiohttp
 
-from src.handlers.mixins import MetadataMixin, PhotoMixin
+from src.handlers.contracts import ContentType, MediaResult
+
+from .InstagramDependencies import InstagramMediaGatewayProtocol, InstagramOptionsProviderProtocol
 
 logger = logging.getLogger(__name__)
 
 
-class InstagramProfile(PhotoMixin, MetadataMixin):
-    """
-    Миксин для извлечения данных профиля Instagram.
-    """
+class InstagramProfile:
+    """Процессор для извлечения данных профиля Instagram."""
 
     PROFILE_NAME_PATTERN = re.compile(r"https?://(?:www\.|m\.)?instagram\.com/([^/?#]+)/?")
 
+    def __init__(
+        self,
+        *,
+        media_gateway: InstagramMediaGatewayProtocol,
+        options_provider: InstagramOptionsProviderProtocol,
+    ) -> None:
+        self._media_gateway = media_gateway
+        self._options_provider = options_provider
+
     @staticmethod
     def _first_non_empty(*values: Any) -> Optional[str]:
-        """
-        Возвращает первую непустую строку из набора значений.
-        """
+        """Возвращает первую непустую строку из набора значений."""
         for value in values:
             if isinstance(value, str) and value.strip():
                 return value.strip()
@@ -34,9 +43,7 @@ class InstagramProfile(PhotoMixin, MetadataMixin):
 
     @staticmethod
     def _format_count(value: Any) -> Optional[str]:
-        """
-        Форматирует счетчики (подписчики, публикации) для caption.
-        """
+        """Форматирует счетчики (подписчики, публикации) для caption."""
         if isinstance(value, bool):
             return None
         if isinstance(value, int):
@@ -53,9 +60,7 @@ class InstagramProfile(PhotoMixin, MetadataMixin):
         followers: Optional[str],
         posts: Optional[str],
     ) -> str:
-        """
-        Формирует профильный caption в mobile-first стиле.
-        """
+        """Формирует профильный caption в mobile-first стиле."""
         safe_name = html.escape(display_name)
         safe_url = html.escape(profile_url, quote=True)
 
@@ -80,10 +85,8 @@ class InstagramProfile(PhotoMixin, MetadataMixin):
         return "\n".join(lines)
 
     @staticmethod
-    def _extract_username_from_url(url: str) -> Optional[str]:
-        """
-        Возвращает username из profile URL Instagram.
-        """
+    def extract_username_from_url(url: str) -> Optional[str]:
+        """Возвращает username из profile URL Instagram."""
         matched_profile = InstagramProfile.PROFILE_NAME_PATTERN.search(url)
         if not matched_profile:
             return None
@@ -91,23 +94,19 @@ class InstagramProfile(PhotoMixin, MetadataMixin):
         return username or None
 
     @staticmethod
-    def _build_canonical_profile_url(username: str) -> str:
-        """
-        Строит канонический URL профиля с завершающим `/`.
-        """
+    def build_canonical_profile_url(username: str) -> str:
+        """Строит канонический URL профиля с завершающим `/`."""
         return f"https://www.instagram.com/{username}/"
 
     @staticmethod
-    def _build_metadata_from_web_profile_user(
-        user_payload: Dict[str, Any],
+    def build_metadata_from_web_profile_user(
+        user_payload: dict[str, Any],
         username: str,
-    ) -> Dict[str, Any]:
-        """
-        Приводит payload web_profile_info к формату полей, ожидаемых обработчиком.
-        """
+    ) -> dict[str, Any]:
+        """Приводит payload web_profile_info к формату полей metadata."""
         biography = user_payload.get("biography")
         full_name = user_payload.get("full_name")
-        profile_url = InstagramProfile._build_canonical_profile_url(username)
+        profile_url = InstagramProfile.build_canonical_profile_url(username)
         followers_count = (
             (user_payload.get("edge_followed_by") or {}).get("count")
             if isinstance(user_payload.get("edge_followed_by"), dict)
@@ -118,10 +117,7 @@ class InstagramProfile(PhotoMixin, MetadataMixin):
             if isinstance(user_payload.get("edge_owner_to_timeline_media"), dict)
             else None
         )
-        avatar_url = (
-            user_payload.get("profile_pic_url_hd")
-            or user_payload.get("profile_pic_url")
-        )
+        avatar_url = user_payload.get("profile_pic_url_hd") or user_payload.get("profile_pic_url")
 
         return {
             "uploader_id": username,
@@ -136,10 +132,8 @@ class InstagramProfile(PhotoMixin, MetadataMixin):
             "thumbnail": avatar_url,
         }
 
-    async def _extract_profile_via_web_api(self, username: str) -> Optional[Dict[str, Any]]:
-        """
-        Резервное получение данных профиля через web_profile_info endpoint.
-        """
+    async def _extract_profile_via_web_api(self, username: str) -> Optional[dict[str, Any]]:
+        """Резервное получение данных профиля через web_profile_info endpoint."""
         api_url = (
             "https://i.instagram.com/api/v1/users/web_profile_info/"
             f"?username={quote(username)}"
@@ -170,7 +164,7 @@ class InstagramProfile(PhotoMixin, MetadataMixin):
                         )
                         return None
                     payload = await response.json(content_type=None)
-        except Exception:
+        except Exception:  # noqa: BLE001
             logger.exception("Failed to fetch Instagram web_profile_info for username=%s", username)
             return None
 
@@ -180,31 +174,28 @@ class InstagramProfile(PhotoMixin, MetadataMixin):
             logger.warning("Instagram web_profile_info payload has no user block for username=%s", username)
             return None
 
-        return self._build_metadata_from_web_profile_user(user_payload, username)
+        return self.build_metadata_from_web_profile_user(user_payload, username)
 
-    async def _process_instagram_profile(
+    async def process(
         self,
         url: str,
         context: str,
         original_url: str,
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Извлекает данные профиля Instagram и формирует карточку профиля.
-        """
-        matched_username = self._extract_username_from_url(url)
+    ) -> Optional[MediaResult]:
+        """Извлекает данные профиля Instagram и формирует typed `MediaResult`."""
+        matched_username = self.extract_username_from_url(url)
         if not matched_username:
             return None
-        canonical_url = self._build_canonical_profile_url(matched_username)
+        canonical_url = self.build_canonical_profile_url(matched_username)
 
         ydl_opts = {
             "extract_flat": True,
         }
-        ydl_opts.update(self._build_instagram_cookie_opts())
+        ydl_opts.update(self._options_provider.build_ytdlp_opts())
 
-        info = await self._extract_metadata(canonical_url, ydl_opts)
+        info = await self._media_gateway.extract_metadata(canonical_url, ydl_opts)
         if not info and canonical_url != url:
-            # Резервный запуск на исходном URL, если канонический внезапно не сработал.
-            info = await self._extract_metadata(url, ydl_opts)
+            info = await self._media_gateway.extract_metadata(url, ydl_opts)
         if not info:
             info = await self._extract_profile_via_web_api(matched_username)
         if not info:
@@ -237,14 +228,18 @@ class InstagramProfile(PhotoMixin, MetadataMixin):
             or info.get("media_count")
         )
 
-        avatar_url = self._pick_thumbnail_url(
+        avatar_url = self._media_gateway.pick_thumbnail_url(
             info,
             candidate_keys=("thumbnail", "thumbnails", "channel_thumbnail"),
         )
         avatar_path = None
         if avatar_url:
-            avatar_path = self._generate_unique_path(username, suffix=".jpg")
-            if not await self._download_photo(avatar_url, avatar_path, size_limit=self.photo_limit):
+            avatar_path = self._media_gateway.generate_unique_path(username, suffix=".jpg")
+            if not await self._media_gateway.download_photo(
+                avatar_url,
+                avatar_path,
+                size_limit=self._media_gateway.photo_limit,
+            ):
                 avatar_path = None
 
         caption = self._build_profile_caption(
@@ -255,14 +250,14 @@ class InstagramProfile(PhotoMixin, MetadataMixin):
             posts=posts,
         )
 
-        return {
-            "type": "profile",
-            "source_name": "Instagram",
-            "file_path": avatar_path,
-            "thumbnail_path": None,
-            "title": display_name,
-            "uploader": username,
-            "original_url": original_url,
-            "context": context,
-            "caption_text": caption,
-        }
+        return MediaResult(
+            content_type=ContentType.PROFILE,
+            source_name="Instagram",
+            original_url=original_url,
+            context=context,
+            main_file_path=avatar_path,
+            thumbnail_path=None,
+            title=display_name,
+            uploader=username,
+            caption_text=caption,
+        )

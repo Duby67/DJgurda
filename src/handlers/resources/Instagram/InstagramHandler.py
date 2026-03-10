@@ -1,158 +1,95 @@
 """
 Главный обработчик Instagram.
 
-Определяет тип контента по URL и направляет на профильный обработчик.
+Определяет тип контента по URL и направляет в typed-процессоры.
 """
+
+from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Dict, Optional
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from typing import Optional
 
-from src.config import INSTAGRAM_COOKIES, INSTAGRAM_COOKIES_ENABLED
+from src.config import PROJECT_TEMP_DIR
 from src.handlers.base import BaseHandler
-from src.utils.cookies import CookieFile
+from src.handlers.contracts import MediaResult
 
+from .InstagramDependencies import InstagramCookieOptionsProvider, InstagramMediaGateway
 from .InstagramMediaGroup import InstagramMediaGroup
 from .InstagramProfile import InstagramProfile
 from .InstagramReels import InstagramReels
 from .InstagramStories import InstagramStories
+from .InstagramUrlService import InstagramUrlService
 
 logger = logging.getLogger(__name__)
 
 
-class InstagramHandler(
-    BaseHandler,
-    InstagramReels,
-    InstagramMediaGroup,
-    InstagramStories,
-    InstagramProfile,
-):
-    """
-    Обработчик ссылок Instagram: reels/media_group/stories/profile.
-    """
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._instagram_cookies = CookieFile(
-            provider_key="instagram",
-            provider_name="Instagram",
-            enabled=INSTAGRAM_COOKIES_ENABLED,
-            cookie_path=INSTAGRAM_COOKIES,
-            path_env_name="INSTAGRAM_COOKIES_PATH",
-            runtime_dir=self.temp_dir,
-            log=logger,
-        )
+class InstagramHandler(BaseHandler):
+    """Обработчик ссылок Instagram: reels/media_group/stories/profile."""
 
     PATTERN = re.compile(r"https?://(?:www\.|m\.)?instagram\.com/\S+")
-    TRACKING_QUERY_PARAMS = frozenset({"igshid", "igsh", "fbclid"})
-    RESERVED_ROOT_PATHS = frozenset(
-        {"p", "reel", "reels", "stories", "accounts", "explore", "direct", "tv"}
-    )
+
+    def __init__(self) -> None:
+        self._runtime_dir = PROJECT_TEMP_DIR / self.__class__.__name__
+        self._runtime_dir.mkdir(parents=True, exist_ok=True)
+
+        self._url_service = InstagramUrlService()
+        self._options_provider = InstagramCookieOptionsProvider(runtime_dir=self._runtime_dir)
+        self._media_gateway = InstagramMediaGateway(runtime_dir=self._runtime_dir)
+
+        self._reels_processor = InstagramReels(
+            media_gateway=self._media_gateway,
+            options_provider=self._options_provider,
+        )
+        self._media_group_processor = InstagramMediaGroup(
+            media_gateway=self._media_gateway,
+            options_provider=self._options_provider,
+        )
+        self._stories_processor = InstagramStories(
+            media_gateway=self._media_gateway,
+            options_provider=self._options_provider,
+        )
+        self._profile_processor = InstagramProfile(
+            media_gateway=self._media_gateway,
+            options_provider=self._options_provider,
+        )
 
     @property
     def pattern(self) -> re.Pattern:
-        """
-        Возвращает паттерн для распознавания Instagram URL.
-        """
+        """Возвращает паттерн для распознавания Instagram URL."""
         return self.PATTERN
 
     @property
     def source_name(self) -> str:
-        """
-        Возвращает имя источника.
-        """
+        """Возвращает имя источника."""
         return "Instagram"
-
-    def _build_instagram_cookie_opts(self) -> Dict[str, str]:
-        """
-        Единая точка подключения Instagram cookies для всех Instagram-миксинов.
-
-        Логика:
-        - проверяет, включены ли cookies флагом `INSTAGRAM_COOKIES_ENABLED`;
-        - проверяет валидность исходного файла `INSTAGRAM_COOKIES`;
-        - игнорирует отсутствующий/пустой/placeholder-файл с понятной диагностикой;
-        - создает временную runtime-копию файла для `yt-dlp`, чтобы оригинал не
-          модифицировался;
-        - возвращает `{"cookiefile": "<runtime-path>"}` или пустой словарь.
-        """
-        return self._instagram_cookies.build_ytdlp_opts()
-
-    def _normalize_instagram_url(self, url: str) -> str:
-        """
-        Нормализует домен и отбрасывает трекинговые query-параметры.
-        """
-        parts = urlsplit(url)
-        netloc = parts.netloc.lower()
-        if netloc in {"instagram.com", "m.instagram.com"}:
-            netloc = "www.instagram.com"
-
-        query_items = parse_qsl(parts.query, keep_blank_values=True)
-        filtered_items = []
-        for key, value in query_items:
-            key_lower = key.lower()
-            if key_lower in self.TRACKING_QUERY_PARAMS:
-                continue
-            if key_lower.startswith("utm_"):
-                continue
-            filtered_items.append((key, value))
-
-        normalized_query = urlencode(filtered_items, doseq=True)
-        return urlunsplit((parts.scheme, netloc, parts.path, normalized_query, parts.fragment))
-
-    def _detect_content_type(self, url: str) -> Optional[str]:
-        """
-        Определяет тип Instagram-контента по URL.
-        """
-        parts = urlsplit(url)
-        path_parts = [part for part in parts.path.split("/") if part]
-        if not path_parts:
-            return None
-
-        first_part = path_parts[0].lower()
-
-        if first_part in {"reel", "reels"} and len(path_parts) >= 2:
-            return "reels"
-
-        if first_part == "p" and len(path_parts) >= 2:
-            return "media_group"
-
-        if first_part == "stories" and len(path_parts) >= 3:
-            return "stories"
-
-        if first_part not in self.RESERVED_ROOT_PATHS:
-            return "profile"
-
-        return None
 
     async def process(
         self,
         url: str,
         context: str,
         resolved_url: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Основной вход в обработчик Instagram.
-        """
+    ) -> Optional[MediaResult]:
+        """Основной вход в обработчик Instagram."""
         target_url = resolved_url or url
-        normalized_url = self._normalize_instagram_url(target_url)
+        normalized_url = self._url_service.normalize(target_url)
         if normalized_url != target_url:
             logger.debug("Normalized Instagram URL: %s -> %s", target_url, normalized_url)
         target_url = normalized_url
 
-        content_type = self._detect_content_type(target_url)
+        content_type = self._url_service.detect_content_type(target_url)
         if content_type == "reels":
             logger.info("Instagram URL classified as reels: %s", target_url)
-            return await self._process_instagram_reels(target_url, context, original_url=url)
+            return await self._reels_processor.process(target_url, context, original_url=url)
         if content_type == "media_group":
             logger.info("Instagram URL classified as media_group: %s", target_url)
-            return await self._process_instagram_media_group(target_url, context, original_url=url)
+            return await self._media_group_processor.process(target_url, context, original_url=url)
         if content_type == "stories":
             logger.info("Instagram URL classified as stories: %s", target_url)
-            return await self._process_instagram_stories(target_url, context, original_url=url)
+            return await self._stories_processor.process(target_url, context, original_url=url)
         if content_type == "profile":
             logger.info("Instagram URL classified as profile: %s", target_url)
-            return await self._process_instagram_profile(target_url, context, original_url=url)
+            return await self._profile_processor.process(target_url, context, original_url=url)
 
         logger.warning("Unsupported Instagram URL type: %s", target_url)
         return None

@@ -1,26 +1,35 @@
 """
-Обработчик Instagram media_group (carousel-посты).
+Процессор Instagram media_group (carousel-посты).
 """
 
+from __future__ import annotations
+
 import re
+from typing import Any, Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-from typing import Any, Dict, Optional
 
-from src.handlers.mixins import MediaGroupMixin
+from src.handlers.contracts import AttachmentKind, AudioAttachment, ContentType, MediaAttachment, MediaResult
+
+from .InstagramDependencies import InstagramMediaGatewayProtocol, InstagramOptionsProviderProtocol
 
 
-class InstagramMediaGroup(MediaGroupMixin):
-    """
-    Миксин для обработки carousel-постов Instagram.
-    """
+class InstagramMediaGroup:
+    """Процессор для обработки carousel-постов Instagram."""
 
     POST_ID_PATTERN = re.compile(r"/p/([A-Za-z0-9_-]+)")
 
+    def __init__(
+        self,
+        *,
+        media_gateway: InstagramMediaGatewayProtocol,
+        options_provider: InstagramOptionsProviderProtocol,
+    ) -> None:
+        self._media_gateway = media_gateway
+        self._options_provider = options_provider
+
     @staticmethod
-    def _normalize_media_group_url(url: str) -> str:
-        """
-        Убирает параметры, которые фиксируют отдельный слайд и мешают получить всю карусель.
-        """
+    def normalize_media_group_url(url: str) -> str:
+        """Убирает параметры, фиксирующие отдельный слайд карусели."""
         parts = urlsplit(url)
         filtered_items = [
             (key, value)
@@ -30,49 +39,53 @@ class InstagramMediaGroup(MediaGroupMixin):
         normalized_query = urlencode(filtered_items, doseq=True)
         return urlunsplit((parts.scheme, parts.netloc, parts.path, normalized_query, parts.fragment))
 
-    async def _process_instagram_media_group(
+    async def process(
         self,
         url: str,
         context: str,
         original_url: str,
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Скачивает медиа-карусель и формирует ответ в формате media_group.
-        """
-        normalized_url = self._normalize_media_group_url(url)
+    ) -> Optional[MediaResult]:
+        """Скачивает медиа-карусель и формирует typed `MediaResult`."""
+        normalized_url = self.normalize_media_group_url(url)
         post_match = self.POST_ID_PATTERN.search(url)
-        post_id = post_match.group(1) if post_match else self._extract_video_id(url)
+        post_id = post_match.group(1) if post_match else self._media_gateway.extract_video_id(url)
 
-        ydl_opts = {
+        ydl_opts: dict[str, Any] = {
             "format": "best[height<=1920][ext=mp4]/best[ext=jpg]/best",
             "ignoreerrors": True,
             "extract_flat": False,
             "noplaylist": False,
             "writethumbnail": False,
         }
-        ydl_opts.update(self._build_instagram_cookie_opts())
-        media_list = await self._download_media_group(
+        ydl_opts.update(self._options_provider.build_ytdlp_opts())
+
+        media_list = await self._media_gateway.download_media_group(
             normalized_url,
             ydl_opts,
             group_id=post_id,
-            size_limit=max(self.video_limit, self.photo_limit),
+            size_limit=max(self._media_gateway.video_limit, self._media_gateway.photo_limit),
         )
         if not media_list:
             return None
 
-        files = [
-            {"file_path": item["file_path"], "type": item["type"]}
+        media_group = tuple(
+            MediaAttachment(
+                kind=AttachmentKind.PHOTO if item.get("type") == "photo" else AttachmentKind.VIDEO,
+                file_path=item["file_path"],
+            )
             for item in media_list
-            if item.get("type") in {"photo", "video"}
-        ]
-        if not files:
+            if item.get("type") in {"photo", "video"} and item.get("file_path") is not None
+        )
+        if not media_group:
             return None
 
-        audio_files = [
-            {"file_path": item["file_path"]}
+        audio_items = tuple(
+            AudioAttachment(
+                file_path=item["file_path"],
+            )
             for item in media_list
-            if item.get("type") == "audio"
-        ]
+            if item.get("type") == "audio" and item.get("file_path") is not None
+        )
 
         first_info = media_list[0].get("info")
         if not isinstance(first_info, dict):
@@ -86,25 +99,24 @@ class InstagramMediaGroup(MediaGroupMixin):
             or "Unknown"
         )
 
-        result = {
-            "type": "media_group",
-            "source_name": "Instagram",
-            "files": files,
-            "title": title,
-            "uploader": uploader,
-            "original_url": original_url,
-            "context": context,
-        }
+        # Для карусели используем title/uploader как fallback метаданные аудио.
+        enriched_audios = tuple(
+            AudioAttachment(
+                file_path=item.file_path,
+                title=title,
+                performer=uploader,
+            )
+            for item in audio_items
+        )
 
-        if audio_files:
-            # Поддерживаем несколько дополнительных аудиофайлов для карусели.
-            result["audios"] = [
-                {
-                    "file_path": item["file_path"],
-                    "title": title,
-                    "performer": uploader,
-                }
-                for item in audio_files
-            ]
-
-        return result
+        return MediaResult(
+            content_type=ContentType.MEDIA_GROUP,
+            source_name="Instagram",
+            original_url=original_url,
+            context=context,
+            title=title,
+            uploader=uploader,
+            media_group=media_group,
+            audios=enriched_audios,
+            audio=enriched_audios[0] if enriched_audios else None,
+        )
