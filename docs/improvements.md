@@ -287,7 +287,7 @@
 
 ### 13.4 Instagram stage migration на typed-контракт
 
-- Статус (2026-03-10): в работе в scope `.github/ai-agent-technical-task.md` (кодовая миграция выполнена, smoke-прогон ожидает отдельного подтверждения пользователя).
+- Статус (2026-03-10): частично выполнено в scope `.github/ai-agent-technical-task.md` (кодовая миграция и реальный smoke-прогон выполнены, но этап не закрыт по итоговому результату smoke).
 - Проблема: Instagram-контур оставался legacy-boundary (`dict[file_info]` + зависимость от MRO через множественное наследование `InstagramHandler`).
 - Выполнено:
   - `InstagramHandler.process()` переведен на прямой возврат `MediaResult`; MRO-цепочка `InstagramHandler(BaseHandler, InstagramReels, InstagramMediaGroup, InstagramStories, InstagramProfile)` удалена. ✅ (`src/handlers/resources/Instagram/InstagramHandler.py`).
@@ -296,10 +296,26 @@
   - Ветки `reels`, `media_group`, `stories`, `profile` переписаны на прямой `MediaResult`. ✅ (`src/handlers/resources/Instagram/InstagramReels.py`, `src/handlers/resources/Instagram/InstagramMediaGroup.py`, `src/handlers/resources/Instagram/InstagramStories.py`, `src/handlers/resources/Instagram/InstagramProfile.py`).
   - Локальный Instagram smoke-скрипт адаптирован под typed-результат с сохранением compatibility для legacy формата. ✅ (`test/handlers/Instagram/test_instagram_handlers_local.py`).
   - Unit-тесты helper-логики Instagram адаптированы под новую архитектурную границу (статические helper API процессоров вместо доступа через MRO handler-а). ✅ (`test/handlers/Instagram/test_instagram_media_group_helpers.py`, `test/handlers/Instagram/test_instagram_profile_helpers.py`).
-- Ограничения валидации:
-  - Полный smoke-прогон Instagram не запускался в рамках этого шага, так как для тестов требуется отдельный явный запрос пользователя.
+- Валидация:
   - Выполнена синтаксическая проверка: `./venv/Scripts/python.exe -m compileall src/handlers/resources/Instagram test/handlers/Instagram`.
-- Результат: Instagram переведен на явную typed-границу `InstagramHandler -> typed processors/dependencies -> MediaResult`; для полного закрытия этапа остается выполнить реальный smoke-прогон.
+  - Выполнен реальный smoke-прогон: `./venv/Scripts/python.exe test/handlers/Instagram/test_instagram_handlers_local.py --timeout 180` -> `passed: 1`, `failed: 5` (`reels` = `OK`; `profile`, `profile_wrapped`, `profile_wrapped_relative`, `media_group`, `stories` = `FAIL`).
+  - Диагностика: `instagram_cookies.txt` в runtime был placeholder, profile extraction через `yt-dlp` падал (`RegexNotFoundError`), web profile fallback получал `TimeoutError`.
+- Результат: Instagram переведен на явную typed-границу `InstagramHandler -> typed processors/dependencies -> MediaResult`; этап остается частично закрытым до стабилизации smoke-результата.
+
+### 13.5 COUB stage migration на typed-контракт
+
+- Статус (2026-03-10): в работе в scope `.github/ai-agent-technical-task.md` (кодовая миграция выполнена, smoke-прогон ожидает отдельного подтверждения пользователя).
+- Проблема: COUB-контур оставался legacy-boundary (`dict[file_info]` + зависимость от MRO через множественное наследование `CoubHandler`).
+- Выполнено:
+  - `CoubHandler.process()` переведен на прямой возврат `MediaResult`; MRO-цепочка `CoubHandler(BaseHandler, CoubVideo)` удалена. ✅ (`src/handlers/resources/Coub/CoubHandler.py`).
+  - Вынесены explicit dependencies для COUB (`options provider` + `media gateway`) без скрытого MRO-контракта. ✅ (`src/handlers/resources/Coub/CoubDependencies.py`).
+  - Классификация и normalizer URL вынесены в явный внутренний API Coub-модуля. ✅ (`src/handlers/resources/Coub/CoubUrlService.py`).
+  - Ветка `video` переписана на прямой `MediaResult`. ✅ (`src/handlers/resources/Coub/CoubVideo.py`).
+  - Локальный COUB smoke-скрипт адаптирован под typed-результат с сохранением compatibility для legacy формата и проверкой потоков `video+audio` через `ffprobe`. ✅ (`test/handlers/Coub/test_coub_handlers_local.py`).
+- Ограничения валидации:
+  - Полный smoke-прогон COUB не запускался в рамках этого шага, так как для тестов требуется отдельный явный запрос пользователя.
+  - Выполнена синтаксическая проверка: `./venv/Scripts/python.exe -m compileall src/handlers/resources/Coub test/handlers/Coub`.
+- Результат: COUB переведен на явную typed-границу `CoubHandler -> typed processor/dependencies -> MediaResult`; для полного закрытия этапа остается выполнить реальный smoke-прогон.
 
 ## Приоритет P3 (дальше)
 

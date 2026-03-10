@@ -2,6 +2,8 @@
 Обработчик видео-контента COUB.
 """
 
+from __future__ import annotations
+
 import asyncio
 import aiohttp
 import logging
@@ -9,17 +11,19 @@ import re
 
 from pathlib import Path
 from shutil import which
-from typing import Any, Dict, Iterable, Optional, Tuple
+from typing import Any, Iterable, Optional
 from urllib.parse import urlsplit
 
-from src.handlers.mixins import VideoMixin
+from src.handlers.contracts import ContentType, MediaResult
+
+from .CoubDependencies import CoubMediaGatewayProtocol, CoubOptionsProviderProtocol
 
 logger = logging.getLogger(__name__)
 
 
-class CoubVideo(VideoMixin):
+class CoubVideo:
     """
-    Миксин для обработки видео из COUB.
+    Процессор для обработки видео из COUB.
     """
 
     COUB_ID_PATTERN = re.compile(r"/view/([A-Za-z0-9]+)")
@@ -29,7 +33,16 @@ class CoubVideo(VideoMixin):
     AUDIO_EXTENSIONS = frozenset({".mp3", ".m4a", ".aac", ".ogg", ".opus", ".wav"})
     IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".webp", ".gif"})
 
-    async def _fetch_json_payload(self, url: str) -> Optional[Dict[str, Any]]:
+    def __init__(
+        self,
+        *,
+        media_gateway: CoubMediaGatewayProtocol,
+        options_provider: CoubOptionsProviderProtocol,
+    ) -> None:
+        self._media_gateway = media_gateway
+        self._options_provider = options_provider
+
+    async def _fetch_json_payload(self, url: str) -> Optional[dict[str, Any]]:
         """
         Запрашивает JSON payload по URL.
         """
@@ -104,7 +117,7 @@ class CoubVideo(VideoMixin):
     def _collect_http_urls_with_key_path(
         value: Any,
         key_path: tuple[str, ...] = (),
-    ) -> Iterable[Tuple[str, tuple[str, ...]]]:
+    ) -> Iterable[tuple[str, tuple[str, ...]]]:
         """
         Итерирует все HTTP(S) URL вместе с путём ключей до найденного значения.
         """
@@ -231,7 +244,7 @@ class CoubVideo(VideoMixin):
         return None
 
     @staticmethod
-    def _nested_get(data: Dict[str, Any], *keys: str) -> Any:
+    def _nested_get(data: dict[str, Any], *keys: str) -> Any:
         """
         Безопасно получает вложенное значение из словаря.
         """
@@ -242,7 +255,7 @@ class CoubVideo(VideoMixin):
             current = current.get(key)
         return current
 
-    def _extract_metadata_source_urls(self, metadata: Dict[str, Any]) -> Dict[str, list[str] | Optional[str]]:
+    def _extract_metadata_source_urls(self, metadata: dict[str, Any]) -> dict[str, list[str] | Optional[str]]:
         """
         Извлекает source URL из metadata COUB.
         """
@@ -292,7 +305,7 @@ class CoubVideo(VideoMixin):
             "share_url": share_url if isinstance(share_url, str) else None,
         }
 
-    def _extract_segment_source_urls(self, segments_payload: Dict[str, Any]) -> Tuple[list[str], list[str]]:
+    def _extract_segment_source_urls(self, segments_payload: dict[str, Any]) -> tuple[list[str], list[str]]:
         """
         Извлекает video/audio URL из payload endpoint /segments.
         """
@@ -488,9 +501,15 @@ class CoubVideo(VideoMixin):
         """
         Скачивает video/audio по прямым URL и собирает единый MP4.
         """
-        video_tmp = self._generate_unique_path(f"{video_id}_video", suffix=self._url_suffix(video_url, ".mp4"))
-        audio_tmp = self._generate_unique_path(f"{video_id}_audio", suffix=self._url_suffix(audio_url, ".m4a"))
-        output_path = self._generate_unique_path(video_id, suffix=".mp4")
+        video_tmp = self._media_gateway.generate_unique_path(
+            f"{video_id}_video",
+            suffix=self._url_suffix(video_url, ".mp4"),
+        )
+        audio_tmp = self._media_gateway.generate_unique_path(
+            f"{video_id}_audio",
+            suffix=self._url_suffix(audio_url, ".m4a"),
+        )
+        output_path = self._media_gateway.generate_unique_path(video_id, suffix=".mp4")
 
         try:
             if not await self._download_url_to_file(video_url, video_tmp):
@@ -499,7 +518,7 @@ class CoubVideo(VideoMixin):
                 return None
             if not await self._mux_video_and_audio(video_tmp, audio_tmp, output_path):
                 return None
-            if output_path.stat().st_size > self.video_limit:
+            if output_path.stat().st_size > self._media_gateway.video_limit:
                 logger.warning("COUB merged video is too large (%s bytes)", output_path.stat().st_size)
                 output_path.unlink(missing_ok=True)
                 return None
@@ -509,30 +528,27 @@ class CoubVideo(VideoMixin):
             audio_tmp.unlink(missing_ok=True)
 
     @staticmethod
-    def _build_file_info(
+    def _build_media_result(
         *,
         file_path: Path,
         title: str,
         uploader: str,
         original_url: str,
         context: str,
-    ) -> Dict[str, Any]:
-        """
-        Формирует итоговый file_info для pipeline отправки.
-        """
-        return {
-            "type": "video",
-            "source_name": "COUB",
-            "file_path": file_path,
-            "thumbnail_path": None,
-            "title": title,
-            "uploader": uploader,
-            "original_url": original_url,
-            "context": context,
-        }
+    ) -> MediaResult:
+        """Формирует typed-результат обработки COUB-видео."""
+        return MediaResult(
+            content_type=ContentType.VIDEO,
+            source_name="COUB",
+            original_url=original_url,
+            context=context,
+            title=title,
+            uploader=uploader,
+            main_file_path=file_path,
+        )
 
     @staticmethod
-    def _extract_uploader(metadata: Dict[str, Any]) -> str:
+    def _extract_uploader(metadata: dict[str, Any]) -> str:
         """
         Возвращает имя автора из metadata COUB.
         """
@@ -590,7 +606,7 @@ class CoubVideo(VideoMixin):
         self,
         *,
         coub_id: str,
-        metadata_urls: Dict[str, list[str] | Optional[str]],
+        metadata_urls: dict[str, list[str] | Optional[str]],
         ordered_audio_urls: list[str],
     ) -> Optional[Path]:
         """
@@ -614,24 +630,28 @@ class CoubVideo(VideoMixin):
         if mux_attempts:
             logger.warning("COUB share source mux exhausted for %s after %s attempt(s)", coub_id, mux_attempts)
 
-        result = await self._download_video(
+        ydl_opts: dict[str, Any] = {
+            "format": "best[ext=mp4]/best",
+            "writethumbnail": False,
+            "noplaylist": True,
+        }
+        ydl_opts.update(self._options_provider.build_ytdlp_opts())
+
+        result = await self._media_gateway.download_video(
             share_url,
-            {
-                "format": "best[ext=mp4]/best",
-                "writethumbnail": False,
-                "noplaylist": True,
-            },
+            ydl_opts,
             video_id=f"{coub_id}_share",
         )
         if not result:
             return None
-        return result["file_path"]
+        file_path = result.get("file_path")
+        return file_path if isinstance(file_path, Path) else None
 
     async def _try_source_file_versions(
         self,
         *,
         coub_id: str,
-        metadata_urls: Dict[str, list[str] | Optional[str]],
+        metadata_urls: dict[str, list[str] | Optional[str]],
         ordered_audio_urls: list[str],
     ) -> Optional[Path]:
         """
@@ -662,38 +682,42 @@ class CoubVideo(VideoMixin):
 
         # Последний fallback: текущий ytdlp-style по основной ссылке COUB.
         has_ffmpeg = bool(which("ffmpeg"))
-        ydl_result = await self._download_video(
+        ydl_opts = {
+            "format": (
+                "html5-video-high+html5-audio-high/"
+                "html5-video-high+html5-audio-med/"
+                "bestvideo+bestaudio/best"
+                if has_ffmpeg
+                else "best[ext=mp4]/best"
+            ),
+            "writethumbnail": False,
+            "noplaylist": True,
+            "merge_output_format": "mp4",
+        }
+        ydl_opts.update(self._options_provider.build_ytdlp_opts())
+
+        ydl_result = await self._media_gateway.download_video(
             f"https://www.coub.com/view/{coub_id}",
-            {
-                "format": (
-                    "html5-video-high+html5-audio-high/"
-                    "html5-video-high+html5-audio-med/"
-                    "bestvideo+bestaudio/best"
-                    if has_ffmpeg
-                    else "best[ext=mp4]/best"
-                ),
-                "writethumbnail": False,
-                "noplaylist": True,
-                "merge_output_format": "mp4",
-            },
+            ydl_opts,
             video_id=f"{coub_id}_ytdlp",
         )
         if ydl_result:
-            return ydl_result["file_path"]
+            file_path = ydl_result.get("file_path")
+            return file_path if isinstance(file_path, Path) else None
 
         return None
 
-    async def _process_coub_video(
+    async def process(
         self,
         url: str,
         context: str,
         original_url: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[MediaResult]:
         """
-        Скачивает COUB-видео и возвращает структуру для дальнейшей отправки.
+        Скачивает COUB-видео и возвращает typed-результат для отправки.
         """
         coub_match = self.COUB_ID_PATTERN.search(url)
-        coub_id = coub_match.group(1) if coub_match else self._extract_video_id(url)
+        coub_id = coub_match.group(1) if coub_match else self._media_gateway.extract_video_id(url)
 
         metadata_url = self.COUB_METADATA_API_URL_TEMPLATE.format(coub_id=coub_id)
         metadata = await self._fetch_json_payload(metadata_url)
@@ -734,7 +758,7 @@ class CoubVideo(VideoMixin):
             ordered_audio_urls=ordered_audio_urls,
         )
         if file_path:
-            return self._build_file_info(
+            return self._build_media_result(
                 file_path=file_path,
                 title=title,
                 uploader=uploader,
@@ -749,7 +773,7 @@ class CoubVideo(VideoMixin):
             ordered_audio_urls=ordered_audio_urls,
         )
         if file_path:
-            return self._build_file_info(
+            return self._build_media_result(
                 file_path=file_path,
                 title=title,
                 uploader=uploader,
@@ -764,7 +788,7 @@ class CoubVideo(VideoMixin):
             ordered_audio_urls=ordered_audio_urls,
         )
         if file_path:
-            return self._build_file_info(
+            return self._build_media_result(
                 file_path=file_path,
                 title=title,
                 uploader=uploader,

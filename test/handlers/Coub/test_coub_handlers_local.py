@@ -4,7 +4,7 @@
 1. Разрешает URL через resolve_url.
 2. Ищет обработчик через ServiceManager.
 3. Вызывает handler.process(...) и проверяет ожидаемый тип результата.
-4. Очищает временные файлы через handler.cleanup(...).
+4. Очищает временные файлы через typed/legacy cleanup.
 """
 
 from __future__ import annotations
@@ -43,6 +43,7 @@ os.environ.setdefault(
     str(PROJECT_ROOT / "src" / "data" / "cookies" / "www.youtube.com_cookies.txt"),
 )
 
+from src.handlers.contracts import MediaResult
 from src.handlers.manager import ServiceManager
 from src.handlers.resources import CoubHandler
 from src.utils.url import resolve_url
@@ -50,7 +51,7 @@ from Coub_urls import COUB_TEST_CASES
 
 
 @dataclass(frozen=True)
-class TestCase:
+class CaseSpec:
     """Описание одного тест-кейса."""
 
     name: str
@@ -60,10 +61,10 @@ class TestCase:
 
 
 @dataclass
-class TestResult:
+class CaseResult:
     """Результат выполнения одного тест-кейса."""
 
-    case: TestCase
+    case: CaseSpec
     resolved_url: str
     ok: bool
     message: str
@@ -71,7 +72,7 @@ class TestResult:
 
 
 DEFAULT_CASES = tuple(
-    TestCase(
+    CaseSpec(
         name=case["name"],
         url=case["url"],
         expected_type=case["expected_type"],
@@ -81,11 +82,40 @@ DEFAULT_CASES = tuple(
 )
 
 
-def validate_video_streams(file_info: dict[str, Any]) -> tuple[bool, str]:
+def _cleanup_media_result(result: MediaResult) -> None:
+    """Очищает runtime-файлы для typed-результата."""
+    for path in result.iter_cleanup_paths():
+        try:
+            path.unlink(missing_ok=True)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _extract_actual_type(handler_output: Any) -> Optional[str]:
+    """Возвращает тип контента для typed/legacy результата."""
+    if isinstance(handler_output, MediaResult):
+        return handler_output.content_type.value
+    if isinstance(handler_output, dict):
+        value = handler_output.get("type")
+        return str(value) if value is not None else None
+    return None
+
+
+def _extract_main_file_path(handler_output: Any) -> Optional[Path]:
+    """Возвращает путь к итоговому медиафайлу для typed/legacy результата."""
+    if isinstance(handler_output, MediaResult):
+        return handler_output.main_file_path
+    if isinstance(handler_output, dict):
+        file_path = handler_output.get("file_path")
+        return file_path if isinstance(file_path, Path) else None
+    return None
+
+
+def validate_video_streams(handler_output: Any) -> tuple[bool, str]:
     """Проверяет, что итоговый файл содержит video и audio потоки."""
-    file_path = file_info.get("file_path")
+    file_path = _extract_main_file_path(handler_output)
     if not isinstance(file_path, Path):
-        return False, "file_info['file_path'] имеет неверный тип"
+        return False, "в результате отсутствует корректный путь к файлу"
     if not file_path.exists():
         return False, f"файл не найден: {file_path}"
 
@@ -141,14 +171,14 @@ def validate_video_streams(file_info: dict[str, Any]) -> tuple[bool, str]:
     return True, "аудио- и видео-потоки подтверждены"
 
 
-async def run_case(case: TestCase, timeout_sec: int) -> TestResult:
+async def run_case(case: CaseSpec, timeout_sec: int) -> CaseResult:
     """Запускает один тест-кейс и возвращает результат."""
     service_manager = ServiceManager()
     resolved_url = await resolve_url(case.url)
     handler = service_manager.get_handler(resolved_url)
 
     if not handler:
-        return TestResult(
+        return CaseResult(
             case=case,
             resolved_url=resolved_url,
             ok=False,
@@ -156,46 +186,46 @@ async def run_case(case: TestCase, timeout_sec: int) -> TestResult:
         )
 
     if not isinstance(handler, CoubHandler):
-        return TestResult(
+        return CaseResult(
             case=case,
             resolved_url=resolved_url,
             ok=False,
             message=f"ожидался CoubHandler, получен: {handler.__class__.__name__}",
         )
 
-    file_info: Optional[dict[str, Any]] = None
+    handler_output: Any = None
     try:
         try:
-            file_info = await asyncio.wait_for(
+            handler_output = await asyncio.wait_for(
                 handler.process(case.url, context=f"local-smoke:{case.name}", resolved_url=resolved_url),
                 timeout=timeout_sec,
             )
         except asyncio.TimeoutError:
-            return TestResult(
+            return CaseResult(
                 case=case,
                 resolved_url=resolved_url,
                 ok=False,
                 message=f"таймаут обработки ({timeout_sec} сек)",
             )
         except Exception as exc:  # noqa: BLE001
-            return TestResult(
+            return CaseResult(
                 case=case,
                 resolved_url=resolved_url,
                 ok=False,
                 message=f"исключение: {exc}",
             )
 
-        if not file_info:
-            return TestResult(
+        if not handler_output:
+            return CaseResult(
                 case=case,
                 resolved_url=resolved_url,
                 ok=False,
                 message="handler.process вернул None",
             )
 
-        actual_type = file_info.get("type")
+        actual_type = _extract_actual_type(handler_output)
         if actual_type != case.expected_type:
-            return TestResult(
+            return CaseResult(
                 case=case,
                 resolved_url=resolved_url,
                 ok=False,
@@ -203,9 +233,9 @@ async def run_case(case: TestCase, timeout_sec: int) -> TestResult:
                 actual_type=actual_type,
             )
 
-        streams_ok, streams_message = validate_video_streams(file_info)
+        streams_ok, streams_message = validate_video_streams(handler_output)
         if not streams_ok:
-            return TestResult(
+            return CaseResult(
                 case=case,
                 resolved_url=resolved_url,
                 ok=False,
@@ -213,7 +243,7 @@ async def run_case(case: TestCase, timeout_sec: int) -> TestResult:
                 actual_type=actual_type,
             )
 
-        return TestResult(
+        return CaseResult(
             case=case,
             resolved_url=resolved_url,
             ok=True,
@@ -221,8 +251,10 @@ async def run_case(case: TestCase, timeout_sec: int) -> TestResult:
             actual_type=actual_type,
         )
     finally:
-        if file_info:
-            handler.cleanup(file_info)
+        if isinstance(handler_output, MediaResult):
+            _cleanup_media_result(handler_output)
+        elif isinstance(handler_output, dict) and handler_output:
+            handler.cleanup(handler_output)
 
 
 async def run_all(timeout_sec: int) -> int:
@@ -231,7 +263,7 @@ async def run_all(timeout_sec: int) -> int:
     print(f"project_root: {PROJECT_ROOT}")
     print("")
 
-    results: list[TestResult] = []
+    results: list[CaseResult] = []
     for case in DEFAULT_CASES:
         print(f"[RUN] {case.name}: {case.url}")
         print(f"  description: {case.description}")
