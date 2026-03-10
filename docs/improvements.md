@@ -340,6 +340,22 @@
   - `yt-dlp` не считать рабочим базовым решением для `VK`; требуется отдельный R&D по альтернативному подходу. ⚠️
 - Результат: архитектурный шаг миграции зафиксирован как промежуточный, но `VK` переведен в статус `в разработке` и исключен из набора решений, которые можно считать реально готовыми.
 
+### 13.7 Typed-only boundary cleanup (runtime + tests)
+
+- Статус (2026-03-11): выполнено в scope `.github/ai-agent-technical-task.md` (Этапы 1 и 2).
+- Проблема: в active runtime оставался обязательный compatibility-контур (`adapt_handler_output` + legacy cleanup в `BaseHandler`), а smoke/unit тесты stable handlers сохраняли dual-mode ветвление `MediaResult|dict`.
+- Выполнено:
+  - Active runtime в `media_processor` переведен на strict typed-only контракт: `handler.process()` теперь принимается только как `MediaResult | None`, без обязательного `LegacyFileInfoAdapter`. ✅ (`src/bot/processing/media_processor.py`).
+  - Добавлена typed-only нормализация обязательных полей результата (`source_name`, `original_url`, `context`) без возврата к legacy payload-ветке. ✅ (`src/bot/processing/media_processor.py`).
+  - Удален legacy cleanup-контур из `BaseHandler`; базовый контракт `process` закреплен как `Optional[MediaResult]`. ✅ (`src/handlers/base.py`).
+  - Удалены `HandlerOutput`/`LegacyFileInfo` из публичного typed-контракта `src/handlers/contracts.py` (legacy alias оставлен только внутри adapter-модуля как локальный технический тип). ✅ (`src/handlers/contracts.py`, `src/handlers/adapters/legacy_file_info.py`).
+  - Smoke-скрипты handlers переведены на typed-only проверку результата и typed cleanup без `dict`-веток и `handler.cleanup(...)`. ✅ (`test/handlers/YouTube/test_youtube_handlers_local.py`, `test/handlers/TikTok/test_tiktok_handlers_local.py`, `test/handlers/Instagram/test_instagram_handlers_local.py`, `test/handlers/Coub/test_coub_handlers_local.py`, `test/handlers/VK/test_vk_handlers_local.py`).
+  - Unit-проверка cleanup обновлена с legacy helper-контракта на проверку `MediaResult.iter_cleanup_paths()`. ✅ (`test/handlers/test_cleanup_helpers.py`).
+- Ограничения валидации:
+  - Реальные тестовые прогоны (`pytest`/smoke) не выполнялись, так как для них требуется отдельное подтверждение пользователя.
+  - Выполнена только синтаксическая проверка измененных модулей через `compileall`.
+- Результат: active runtime и локальные smoke/unit проверки перешли в typed-only режим; legacy `dict[file_info]` больше не является рабочим контрактом для runtime-потока stable handlers.
+
 ## Приоритет P3 (дальше)
 
 ### 14. Возврат к тестам как отдельная фаза

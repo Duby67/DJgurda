@@ -4,7 +4,7 @@
 1. Разрешает короткий URL через resolve_url.
 2. Ищет обработчик через ServiceManager.
 3. Вызывает handler.process(...) и проверяет ожидаемый тип результата.
-4. Очищает временные файлы через typed/legacy cleanup.
+4. Очищает временные файлы через typed cleanup.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 # test/handlers/TikTok/test_tiktok_handlers_local.py -> project root это parents[3]
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -88,14 +88,9 @@ def _cleanup_media_result(result: MediaResult) -> None:
             pass
 
 
-def _extract_actual_type(handler_output: Any) -> Optional[str]:
-    """Возвращает тип контента для typed/legacy результата."""
-    if isinstance(handler_output, MediaResult):
-        return handler_output.content_type.value
-    if isinstance(handler_output, dict):
-        value = handler_output.get("type")
-        return str(value) if value is not None else None
-    return None
+def _extract_actual_type(handler_output: MediaResult) -> str:
+    """Возвращает тип контента для typed-результата."""
+    return handler_output.content_type.value
 
 
 async def run_case(case: CaseSpec, timeout_sec: int) -> CaseResult:
@@ -120,7 +115,7 @@ async def run_case(case: CaseSpec, timeout_sec: int) -> CaseResult:
             message=f"ожидался TikTokHandler, получен: {handler.__class__.__name__}",
         )
 
-    handler_output: Any = None
+    handler_output: MediaResult | None = None
     try:
         handler_output = await asyncio.wait_for(
             handler.process(case.url, context=f"local-smoke:{case.name}", resolved_url=resolved_url),
@@ -143,8 +138,6 @@ async def run_case(case: CaseSpec, timeout_sec: int) -> CaseResult:
     finally:
         if isinstance(handler_output, MediaResult):
             _cleanup_media_result(handler_output)
-        elif isinstance(handler_output, dict) and handler_output:
-            handler.cleanup(handler_output)
 
     if not handler_output:
         return CaseResult(

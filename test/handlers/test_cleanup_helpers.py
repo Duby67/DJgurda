@@ -1,8 +1,7 @@
-"""Unit-тесты очистки временных файлов в BaseHandler."""
+"""Unit-тесты cleanup-контракта MediaResult."""
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -11,33 +10,42 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# Минимальные env для загрузки src.config.
-os.environ.setdefault("BOT_DB_PATH", str(PROJECT_ROOT / "src" / "data" / "db" / "bot.db"))
-os.environ.setdefault("BOT_VERSION", "local-test")
-os.environ.setdefault("ADMIN_ID", "1")
-os.environ.setdefault("BOT_TOKEN", "local-test-token")
-os.environ.setdefault("YANDEX_MUSIC_TOKEN", "local-test-token")
-os.environ.setdefault("YOUTUBE_COOKIES_ENABLED", "false")
-
-from src.handlers.resources.Instagram.InstagramHandler import InstagramHandler
+from src.handlers.contracts import (
+    AttachmentKind,
+    AudioAttachment,
+    ContentType,
+    MediaAttachment,
+    MediaResult,
+)
 
 
-def test_collect_paths_includes_audios_list() -> None:
+def test_iter_cleanup_paths_includes_audios_list() -> None:
     """
-    Base cleanup должен учитывать список `audios` в file_info.
+    Typed cleanup должен учитывать список `audios`.
     """
-    handler = InstagramHandler()
-    file_info = {
-        "type": "media_group",
-        "files": [],
-        "audios": [
-            {"file_path": Path("a1.m4a")},
-            {"file_path": Path("a2.m4a"), "thumbnail_path": Path("a2.jpg")},
-        ],
-    }
+    result = MediaResult(
+        content_type=ContentType.MEDIA_GROUP,
+        source_name="Instagram",
+        original_url="https://instagram.com/p/demo",
+        context="unit-test",
+        media_group=(
+            MediaAttachment(
+                kind=AttachmentKind.PHOTO,
+                file_path=Path("photo.jpg"),
+            ),
+        ),
+        audios=(
+            AudioAttachment(file_path=Path("a1.m4a")),
+            AudioAttachment(
+                file_path=Path("a2.m4a"),
+                thumbnail_path=Path("a2.jpg"),
+            ),
+        ),
+        cleanup_paths=(Path("a1.m4a"),),
+    )
 
-    paths = set(handler._collect_paths_for_cleanup(file_info))
+    paths = set(result.iter_cleanup_paths())
+    assert Path("photo.jpg") in paths
     assert Path("a1.m4a") in paths
     assert Path("a2.m4a") in paths
     assert Path("a2.jpg") in paths
-

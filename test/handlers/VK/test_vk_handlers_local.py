@@ -5,7 +5,7 @@
 2. Ищет обработчик через ServiceManager.
 3. Вызывает handler.process(...) и проверяет ожидаемый тип результата.
 4. Для треков дополнительно проверяет, что скачанный файл валиден.
-5. Очищает временные файлы через handler.cleanup(...).
+5. Очищает временные файлы через typed cleanup.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 # test/handlers/VK/test_vk_handlers_local.py -> project root это parents[3]
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -103,29 +103,19 @@ def _cleanup_media_result(result: MediaResult) -> None:
             pass
 
 
-def _extract_actual_type(handler_output: Any) -> Optional[str]:
-    """Возвращает тип контента для typed/legacy результата."""
-    if isinstance(handler_output, MediaResult):
-        return handler_output.content_type.value
-    if isinstance(handler_output, dict):
-        value = handler_output.get("type")
-        return str(value) if value is not None else None
-    return None
+def _extract_actual_type(handler_output: MediaResult) -> str:
+    """Возвращает тип контента для typed-результата."""
+    return handler_output.content_type.value
 
 
-def _extract_main_file_path(handler_output: Any) -> Optional[Path]:
-    """Возвращает путь к итоговому медиафайлу для typed/legacy результата."""
-    if isinstance(handler_output, MediaResult):
-        if handler_output.audio is not None:
-            return handler_output.audio.file_path
-        return handler_output.main_file_path
-    if isinstance(handler_output, dict):
-        file_path = handler_output.get("file_path")
-        return file_path if isinstance(file_path, Path) else None
-    return None
+def _extract_main_file_path(handler_output: MediaResult) -> Optional[Path]:
+    """Возвращает путь к итоговому медиафайлу для typed-результата."""
+    if handler_output.audio is not None:
+        return handler_output.audio.file_path
+    return handler_output.main_file_path
 
 
-def validate_audio_file(handler_output: Any) -> tuple[bool, str]:
+def validate_audio_file(handler_output: MediaResult) -> tuple[bool, str]:
     """Проверяет, что файл существует, имеет размер > 0 и читается как аудио."""
     file_path = _extract_main_file_path(handler_output)
     if not isinstance(file_path, Path):
@@ -204,7 +194,7 @@ async def run_playlist_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
             message=f"ожидался VKHandler, получен: {handler.__class__.__name__}",
         )
 
-    handler_output: Any = None
+    handler_output: MediaResult | None = None
     try:
         try:
             handler_output = await asyncio.wait_for(
@@ -244,51 +234,13 @@ async def run_playlist_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
                 actual_type=actual_type,
             )
 
-        if isinstance(handler_output, MediaResult):
-            caption_text = str(handler_output.caption_text or "").strip()
-            if not caption_text:
-                return SmokeResult(
-                    case=case,
-                    resolved_url=resolved_url,
-                    ok=False,
-                    message="playlist typed-результат не содержит caption_text",
-                    actual_type=actual_type,
-                )
-            return SmokeResult(
-                case=case,
-                resolved_url=resolved_url,
-                ok=True,
-                message="успешно (playlist caption сформирован)",
-                actual_type=actual_type,
-            )
-
-        metadata = handler_output.get("metadata") if isinstance(handler_output, dict) else None
-        if not isinstance(metadata, dict):
+        caption_text = str(handler_output.caption_text or "").strip()
+        if not caption_text:
             return SmokeResult(
                 case=case,
                 resolved_url=resolved_url,
                 ok=False,
-                message="playlist metadata отсутствует или имеет неверный тип",
-                actual_type=actual_type,
-            )
-
-        tracks = metadata.get("tracks")
-        if not isinstance(tracks, list) or not tracks:
-            return SmokeResult(
-                case=case,
-                resolved_url=resolved_url,
-                ok=False,
-                message="playlist распознан, но список треков пуст",
-                actual_type=actual_type,
-            )
-
-        track_count = metadata.get("track_count")
-        if not isinstance(track_count, int) or track_count <= 0:
-            return SmokeResult(
-                case=case,
-                resolved_url=resolved_url,
-                ok=False,
-                message="playlist metadata не содержит корректный track_count",
+                message="playlist typed-результат не содержит caption_text",
                 actual_type=actual_type,
             )
 
@@ -296,14 +248,12 @@ async def run_playlist_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
             case=case,
             resolved_url=resolved_url,
             ok=True,
-            message=f"успешно (tracks parsed: {len(tracks)}, declared count: {track_count})",
+            message="успешно (playlist caption сформирован)",
             actual_type=actual_type,
         )
     finally:
         if isinstance(handler_output, MediaResult):
             _cleanup_media_result(handler_output)
-        elif isinstance(handler_output, dict) and handler_output:
-            handler.cleanup(handler_output)
 
 
 async def run_track_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
@@ -327,7 +277,7 @@ async def run_track_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
             message=f"ожидался VKHandler, получен: {handler.__class__.__name__}",
         )
 
-    handler_output: Any = None
+    handler_output: MediaResult | None = None
     try:
         try:
             handler_output = await asyncio.wait_for(
@@ -387,8 +337,6 @@ async def run_track_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
     finally:
         if isinstance(handler_output, MediaResult):
             _cleanup_media_result(handler_output)
-        elif isinstance(handler_output, dict) and handler_output:
-            handler.cleanup(handler_output)
 
 
 async def run_all(timeout_sec: int) -> int:

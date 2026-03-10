@@ -15,11 +15,12 @@ from src.handlers.contracts import (
     AttachmentKind,
     AudioAttachment,
     ContentType,
-    LegacyFileInfo,
     MediaAttachment,
     MediaResult,
     normalize_cleanup_paths,
 )
+
+LegacyFileInfo = Mapping[str, Any]
 
 
 class LegacyFileInfoAdapter:

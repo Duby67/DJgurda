@@ -2,12 +2,12 @@
 
 import asyncio
 import logging
+from dataclasses import replace
 from typing import Any
 
 from aiogram.types import Message, ReplyParameters
 
 from src.bot.processing.senders import DEFAULT_SENDER_REGISTRY
-from src.handlers.adapters import adapt_handler_output
 from src.handlers.contracts import MediaResult
 from src.middlewares.db import get_errors_enabled, update_stats
 from src.utils.messages import build_caption, build_error
@@ -28,6 +28,38 @@ def _cleanup_media_result(media_result: MediaResult | None) -> None:
             path.unlink(missing_ok=True)
         except Exception as exc:
             logger.error("Failed to delete %s: %s", path, exc)
+
+
+def _normalize_handler_output(
+    handler_output: object,
+    *,
+    fallback_source_name: str,
+    default_original_url: str,
+    default_context: str,
+) -> MediaResult:
+    """Проверяет и нормализует typed-результат handler-а."""
+    if not isinstance(handler_output, MediaResult):
+        raise TypeError(
+            "Handler process() must return MediaResult | None, "
+            f"got {type(handler_output)!r}"
+        )
+
+    source_name = handler_output.source_name or fallback_source_name
+    original_url = handler_output.original_url or default_original_url
+    context = handler_output.context or default_context
+
+    if (
+        source_name != handler_output.source_name
+        or original_url != handler_output.original_url
+        or context != handler_output.context
+    ):
+        return replace(
+            handler_output,
+            source_name=source_name,
+            original_url=original_url,
+            context=context,
+        )
+    return handler_output
 
 
 async def process_block(
@@ -65,7 +97,7 @@ async def process_block(
             logger.info("Block %s: failed to load handler output", idx)
             return False
 
-        media_result = adapt_handler_output(
+        media_result = _normalize_handler_output(
             handler_output,
             fallback_source_name=handler.source_name,
             default_original_url=raw_url,

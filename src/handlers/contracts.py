@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Iterable
 
 
 class ContentType(str, Enum):
@@ -115,11 +115,6 @@ class MediaResult:
             seen.add(path)
             ordered_unique.append(path)
         return tuple(ordered_unique)
-
-
-LegacyFileInfo = Mapping[str, Any]
-HandlerOutput = MediaResult | LegacyFileInfo
-
 
 def normalize_cleanup_paths(paths: Iterable[Path]) -> tuple[Path, ...]:
     """Дедуплицирует и нормализует список cleanup-путей."""
