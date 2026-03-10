@@ -1,13 +1,14 @@
 """
-Миксин обработчика VK Music для одиночных аудио-треков.
+Процессор VK Music для одиночных аудио-треков.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional, Sequence
+from typing import Any, Iterable, Optional, Sequence
 from urllib.parse import urlsplit
 
 import aiofiles
@@ -15,53 +16,97 @@ import aiohttp
 import yt_dlp
 from bs4 import BeautifulSoup
 
-from src.handlers.mixins import AudioMixin
+from src.handlers.contracts import AudioAttachment, ContentType, MediaResult
 from src.utils.cookies import cleanup_runtime_cookiefile
+from .VKDependencies import VKMediaGatewayProtocol, VKRequestContextProtocol
 
 logger = logging.getLogger(__name__)
 
 
-class VKAudio(AudioMixin):
+class VKAudio:
     """
-    Миксин для обработки одиночных треков VK Music.
+    Процессор для обработки одиночных треков VK Music.
     """
+
+    AUDIO_EXTENSIONS = frozenset({".mp3", ".m4a", ".aac", ".ogg", ".opus", ".wav", ".mp4"})
+    AUDIO_URL_PATTERNS = (
+        re.compile(
+            r'"(?:url|play_url|audio_url|stream_url|mp3|src)"\s*:\s*"(?P<url>https?:\\\\/\\\\/[^"]+)"',
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?P<url>https?:\\\\u002F\\\\u002F[^\"'\\\s<>]+)",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?P<url>https?:\\\\/\\\\/[^\"'\\\s<>]+\.(?:mp3|m4a|aac|ogg|opus|wav|m3u8|mp4)[^\"'\\\s<>]*)",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?P<url>https?://[^\"'\\\s<>]+\.(?:mp3|m4a|aac|ogg|opus|wav|m3u8|mp4)[^\"'\\\s<>]*)",
+            re.IGNORECASE,
+        ),
+    )
+    AUDIO_INDEX_ID = 0
+    AUDIO_INDEX_OWNER_ID = 1
+    AUDIO_INDEX_URL = 2
+    AUDIO_INDEX_TITLE = 3
+    AUDIO_INDEX_PERFORMER = 4
+    AUDIO_INDEX_DURATION = 5
+    AUDIO_INDEX_HASHES = 13
+    AUDIO_INDEX_COVER_URL = 14
+    AUDIO_INDEX_ACCESS_KEY = 24
+
+    def __init__(
+        self,
+        *,
+        request_context: VKRequestContextProtocol,
+        media_gateway: VKMediaGatewayProtocol,
+    ) -> None:
+        self._request_context = request_context
+        self._media_gateway = media_gateway
+
+    def __getattr__(self, name: str) -> Any:
+        if hasattr(self._request_context, name):
+            return getattr(self._request_context, name)
+        if hasattr(self._media_gateway, name):
+            return getattr(self._media_gateway, name)
+        raise AttributeError(name)
 
     def _ensure_vk_runtime_dirs(self) -> None:
         """
         Гарантирует наличие runtime-директории для операций VK.
         """
         try:
-            self.temp_dir.mkdir(parents=True, exist_ok=True)
+            self._media_gateway.temp_dir.mkdir(parents=True, exist_ok=True)
         except Exception:
             pass
 
-    @classmethod
-    def _looks_like_audio_tuple(cls, value: Any) -> bool:
+    def _looks_like_audio_tuple(self, value: Any) -> bool:
         """
         Проверяет, похож ли объект на tuple-аудио VK.
         """
-        if not isinstance(value, list) or len(value) <= cls.AUDIO_INDEX_DURATION:
+        if not isinstance(value, list) or len(value) <= self.AUDIO_INDEX_DURATION:
             return False
-        owner_id = cls._safe_int(value[cls.AUDIO_INDEX_OWNER_ID])
-        audio_id = cls._safe_int(value[cls.AUDIO_INDEX_ID])
+        owner_id = self._safe_int(value[self.AUDIO_INDEX_OWNER_ID])
+        audio_id = self._safe_int(value[self.AUDIO_INDEX_ID])
         return owner_id is not None and audio_id is not None
 
-    @classmethod
-    def _iter_audio_tuples(cls, value: Any) -> Iterable[list[Any]]:
+    def _iter_audio_tuples(self, value: Any) -> Iterable[list[Any]]:
         """
         Рекурсивно итерирует tuple-аудио из произвольной структуры VK payload.
         """
         if isinstance(value, list):
-            if cls._looks_like_audio_tuple(value):
+            if self._looks_like_audio_tuple(value):
                 yield value
                 return
             for item in value:
-                yield from cls._iter_audio_tuples(item)
+                yield from self._iter_audio_tuples(item)
             return
 
         if isinstance(value, dict):
             for nested in value.values():
-                yield from cls._iter_audio_tuples(nested)
+                yield from self._iter_audio_tuples(nested)
 
     def _pick_audio_tuple(
         self,
@@ -110,7 +155,7 @@ class VKAudio(AudioMixin):
         self,
         audio_tuple: Sequence[Any],
         canonical_url: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Преобразует tuple-аудио VK в стандартные метаданные трека.
         """
@@ -146,12 +191,12 @@ class VKAudio(AudioMixin):
             return self._safe_int(payload.get("vk_id"))
         return None
 
-    def _extract_track_metadata(self, html_text: str, canonical_url: str) -> Dict[str, Any]:
+    def _extract_track_metadata(self, html_text: str, canonical_url: str) -> dict[str, Any]:
         """
         Извлекает метаданные одиночного трека из HTML.
         """
         soup = BeautifulSoup(html_text, "html.parser")
-        metadata: Dict[str, Any] = {
+        metadata: dict[str, Any] = {
             "title": "VK Music Track",
             "performer": "Unknown",
             "duration": None,
@@ -418,7 +463,7 @@ class VKAudio(AudioMixin):
         base_path = self._generate_unique_path(track_token, suffix="")
         output_template = f"{base_path}.%(ext)s"
 
-        ydl_opts: Dict[str, Any] = self._build_ytdlp_opts({
+        ydl_opts: dict[str, Any] = self._build_ytdlp_opts({
             "noplaylist": True,
             "format": "bestaudio/best",
             "retries": 2,
@@ -476,7 +521,7 @@ class VKAudio(AudioMixin):
         """
         Редкий fallback: пытается извлечь direct URL через yt-dlp metadata режим.
         """
-        ydl_opts: Dict[str, Any] = self._build_ytdlp_opts({
+        ydl_opts: dict[str, Any] = self._build_ytdlp_opts({
             "skip_download": True,
             "geo_bypass": True,
             "user_agent": (
@@ -568,12 +613,11 @@ class VKAudio(AudioMixin):
             file_path.unlink(missing_ok=True)
             return None
 
-    @classmethod
-    def _build_track_candidates(cls, owner_id: str, audio_id: str, access_hash: Optional[str]) -> tuple[str, ...]:
+    def _build_track_candidates(self, owner_id: str, audio_id: str, access_hash: Optional[str]) -> tuple[str, ...]:
         """
         Возвращает VK URL-кандидаты трека для web/mobile extraction.
         """
-        token = cls._build_track_token(owner_id, audio_id, access_hash)
+        token = self._build_track_token(owner_id, audio_id, access_hash)
         return (f"https://vk.com/audio{token}",)
 
     async def _fetch_audio_tuple_via_reload_audios(
@@ -615,7 +659,7 @@ class VKAudio(AudioMixin):
 
         return None
 
-    def _audio_tuple_to_track_preview(self, audio_tuple: Sequence[Any]) -> Dict[str, Any]:
+    def _audio_tuple_to_track_preview(self, audio_tuple: Sequence[Any]) -> dict[str, Any]:
         """
         Преобразует tuple-аудио в metadata-трек для playlist preview.
         """
@@ -646,7 +690,7 @@ class VKAudio(AudioMixin):
             "cover_url": self._extract_cover_url_from_audio_tuple(audio_tuple),
         }
 
-    async def _process_vk_audio(
+    async def process(
         self,
         session: aiohttp.ClientSession,
         original_url: str,
@@ -654,13 +698,13 @@ class VKAudio(AudioMixin):
         owner_id: str,
         audio_id: str,
         access_hash: Optional[str],
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[MediaResult]:
         """
         Обрабатывает одиночный трек VK Music.
         """
         track_token = self._build_track_token(owner_id, audio_id, access_hash)
         canonical_url = self._build_track_canonical_url(owner_id, audio_id, access_hash)
-        metadata: Dict[str, Any] = {
+        metadata: dict[str, Any] = {
             "title": "VK Music Track",
             "performer": "Unknown",
             "duration": None,
@@ -764,20 +808,22 @@ class VKAudio(AudioMixin):
             if not await self._download_thumbnail(cover_url, cover_path, self.photo_limit):
                 cover_path = None
 
-        return {
-            "type": "audio",
-            "source_name": self.source_name,
-            "file_path": file_path,
-            "thumbnail_path": cover_path,
-            "title": metadata.get("title") or "VK Music Track",
-            "uploader": metadata.get("performer") or "Unknown",
-            "duration": metadata.get("duration"),
-            "source_url": original_url,
-            "canonical_url": canonical_url,
-            "original_url": original_url,
-            "context": context,
-            "metadata": {
-                "cover_url": metadata.get("cover_url"),
-                "audio_url": best_audio_url,
-            },
-        }
+        title = str(metadata.get("title") or "VK Music Track")
+        performer = str(metadata.get("performer") or "Unknown")
+
+        return MediaResult(
+            content_type=ContentType.AUDIO,
+            source_name="VK",
+            original_url=original_url,
+            context=context,
+            title=title,
+            uploader=performer,
+            main_file_path=file_path,
+            thumbnail_path=cover_path,
+            audio=AudioAttachment(
+                file_path=file_path,
+                title=title,
+                performer=performer,
+                thumbnail_path=cover_path,
+            ),
+        )

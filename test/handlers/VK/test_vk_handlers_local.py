@@ -49,6 +49,7 @@ os.environ.setdefault(
 )
 
 from src.handlers.manager import ServiceManager
+from src.handlers.contracts import MediaResult
 from src.handlers.resources import VKHandler
 from src.utils.url import resolve_url
 from VK_urls import VK_PLAYLIST_TEST_CASE, VK_TRACK_TEST_CASES
@@ -93,11 +94,42 @@ TRACK_CASES = tuple(
 )
 
 
-def validate_audio_file(file_info: dict[str, Any]) -> tuple[bool, str]:
+def _cleanup_media_result(result: MediaResult) -> None:
+    """Очищает runtime-файлы для typed-результата."""
+    for path in result.iter_cleanup_paths():
+        try:
+            path.unlink(missing_ok=True)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _extract_actual_type(handler_output: Any) -> Optional[str]:
+    """Возвращает тип контента для typed/legacy результата."""
+    if isinstance(handler_output, MediaResult):
+        return handler_output.content_type.value
+    if isinstance(handler_output, dict):
+        value = handler_output.get("type")
+        return str(value) if value is not None else None
+    return None
+
+
+def _extract_main_file_path(handler_output: Any) -> Optional[Path]:
+    """Возвращает путь к итоговому медиафайлу для typed/legacy результата."""
+    if isinstance(handler_output, MediaResult):
+        if handler_output.audio is not None:
+            return handler_output.audio.file_path
+        return handler_output.main_file_path
+    if isinstance(handler_output, dict):
+        file_path = handler_output.get("file_path")
+        return file_path if isinstance(file_path, Path) else None
+    return None
+
+
+def validate_audio_file(handler_output: Any) -> tuple[bool, str]:
     """Проверяет, что файл существует, имеет размер > 0 и читается как аудио."""
-    file_path = file_info.get("file_path")
+    file_path = _extract_main_file_path(handler_output)
     if not isinstance(file_path, Path):
-        return False, "file_info['file_path'] имеет неверный тип"
+        return False, "в результате отсутствует корректный путь к аудиофайлу"
     if not file_path.exists():
         return False, f"файл не найден: {file_path}"
 
@@ -172,10 +204,10 @@ async def run_playlist_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
             message=f"ожидался VKHandler, получен: {handler.__class__.__name__}",
         )
 
-    file_info: Optional[dict[str, Any]] = None
+    handler_output: Any = None
     try:
         try:
-            file_info = await asyncio.wait_for(
+            handler_output = await asyncio.wait_for(
                 handler.process(case.url, context=f"local-smoke:{case.name}", resolved_url=resolved_url),
                 timeout=timeout_sec,
             )
@@ -194,7 +226,7 @@ async def run_playlist_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
                 message=f"исключение: {exc}",
             )
 
-        if not file_info:
+        if not handler_output:
             return SmokeResult(
                 case=case,
                 resolved_url=resolved_url,
@@ -202,7 +234,7 @@ async def run_playlist_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
                 message="handler.process вернул None",
             )
 
-        actual_type = file_info.get("type")
+        actual_type = _extract_actual_type(handler_output)
         if actual_type != case.expected_type:
             return SmokeResult(
                 case=case,
@@ -212,7 +244,25 @@ async def run_playlist_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
                 actual_type=actual_type,
             )
 
-        metadata = file_info.get("metadata")
+        if isinstance(handler_output, MediaResult):
+            caption_text = str(handler_output.caption_text or "").strip()
+            if not caption_text:
+                return SmokeResult(
+                    case=case,
+                    resolved_url=resolved_url,
+                    ok=False,
+                    message="playlist typed-результат не содержит caption_text",
+                    actual_type=actual_type,
+                )
+            return SmokeResult(
+                case=case,
+                resolved_url=resolved_url,
+                ok=True,
+                message="успешно (playlist caption сформирован)",
+                actual_type=actual_type,
+            )
+
+        metadata = handler_output.get("metadata") if isinstance(handler_output, dict) else None
         if not isinstance(metadata, dict):
             return SmokeResult(
                 case=case,
@@ -250,8 +300,10 @@ async def run_playlist_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
             actual_type=actual_type,
         )
     finally:
-        if file_info:
-            handler.cleanup(file_info)
+        if isinstance(handler_output, MediaResult):
+            _cleanup_media_result(handler_output)
+        elif isinstance(handler_output, dict) and handler_output:
+            handler.cleanup(handler_output)
 
 
 async def run_track_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
@@ -275,10 +327,10 @@ async def run_track_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
             message=f"ожидался VKHandler, получен: {handler.__class__.__name__}",
         )
 
-    file_info: Optional[dict[str, Any]] = None
+    handler_output: Any = None
     try:
         try:
-            file_info = await asyncio.wait_for(
+            handler_output = await asyncio.wait_for(
                 handler.process(case.url, context=f"local-smoke:{case.name}", resolved_url=resolved_url),
                 timeout=timeout_sec,
             )
@@ -297,7 +349,7 @@ async def run_track_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
                 message=f"исключение: {exc}",
             )
 
-        if not file_info:
+        if not handler_output:
             return SmokeResult(
                 case=case,
                 resolved_url=resolved_url,
@@ -305,7 +357,7 @@ async def run_track_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
                 message="handler.process вернул None",
             )
 
-        actual_type = file_info.get("type")
+        actual_type = _extract_actual_type(handler_output)
         if actual_type != case.expected_type:
             return SmokeResult(
                 case=case,
@@ -315,7 +367,7 @@ async def run_track_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
                 actual_type=actual_type,
             )
 
-        file_ok, file_message = validate_audio_file(file_info)
+        file_ok, file_message = validate_audio_file(handler_output)
         if not file_ok:
             return SmokeResult(
                 case=case,
@@ -333,8 +385,10 @@ async def run_track_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
             actual_type=actual_type,
         )
     finally:
-        if file_info:
-            handler.cleanup(file_info)
+        if isinstance(handler_output, MediaResult):
+            _cleanup_media_result(handler_output)
+        elif isinstance(handler_output, dict) and handler_output:
+            handler.cleanup(handler_output)
 
 
 async def run_all(timeout_sec: int) -> int:

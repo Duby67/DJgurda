@@ -319,6 +319,22 @@
   - Техническое ограничение окружения: `ffprobe` отсутствует, поэтому проверка наличия `audio/video` потоков в smoke была пропущена.
 - Результат: COUB переведен на явную typed-границу `CoubHandler -> typed processor/dependencies -> MediaResult`; этап остается частично закрытым до стабилизации smoke-результата.
 
+### 13.6 VK stage migration на typed-контракт
+
+- Статус (2026-03-11): выполнено частично в scope `.github/ai-agent-technical-task.md` (кодовая и архитектурная миграция завершены; запуск smoke-тестов пропущен по явному запросу пользователя).
+- Проблема: VK-контур оставался legacy-boundary (`dict[file_info]` + зависимость от MRO через множественное наследование `VKHandler(BaseHandler, VKAudio, VKPlaylist)`).
+- Выполнено:
+  - `VKHandler.process()` переведен на прямой возврат `MediaResult`; MRO-цепочка `VKHandler(BaseHandler, VKAudio, VKPlaylist)` удалена. ✅ (`src/handlers/resources/VK/VKHandler.py`).
+  - Вынесены explicit dependencies для VK (`request context` + `media gateway`) без скрытого MRO-контракта. ✅ (`src/handlers/resources/VK/VKDependencies.py`).
+  - Классификация и normalizer URL вынесены в явный внутренний API VK-модуля. ✅ (`src/handlers/resources/VK/VKUrlService.py`).
+  - Ветки `audio` и `playlist` переписаны на прямой `MediaResult`. ✅ (`src/handlers/resources/VK/VKAudio.py`, `src/handlers/resources/VK/VKPlaylist.py`).
+  - Локальный VK smoke-скрипт адаптирован под typed-результат с сохранением compatibility для legacy формата. ✅ (`test/handlers/VK/test_vk_handlers_local.py`).
+- Валидация:
+  - Выполнена синтаксическая проверка: `./venv/Scripts/python.exe -m compileall src/handlers/resources/VK test/handlers/VK`.
+  - Выполнена локальная проверка инициализации: создание `VKHandler` и выбор handler через `ServiceManager`.
+  - Реальный smoke-прогон VK не выполнялся по явному запросу пользователя (пропуск допустим в рамках текущего инкремента).
+- Результат: VK переведен на явную typed-границу `VKHandler -> typed processors/dependencies -> MediaResult`; для полного закрытия этапа остается выполнить smoke-прогон VK и подтвердить parity поведения на реальных ссылках.
+
 ## Приоритет P3 (дальше)
 
 ### 14. Возврат к тестам как отдельная фаза

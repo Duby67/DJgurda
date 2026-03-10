@@ -1,26 +1,115 @@
 """
-Миксин обработчика VK Music для плейлистов.
+Процессор обработчика VK Music для плейлистов.
 """
 
 from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
+from typing import Any, Iterable, Optional, Sequence
 
 import aiohttp
 from bs4 import BeautifulSoup
+
+from src.handlers.contracts import ContentType, MediaResult
+from .VKDependencies import VKMediaGatewayProtocol, VKRequestContextProtocol
 
 logger = logging.getLogger(__name__)
 
 
 class VKPlaylist:
     """
-    Миксин для обработки плейлистов VK Music.
+    Процессор для обработки плейлистов VK Music.
     """
 
+    TRACK_LINK_PATTERN = re.compile(
+        r"/audio(?P<owner>-?\d+)_(?P<audio>\d+)(?:_(?P<access_hash>[A-Za-z0-9]+))?",
+        re.IGNORECASE,
+    )
+    TRACK_COUNT_PATTERNS = (
+        re.compile(r'"tracksCount"\s*:\s*(\d+)', re.IGNORECASE),
+        re.compile(r'"track_count"\s*:\s*(\d+)', re.IGNORECASE),
+        re.compile(r"(\d+)\s+трек", re.IGNORECASE),
+    )
+    AUDIO_INDEX_ID = 0
+    AUDIO_INDEX_OWNER_ID = 1
+    AUDIO_INDEX_TITLE = 3
+    AUDIO_INDEX_PERFORMER = 4
+    AUDIO_INDEX_DURATION = 5
+    AUDIO_INDEX_COVER_URL = 14
+    AUDIO_INDEX_ACCESS_KEY = 24
+    VK_PLAYLIST_CONTEXT = "audio_page"
+    VK_MAX_PLAYLIST_PAGES = 20
+
+    def __init__(
+        self,
+        *,
+        request_context: VKRequestContextProtocol,
+        media_gateway: VKMediaGatewayProtocol,
+    ) -> None:
+        self._request_context = request_context
+        self._media_gateway = media_gateway
+
+    def __getattr__(self, name: str) -> Any:
+        if hasattr(self._request_context, name):
+            return getattr(self._request_context, name)
+        if hasattr(self._media_gateway, name):
+            return getattr(self._media_gateway, name)
+        raise AttributeError(name)
+
+    def _looks_like_audio_tuple(self, value: Any) -> bool:
+        """Проверяет, похож ли объект на tuple-аудио VK."""
+        if not isinstance(value, list) or len(value) <= self.AUDIO_INDEX_DURATION:
+            return False
+        owner_id = self._safe_int(value[self.AUDIO_INDEX_OWNER_ID])
+        audio_id = self._safe_int(value[self.AUDIO_INDEX_ID])
+        return owner_id is not None and audio_id is not None
+
+    def _extract_cover_url_from_audio_tuple(self, audio_tuple: Sequence[Any]) -> Optional[str]:
+        """Извлекает URL обложки из tuple-аудио."""
+        if len(audio_tuple) <= self.AUDIO_INDEX_COVER_URL:
+            return None
+
+        raw_cover = audio_tuple[self.AUDIO_INDEX_COVER_URL]
+        if isinstance(raw_cover, str):
+            for candidate in raw_cover.split(","):
+                cleaned = candidate.strip()
+                if cleaned.startswith(("http://", "https://")):
+                    return cleaned
+
+        return self._extract_first_http_url(raw_cover)
+
+    def _audio_tuple_to_track_preview(self, audio_tuple: Sequence[Any]) -> dict[str, Any]:
+        """Преобразует tuple-аудио в metadata-трек для playlist preview."""
+        owner = self._safe_int(audio_tuple[self.AUDIO_INDEX_OWNER_ID] if len(audio_tuple) > self.AUDIO_INDEX_OWNER_ID else None)
+        audio = self._safe_int(audio_tuple[self.AUDIO_INDEX_ID] if len(audio_tuple) > self.AUDIO_INDEX_ID else None)
+        access_key = self._first_non_empty(
+            audio_tuple[self.AUDIO_INDEX_ACCESS_KEY] if len(audio_tuple) > self.AUDIO_INDEX_ACCESS_KEY else None,
+        )
+
+        canonical_track_url = None
+        if owner is not None and audio is not None:
+            canonical_track_url = self._build_track_canonical_url(str(owner), str(audio), access_key)
+
+        return {
+            "title": self._first_non_empty(
+                audio_tuple[self.AUDIO_INDEX_TITLE] if len(audio_tuple) > self.AUDIO_INDEX_TITLE else None,
+                "VK Track",
+            )
+            or "VK Track",
+            "performer": self._first_non_empty(
+                audio_tuple[self.AUDIO_INDEX_PERFORMER] if len(audio_tuple) > self.AUDIO_INDEX_PERFORMER else None,
+                "Unknown",
+            )
+            or "Unknown",
+            "duration": self._safe_int(audio_tuple[self.AUDIO_INDEX_DURATION] if len(audio_tuple) > self.AUDIO_INDEX_DURATION else None),
+            "source_url": canonical_track_url,
+            "canonical_url": canonical_track_url,
+            "cover_url": self._extract_cover_url_from_audio_tuple(audio_tuple),
+        }
+
     @classmethod
-    def _extract_playlist_object_from_payload(cls, payload: Any) -> Optional[Dict[str, Any]]:
+    def _extract_playlist_object_from_payload(cls, payload: Any) -> Optional[dict[str, Any]]:
         """
         Извлекает объект playlist из ответа `load_section`.
         """
@@ -29,7 +118,7 @@ class VKPlaylist:
             if isinstance(first_item, dict) and isinstance(first_item.get("list"), list):
                 return first_item
 
-        def _walk(value: Any) -> Iterable[Dict[str, Any]]:
+        def _walk(value: Any) -> Iterable[dict[str, Any]]:
             if isinstance(value, dict):
                 if isinstance(value.get("list"), list):
                     yield value
@@ -50,7 +139,7 @@ class VKPlaylist:
         access_hash: Optional[str],
         offset: int,
         is_preload: bool,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         """
         Загружает страницу плейлиста через `al_audio.php?act=load_section`.
         """
@@ -81,13 +170,13 @@ class VKPlaylist:
         owner_id: str,
         playlist_id: str,
         access_hash: Optional[str],
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         """
         Загружает плейлист через API-цепочку `load_section` c поддержкой пагинации.
         """
-        playlist_meta: Optional[Dict[str, Any]] = None
+        playlist_meta: Optional[dict[str, Any]] = None
         tracks: list[list[Any]] = []
-        seen_track_ids: set[Tuple[int, int]] = set()
+        seen_track_ids: set[tuple[int, int]] = set()
 
         offset = 0
         for page_index in range(self.VK_MAX_PLAYLIST_PAGES):
@@ -134,16 +223,15 @@ class VKPlaylist:
             playlist_meta["totalCount"] = len(tracks)
         return playlist_meta
 
-    @classmethod
-    def _build_playlist_candidates(cls, owner_id: str, playlist_id: str, access_hash: Optional[str]) -> tuple[str, ...]:
+    def _build_playlist_candidates(self, owner_id: str, playlist_id: str, access_hash: Optional[str]) -> tuple[str, ...]:
         """
         Возвращает VK URL-кандидаты плейлиста для web/mobile extraction.
         """
-        token = cls._build_playlist_token(owner_id, playlist_id, access_hash)
+        token = self._build_playlist_token(owner_id, playlist_id, access_hash)
         return (f"https://vk.com/music/playlist/{token}",)
 
     @classmethod
-    def _iter_playlist_track_nodes(cls, value: Any) -> Iterable[Dict[str, Any]]:
+    def _iter_playlist_track_nodes(cls, value: Any) -> Iterable[dict[str, Any]]:
         """
         Итерирует track-объекты из JSON-LD playlist структуры.
         """
@@ -161,7 +249,7 @@ class VKPlaylist:
             for item in value:
                 yield from cls._iter_playlist_track_nodes(item)
 
-    def _extract_playlist_metadata(self, html_text: str, canonical_url: str) -> Dict[str, Any]:
+    def _extract_playlist_metadata(self, html_text: str, canonical_url: str) -> dict[str, Any]:
         """
         Извлекает метаданные плейлиста и список треков без скачивания.
         """
@@ -169,7 +257,7 @@ class VKPlaylist:
 
         playlist_title = "VK Music Playlist"
         owner = "Unknown"
-        tracks: list[Dict[str, Any]] = []
+        tracks: list[dict[str, Any]] = []
         seen_track_urls: set[str] = set()
         track_count: Optional[int] = None
 
@@ -309,7 +397,7 @@ class VKPlaylist:
         playlist_title: str,
         owner: str,
         track_count: int,
-        tracks: Sequence[Dict[str, Any]],
+        tracks: Sequence[dict[str, Any]],
     ) -> str:
         """
         Формирует текст превью плейлиста для Telegram.
@@ -330,7 +418,7 @@ class VKPlaylist:
 
         return "\n".join(lines)
 
-    async def _process_vk_playlist(
+    async def process(
         self,
         session: aiohttp.ClientSession,
         original_url: str,
@@ -338,7 +426,7 @@ class VKPlaylist:
         owner_id: str,
         playlist_id: str,
         access_hash: Optional[str],
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[MediaResult]:
         """
         Обрабатывает плейлист VK Music (без пакетной загрузки файлов).
         """
@@ -377,30 +465,20 @@ class VKPlaylist:
                     track_count=track_count,
                     tracks=playlist_tracks,
                 )
-                return {
-                    "type": "playlist",
-                    "source_name": self.source_name,
-                    "title": playlist_title,
-                    "uploader": playlist_owner,
-                    "source_url": original_url,
-                    "canonical_url": canonical_url,
-                    "original_url": original_url,
-                    "context": context,
-                    "caption_text": caption_text,
-                    "metadata": {
-                        "playlist_title": playlist_title,
-                        "owner": playlist_owner,
-                        "track_count": track_count,
-                        "tracks": playlist_tracks,
-                        "canonical_url": canonical_url,
-                    },
-                    "tracks": playlist_tracks,
-                }
+                return MediaResult(
+                    content_type=ContentType.PLAYLIST,
+                    source_name="VK",
+                    original_url=original_url,
+                    context=context,
+                    title=playlist_title,
+                    uploader=playlist_owner,
+                    caption_text=caption_text,
+                )
 
             logger.warning("VK playlist API returned no tracks, fallback to HTML parsing: %s", canonical_url)
 
         candidate_urls = self._build_playlist_candidates(owner_id, playlist_id, access_hash)
-        best_metadata: Optional[Dict[str, Any]] = None
+        best_metadata: Optional[dict[str, Any]] = None
         for candidate_url in candidate_urls:
             html_text = await self._fetch_html(session, candidate_url)
             if not html_text:
@@ -433,22 +511,12 @@ class VKPlaylist:
             tracks=tracks,
         )
 
-        return {
-            "type": "playlist",
-            "source_name": self.source_name,
-            "title": playlist_title,
-            "uploader": playlist_owner,
-            "source_url": original_url,
-            "canonical_url": canonical_url,
-            "original_url": original_url,
-            "context": context,
-            "caption_text": caption_text,
-            "metadata": {
-                "playlist_title": playlist_title,
-                "owner": playlist_owner,
-                "track_count": track_count,
-                "tracks": tracks,
-                "canonical_url": canonical_url,
-            },
-            "tracks": tracks,
-        }
+        return MediaResult(
+            content_type=ContentType.PLAYLIST,
+            source_name="VK",
+            original_url=original_url,
+            context=context,
+            title=playlist_title,
+            uploader=playlist_owner,
+            caption_text=caption_text,
+        )
