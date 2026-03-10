@@ -254,6 +254,21 @@
   - pilot-миграция `YouTubeHandler` на прямой `MediaResult` и explicit composition без inheritance-boundary (зафиксирована в `.github/ai-agent-technical-task.md`).
 - Результат: архитектурная граница зафиксирована как `handler -> MediaResult -> SenderRegistry -> Telegram` при сохранении совместимости с текущими legacy handlers.
 
+### 13.2 YouTube pilot migration на typed-контракт
+
+- Статус (2026-03-10): выполнено в scope `.github/ai-agent-technical-task.md`.
+- Проблема: YouTube-контур оставался legacy-boundary (`dict[file_info]` + MRO-зависимость).
+- Выполнено:
+  - `YouTubeHandler.process()` переведен на прямой возврат `MediaResult` без локального adapter-слоя. ✅ (`src/handlers/resources/YouTube/YouTubeHandler.py`).
+  - Ветки `shorts` и `channel` переписаны на прямой `MediaResult`. ✅ (`src/handlers/resources/YouTube/YouTubeShorts.py`, `src/handlers/resources/YouTube/YouTubeChannel.py`).
+  - Вынесены explicit dependencies для YouTube (`cookies/options provider` + `media gateway`) без скрытого MRO-контракта. ✅ (`src/handlers/resources/YouTube/YouTubeDependencies.py`).
+  - Классификация и normalizer URL вынесены в явный внутренний API YouTube-модуля. ✅ (`src/handlers/resources/YouTube/YouTubeUrlService.py`).
+  - Локальный YouTube smoke-скрипт адаптирован под typed-результат с сохранением compatibility для legacy формата. ✅ (`test/handlers/YouTube/test_youtube_handlers_local.py`).
+- Ограничения валидации:
+  - Полный smoke-прогон YouTube не запускался в рамках этого шага, так как для тестов требуется отдельный явный запрос пользователя.
+  - Выполнена синтаксическая проверка: `python -m compileall src test/handlers/YouTube`.
+- Результат: YouTube стал первым source handler с прямой typed-границей `YouTubeHandler -> MediaResult`, при сохранении текущего runtime-реестра и без расширения scope на другие источники.
+
 ## Приоритет P3 (дальше)
 
 ### 14. Возврат к тестам как отдельная фаза

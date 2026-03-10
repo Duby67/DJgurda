@@ -1,33 +1,42 @@
 """
-Обработчик Shorts-контента YouTube.
+Процессор Shorts-контента YouTube.
 """
 
+from __future__ import annotations
+
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
-from src.handlers.mixins import VideoMixin
+from src.handlers.contracts import ContentType, MediaResult
+
+from .YouTubeDependencies import YouTubeMediaGatewayProtocol, YouTubeOptionsProviderProtocol
 
 
-class YouTubeShorts(VideoMixin):
-    """
-    Миксин для скачивания и подготовки YouTube Shorts.
-    """
+class YouTubeShorts:
+    """Процессор для скачивания и подготовки YouTube Shorts."""
 
     SHORTS_ID_PATTERN = re.compile(r"/shorts/([A-Za-z0-9_-]+)")
 
-    async def _process_youtube_shorts(
+    def __init__(
+        self,
+        *,
+        media_gateway: YouTubeMediaGatewayProtocol,
+        options_provider: YouTubeOptionsProviderProtocol,
+    ) -> None:
+        self._media_gateway = media_gateway
+        self._options_provider = options_provider
+
+    async def process(
         self,
         url: str,
         context: str,
         original_url: str,
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Скачивает Shorts и возвращает файл + метаданные для общего pipeline.
-        """
+    ) -> Optional[MediaResult]:
+        """Скачивает Shorts и возвращает typed `MediaResult`."""
         shorts_match = self.SHORTS_ID_PATTERN.search(url)
-        shorts_id = shorts_match.group(1) if shorts_match else self._extract_video_id(url)
+        shorts_id = shorts_match.group(1) if shorts_match else self._media_gateway.extract_video_id(url)
 
-        ydl_opts = {
+        ydl_opts: dict[str, Any] = {
             "format": "best[height<=1920][ext=mp4]/best[height<=1920]/best",
             "merge_output_format": "mp4",
             "writethumbnail": True,
@@ -39,19 +48,29 @@ class YouTubeShorts(VideoMixin):
                 }
             },
         }
-        ydl_opts.update(self._build_youtube_cookie_opts())
-        result = await self._download_video(url, ydl_opts, video_id=shorts_id)
+        ydl_opts.update(self._options_provider.build_ytdlp_opts())
+
+        result = await self._media_gateway.download_video(url, ydl_opts, video_id=shorts_id)
         if not result:
             return None
 
-        info = result["info"]
-        return {
-            "type": "shorts",
-            "source_name": "YouTube",
-            "file_path": result["file_path"],
-            "thumbnail_path": result["thumbnail_path"],
-            "title": info.get("title", "YouTube Shorts"),
-            "uploader": info.get("uploader", info.get("channel", "Unknown")),
-            "original_url": original_url,
-            "context": context,
-        }
+        info = result.get("info") if isinstance(result, dict) else None
+        if not isinstance(info, dict):
+            info = {}
+
+        file_path = result.get("file_path")
+        if file_path is None:
+            return None
+
+        thumbnail_path = result.get("thumbnail_path")
+
+        return MediaResult(
+            content_type=ContentType.SHORTS,
+            source_name="YouTube",
+            original_url=original_url,
+            context=context,
+            title=info.get("title", "YouTube Shorts"),
+            uploader=info.get("uploader", info.get("channel", "Unknown")),
+            main_file_path=file_path,
+            thumbnail_path=thumbnail_path,
+        )

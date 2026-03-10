@@ -19,7 +19,15 @@ os.environ.setdefault("BOT_TOKEN", "local-test-token")
 os.environ.setdefault("YANDEX_MUSIC_TOKEN", "local-test-token")
 os.environ.setdefault("YOUTUBE_COOKIES_ENABLED", "false")
 
-from src.handlers.resources.YouTube.YouTubeHandler import YouTubeHandler
+from src.handlers.resources.YouTube.YouTubeChannel import YouTubeChannel
+
+
+def _build_channel_processor() -> YouTubeChannel:
+    """Создает процессор канала с минимальными зависимостями для unit-теста helper-методов."""
+    return YouTubeChannel(
+        media_gateway=object(),  # type: ignore[arg-type]
+        options_provider=object(),  # type: ignore[arg-type]
+    )
 
 
 def test_channel_video_count_has_priority_over_playlist_count() -> None:
@@ -27,7 +35,7 @@ def test_channel_video_count_has_priority_over_playlist_count() -> None:
     Для карточки канала приоритетом должно быть общее число видео,
     а не количество плейлистов.
     """
-    handler = YouTubeHandler()
+    handler = _build_channel_processor()
     info = {
         "playlist_count": 2,
         "channel_video_count": 75,
@@ -40,7 +48,7 @@ def test_playlist_count_is_used_as_fallback() -> None:
     """
     Если общего числа видео нет, разрешается использовать playlist_count как fallback.
     """
-    handler = YouTubeHandler()
+    handler = _build_channel_processor()
     info = {"playlist_count": 2}
 
     assert handler._extract_total_videos_count(info) == "2"
@@ -50,7 +58,7 @@ def test_build_videos_tab_url_from_channel_id() -> None:
     """
     Для channel-id URL должен строиться путь на вкладку videos.
     """
-    handler = YouTubeHandler()
+    handler = _build_channel_processor()
     url = "https://www.youtube.com/channel/UCALIGDpGpOmezPu0xujHzqA"
 
     assert handler._build_videos_tab_url(url) == "https://www.youtube.com/channel/UCALIGDpGpOmezPu0xujHzqA/videos"
@@ -60,7 +68,7 @@ def test_build_videos_tab_url_from_handle_root() -> None:
     """
     Для handle-страницы должен добавляться суффикс /videos.
     """
-    handler = YouTubeHandler()
+    handler = _build_channel_processor()
     url = "https://www.youtube.com/@IDIM20247"
 
     assert handler._build_videos_tab_url(url) == "https://www.youtube.com/@IDIM20247/videos"
@@ -70,7 +78,7 @@ def test_build_videos_tab_url_replaces_other_tab() -> None:
     """
     Для вкладок типа /about должен подставляться /videos.
     """
-    handler = YouTubeHandler()
+    handler = _build_channel_processor()
     url = "https://www.youtube.com/@IDIM20247/about"
 
     assert handler._build_videos_tab_url(url) == "https://www.youtube.com/@IDIM20247/videos"

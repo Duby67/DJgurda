@@ -1,24 +1,33 @@
 """
-Обработчик профилей/страниц каналов YouTube.
+Процессор профилей/страниц каналов YouTube.
 """
 
+from __future__ import annotations
+
 import html
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 from urllib.parse import urlsplit, urlunsplit
 
-from src.handlers.mixins import MetadataMixin, PhotoMixin
+from src.handlers.contracts import ContentType, MediaResult
+
+from .YouTubeDependencies import YouTubeMediaGatewayProtocol, YouTubeOptionsProviderProtocol
 
 
-class YouTubeChannel(PhotoMixin, MetadataMixin):
-    """
-    Миксин для извлечения метаданных канала YouTube.
-    """
+class YouTubeChannel:
+    """Процессор метаданных и карточки канала YouTube."""
+
+    def __init__(
+        self,
+        *,
+        media_gateway: YouTubeMediaGatewayProtocol,
+        options_provider: YouTubeOptionsProviderProtocol,
+    ) -> None:
+        self._media_gateway = media_gateway
+        self._options_provider = options_provider
 
     @staticmethod
     def _first_non_empty(*values: Any) -> Optional[str]:
-        """
-        Возвращает первую непустую строку из набора значений.
-        """
+        """Возвращает первую непустую строку из набора значений."""
         for value in values:
             if isinstance(value, str) and value.strip():
                 return value.strip()
@@ -26,9 +35,7 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
 
     @staticmethod
     def _format_count(value: Any) -> Optional[str]:
-        """
-        Форматирует числовое значение для компактного отображения.
-        """
+        """Форматирует числовое значение для компактного отображения."""
         if isinstance(value, bool):
             return None
         if isinstance(value, int):
@@ -45,9 +52,7 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
         subscriber_count: Optional[str],
         video_count: Optional[str],
     ) -> str:
-        """
-        Формирует мобильный caption для карточки канала.
-        """
+        """Формирует mobile-first caption для карточки канала."""
         safe_title = html.escape(channel_title)
         safe_url = html.escape(channel_url, quote=True)
 
@@ -71,7 +76,7 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
 
         return "\n".join(lines)
 
-    def _extract_total_videos_count(self, info: Dict[str, Any]) -> Optional[str]:
+    def _extract_total_videos_count(self, info: dict[str, Any]) -> Optional[str]:
         """
         Возвращает общее количество видео на канале.
 
@@ -88,9 +93,7 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
         return self._format_count(info.get("playlist_count"))
 
     def _build_videos_tab_url(self, channel_url: str) -> str:
-        """
-        Возвращает URL вкладки `/videos` для канала.
-        """
+        """Возвращает URL вкладки `/videos` для канала."""
         parts = urlsplit(channel_url)
         path_parts = [part for part in parts.path.split("/") if part]
         if not path_parts:
@@ -108,18 +111,16 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
     async def _extract_channel_metadata(
         self,
         channel_url: str,
-        ydl_opts: Dict[str, Any],
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Извлекает метаданные канала с приоритетом данных из вкладки `/videos`.
-        """
+        ydl_opts: dict[str, Any],
+    ) -> Optional[dict[str, Any]]:
+        """Извлекает метаданные канала с приоритетом данных из вкладки `/videos`."""
         videos_url = self._build_videos_tab_url(channel_url)
-        videos_info = await self._extract_metadata(videos_url, ydl_opts)
+        videos_info = await self._media_gateway.extract_metadata(videos_url, ydl_opts)
 
         if videos_url == channel_url:
             return videos_info
 
-        base_info = await self._extract_metadata(channel_url, ydl_opts)
+        base_info = await self._media_gateway.extract_metadata(channel_url, ydl_opts)
         if not videos_info and not base_info:
             return None
         if videos_info and not base_info:
@@ -127,7 +128,6 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
         if base_info and not videos_info:
             return base_info
 
-        # Берем за основу профильные данные канала и явно переносим счетчики из /videos.
         merged_info = dict(base_info or {})
         for key in ("channel_video_count", "video_count", "playlist_count"):
             value = videos_info.get(key) if isinstance(videos_info, dict) else None
@@ -135,16 +135,14 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
                 merged_info[key] = value
         return merged_info
 
-    async def _process_youtube_channel(
+    async def process(
         self,
         url: str,
         context: str,
         original_url: str,
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Извлекает метаданные канала и возвращает профильную карточку.
-        """
-        ydl_opts = {
+    ) -> Optional[MediaResult]:
+        """Извлекает данные канала и возвращает typed `MediaResult`."""
+        ydl_opts: dict[str, Any] = {
             "extract_flat": True,
             "extractor_args": {
                 "youtube": {
@@ -152,7 +150,7 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
                 }
             },
         }
-        ydl_opts.update(self._build_youtube_cookie_opts())
+        ydl_opts.update(self._options_provider.build_ytdlp_opts())
 
         info = await self._extract_channel_metadata(url, ydl_opts)
         if not info:
@@ -181,14 +179,18 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
         )
         video_count = self._extract_total_videos_count(info)
 
-        avatar_url = self._pick_thumbnail_url(
+        avatar_url = self._media_gateway.pick_thumbnail_url(
             info,
             candidate_keys=("channel_thumbnail", "thumbnail", "thumbnails"),
         )
         avatar_path = None
         if avatar_url:
-            avatar_path = self._generate_unique_path(channel_id, suffix=".jpg")
-            if not await self._download_photo(avatar_url, avatar_path, size_limit=self.photo_limit):
+            avatar_path = self._media_gateway.generate_unique_path(channel_id, suffix=".jpg")
+            if not await self._media_gateway.download_photo(
+                avatar_url,
+                avatar_path,
+                size_limit=self._media_gateway.photo_limit,
+            ):
                 avatar_path = None
 
         caption = self._build_channel_caption(
@@ -199,14 +201,14 @@ class YouTubeChannel(PhotoMixin, MetadataMixin):
             video_count=video_count,
         )
 
-        return {
-            "type": "channel",
-            "source_name": "YouTube",
-            "file_path": avatar_path,
-            "thumbnail_path": None,
-            "title": channel_title,
-            "uploader": channel_id,
-            "original_url": original_url,
-            "context": context,
-            "caption_text": caption,
-        }
+        return MediaResult(
+            content_type=ContentType.CHANNEL,
+            source_name="YouTube",
+            original_url=original_url,
+            context=context,
+            main_file_path=avatar_path,
+            thumbnail_path=None,
+            title=channel_title,
+            uploader=channel_id,
+            caption_text=caption,
+        )
