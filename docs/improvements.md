@@ -34,15 +34,16 @@
 
 ### 3. Стратегия по неактивным handlers
 
-- Статус (2026-03-08): частично выполнено.
-- Проблема: в коде есть YouTube/Instagram/YandexMusic/VK handlers; после подключения YouTube/Instagram/VK в runtime остается неактивным YandexMusic.
+- Статус (2026-03-11): пересмотрено после ревизии runtime-контуров.
+- Проблема: документный статус handlers разошелся с фактическим кодом и архитектурным планом; для `YandexMusic` и `VK` нужен явный статусный режим вместо неявных ожиданий readiness.
 - Действие:
   - Подключить готовые обработчики YouTube/Instagram в `ServiceManager` с минимальным риском для текущего TikTok pipeline. ✅ Выполнено.
-  - Подключить `VKHandler` в `ServiceManager` с поддержкой `audio`/`playlist`, безопасными VK cookies и локальными smoke-проверками по шаблону `test/handlers/<Source>`. ✅ Выполнено (`src/handlers/resources/VK/*`, `src/handlers/manager.py`, `test/handlers/VK/*`, `src/config.py`, `env.example`).
-  - Для VK Music стабилизировать extraction: использовать API-first цепочку `reload_audios`/`load_section`, декодировать `audio_api_unavailable`, поддержать HLS-загрузку трека и подтвердить локальным smoke-прогоном `4/4`. ✅ Выполнено (`src/handlers/resources/VK/VKHandler.py`, `test/handlers/VK/test_vk_handlers_local.py`).
-  - Выбрать подход: поэтапное включение или архивирование оставшихся неиспользуемых обработчиков.
-  - Для включаемых источников добавить критерии readiness и чеклист.
-- Результат: меньше технического долга и понятный roadmap по источникам.
+  - `YandexMusic` явно зафиксировать как legacy-source и не тянуть в новый stable runtime baseline. ⏳ В backlog.
+  - `VK` явно зафиксировать как source `в разработке`, а не как готовый runtime-handler. ⏳ В backlog.
+  - Зафиксировать в backlog и task-документации, что текущая `VK`-реализация недееспособна. ⏳ В backlog.
+  - Зафиксировать, что `yt-dlp` не работает с `VK` как надежная технологическая опора, поэтому для `VK` нужен отдельный R&D с поиском другого решения. ⏳ В backlog.
+  - Для включаемых источников держать явный readiness-checklist вместо исторических предположений о готовности. ⏳ В backlog.
+- Результат: меньше ложных ожиданий по источникам и более честная карта статусов runtime/legacy/development.
 
 ## Приоритет P2 (средний)
 
@@ -321,7 +322,7 @@
 
 ### 13.6 VK stage migration на typed-контракт
 
-- Статус (2026-03-11): выполнено частично в scope `.github/ai-agent-technical-task.md` (кодовая и архитектурная миграция завершены; запуск smoke-тестов пропущен по явному запросу пользователя).
+- Статус (2026-03-11): пересмотрено; историческая typed-миграция сохранена как промежуточный результат, но production-readiness по `VK` не подтвержден.
 - Проблема: VK-контур оставался legacy-boundary (`dict[file_info]` + зависимость от MRO через множественное наследование `VKHandler(BaseHandler, VKAudio, VKPlaylist)`).
 - Выполнено:
   - `VKHandler.process()` переведен на прямой возврат `MediaResult`; MRO-цепочка `VKHandler(BaseHandler, VKAudio, VKPlaylist)` удалена. ✅ (`src/handlers/resources/VK/VKHandler.py`).
@@ -333,7 +334,11 @@
   - Выполнена синтаксическая проверка: `./venv/Scripts/python.exe -m compileall src/handlers/resources/VK test/handlers/VK`.
   - Выполнена локальная проверка инициализации: создание `VKHandler` и выбор handler через `ServiceManager`.
   - Реальный smoke-прогон VK не выполнялся по явному запросу пользователя (пропуск допустим в рамках текущего инкремента).
-- Результат: VK переведен на явную typed-границу `VKHandler -> typed processors/dependencies -> MediaResult`; для полного закрытия этапа остается выполнить smoke-прогон VK и подтвердить parity поведения на реальных ссылках.
+- Актуализация статуса:
+  - `VK` не считать stable runtime-source. ⚠️
+  - Текущую `VK`-реализацию считать недееспособной до выбора другой технологической основы. ⚠️
+  - `yt-dlp` не считать рабочим базовым решением для `VK`; требуется отдельный R&D по альтернативному подходу. ⚠️
+- Результат: архитектурный шаг миграции зафиксирован как промежуточный, но `VK` переведен в статус `в разработке` и исключен из набора решений, которые можно считать реально готовыми.
 
 ## Приоритет P3 (дальше)
 
