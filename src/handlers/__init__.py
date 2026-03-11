@@ -6,13 +6,8 @@
 
 from .base import BaseHandler
 from .manager import ServiceManager
-from .mixins import VideoMixin, PhotoMixin, AudioMixin, MediaGroupMixin
 
 __all__ = [
-    'BaseHandler', 
+    'BaseHandler',
     'ServiceManager',
-    'VideoMixin',
-    'PhotoMixin', 
-    'AudioMixin',
-    'MediaGroupMixin'
 ]

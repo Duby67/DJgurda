@@ -19,7 +19,12 @@ import aiohttp
 from bs4 import BeautifulSoup
 
 from src.config import VK_COOKIES, VK_COOKIES_ENABLED
-from src.handlers.mixins import AudioMixin
+from src.handlers.infrastructure import (
+    DelayPolicyService,
+    HttpFileService,
+    RuntimePathService,
+    YtdlpOptionBuilder,
+)
 from src.utils.cookies import CookieFile
 
 logger = logging.getLogger(__name__)
@@ -340,15 +345,40 @@ class VKRequestContext:
         return text or None
 
 
-class VKMediaGateway(AudioMixin):
+class VKMediaGateway:
     """
-    Реализация low-level операций VK через AudioMixin.
+    Реализация low-level операций VK через composition-сервисы.
 
-    Mixins используются только как внутренний механизм этого gateway-объекта,
-    а не как публичный runtime-контракт handler-а.
+    Сохраняет минимальный API, который ожидают VK-процессоры.
     """
 
     def __init__(self, runtime_dir: Path) -> None:
-        super().__init__()
         self.temp_dir = runtime_dir
         self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self._runtime_paths = RuntimePathService(runtime_dir=runtime_dir)
+        self._delay_policy = DelayPolicyService()
+        self._http_service = HttpFileService(delay_policy=self._delay_policy)
+        self._option_builder = YtdlpOptionBuilder(scope=self.__class__.__name__)
+        self.audio_limit = self._http_service.audio_limit
+        self.photo_limit = self._http_service.photo_limit
+
+    def _generate_unique_path(self, identifier: str, suffix: str = "") -> Path:
+        """Генерирует уникальный runtime-путь."""
+        return self._runtime_paths.generate_unique_path(identifier, suffix=suffix)
+
+    def _build_ytdlp_opts(
+        self,
+        default_opts: dict[str, Any],
+        ydl_opts: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """Объединяет опции yt-dlp и добавляет тихий logger."""
+        return self._option_builder.build(default_opts, ydl_opts)
+
+    async def _download_thumbnail(
+        self,
+        url: str,
+        dest_path: Path,
+        size_limit: Optional[int] = None,
+    ) -> bool:
+        """Скачивает thumbnail с проверкой лимита размера."""
+        return await self._http_service.download_thumbnail(url, dest_path, size_limit=size_limit)
