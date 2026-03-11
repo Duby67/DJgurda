@@ -6,7 +6,7 @@
 
 ## Метаданные backlog
 
-- Последняя ревизия backlog: 2026-03-10 | version/tag: v1.2.3
+- Последняя ревизия backlog: 2026-03-11 | version/tag: v1.2.3
 
 ## Приоритет P0 (критично)
 
@@ -34,16 +34,16 @@
 
 ### 3. Стратегия по неактивным handlers
 
-- Статус (2026-03-11): выполнено в части статусной сегрегации runtime/legacy/development.
-- Проблема: документный статус handlers разошелся с фактическим кодом и архитектурным планом; для `YandexMusic` и `VK` нужен явный статусный режим вместо неявных ожиданий readiness.
+- Статус (2026-03-11): пересмотрено; `YandexMusic` переведен в active runtime, `VK` остается в статусе `в разработке`.
+- Проблема: документный статус handlers разошелся с фактическим кодом и архитектурным планом; для `VK` нужен явный статусный режим вместо неявных ожиданий readiness.
 - Действие:
   - Подключить готовые обработчики YouTube/Instagram в `ServiceManager` с минимальным риском для текущего TikTok pipeline. ✅ Выполнено.
-  - `YandexMusic` явно зафиксировать как legacy-source и не тянуть в новый stable runtime baseline. ✅ Выполнено (`README.md`, `.github/ai-context.md`, `src/handlers/registry.py`).
+  - `YandexMusic` перевести из legacy-зоны в стабильный runtime-контур с typed-результатом `MediaResult` для `audio`. ✅ Выполнено (`src/handlers/resources/YandexMusic/YandexMusic.py`, `src/handlers/registry.py`, `README.md`, `.github/ai-context.md`).
   - `VK` явно зафиксировать как source `в разработке`, а не как готовый runtime-handler. ✅ Выполнено (`README.md`, `.github/ai-context.md`, `src/handlers/registry.py`).
   - Зафиксировать в backlog и task-документации, что текущая `VK`-реализация недееспособна. ✅ Выполнено (`.github/ai-agent-technical-task.md`, `docs/improvements.md`, `README.md`, `.github/ai-context.md`).
   - Зафиксировать, что `yt-dlp` не работает с `VK` как надежная технологическая опора, поэтому для `VK` нужен отдельный R&D с поиском другого решения. ✅ Выполнено (`.github/ai-agent-technical-task.md`, `docs/improvements.md`, `README.md`, `.github/ai-context.md`).
   - Для включаемых источников держать явный readiness-checklist вместо исторических предположений о готовности. ⏳ В backlog.
-- Результат: меньше ложных ожиданий по источникам и более честная карта статусов runtime/legacy/development.
+- Результат: статусная карта источников синхронизирована с кодом runtime (`YandexMusic` активен, `VK` остается dev/R&D).
 
 ## Приоритет P2 (средний)
 
@@ -359,19 +359,19 @@
 ### 13.8 Gateway composition without mixins + source-status segregation
 
 - Статус (2026-03-11): выполнено в scope `.github/ai-agent-technical-task.md` (Этапы 3–7).
-- Проблема: stable runtime gateways (`COUB`, `YouTube`, `TikTok`, `Instagram`) продолжали опираться на multiple inheritance от mixins, а статусная сегрегация `YandexMusic/VK` оставалась в backlog как незакрытый пункт.
+- Проблема: stable runtime gateways (`COUB`, `YouTube`, `TikTok`, `Instagram`) продолжали опираться на multiple inheritance от mixins, а статусная сегрегация источников оставалась в backlog как незакрытый пункт.
 - Выполнено:
   - Добавлен composition-based infrastructure слой `media services` для runtime paths, random delay policy, yt-dlp video/metadata/media_group операций и HTTP download-операций. ✅ (`src/handlers/infrastructure/media_services.py`, `src/handlers/infrastructure/__init__.py`).
   - `CoubMediaGateway` переведен с `VideoMixin` inheritance на явную композицию сервисов. ✅ (`src/handlers/resources/Coub/CoubDependencies.py`).
   - `YouTubeMediaGateway` переведен с `VideoMixin+MetadataMixin+PhotoMixin` на явную композицию сервисов. ✅ (`src/handlers/resources/YouTube/YouTubeDependencies.py`).
   - `TikTokMediaGateway` переведен с `VideoMixin+PhotoMixin+AudioMixin+MediaGroupMixin` на явную композицию сервисов. ✅ (`src/handlers/resources/TikTok/TikTokDependencies.py`).
   - `InstagramMediaGateway` переведен с `VideoMixin+MediaGroupMixin+MetadataMixin+PhotoMixin` на явную композицию сервисов. ✅ (`src/handlers/resources/Instagram/InstagramDependencies.py`).
-  - В handler registry добавлена явная фиксация статусов источников вне stable runtime: `YandexMusic=legacy`, `VK=in_development`. ✅ (`src/handlers/registry.py`).
+  - В handler registry закреплен актуальный статусный контур: `YandexMusic` включен в stable runtime, `VK=in_development`. ✅ (`src/handlers/registry.py`, `src/handlers/resources/YandexMusic/YandexMusic.py`).
   - В task/backlog документации закрыты статусы этапов 3–7 и требований по segregation `YandexMusic/VK`. ✅ (`.github/ai-agent-technical-task.md`, `docs/improvements.md`).
 - Ограничения валидации:
   - Реальные тестовые прогоны (`pytest`/smoke) не выполнялись, так как для них требуется отдельное подтверждение пользователя.
   - Выполнена только синтаксическая проверка измененных модулей через `compileall`.
-- Результат: stable runtime gateways больше не используют mixin-based multiple inheritance как основную форму low-level инфраструктуры; status-segregation `YandexMusic`/`VK` формализована в коде и документации.
+- Результат: stable runtime gateways больше не используют mixin-based multiple inheritance как основную форму low-level инфраструктуры; статусная карта источников синхронизирована с кодом runtime (`YandexMusic` активен, `VK` в разработке).
 
 ## Приоритет P3 (дальше)
 

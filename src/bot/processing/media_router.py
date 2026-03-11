@@ -53,7 +53,11 @@ async def handle_media_message(message: Message) -> None:
     manager = _get_service_manager()
     for idx, (raw_url, context) in enumerate(blocks, start=1):
         resolved_url = await resolve_url(raw_url)
-        handler = manager.get_handler(resolved_url)
+        # Сначала пытаемся подобрать handler по исходному URL пользователя.
+        # Это снижает риск потери классификации на anti-bot redirect-страницах.
+        handler = manager.get_handler(raw_url)
+        if not handler:
+            handler = manager.get_handler(resolved_url)
         if not handler:
             logger.warning(f"No handler found for resolved URL: {resolved_url}")
             if await get_errors_enabled(message.chat.id):

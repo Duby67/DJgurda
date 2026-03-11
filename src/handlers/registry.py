@@ -10,13 +10,13 @@ from src.handlers.contracts import ContentType
 from src.handlers.resources.Coub import CoubHandler
 from src.handlers.resources.Instagram import InstagramHandler
 from src.handlers.resources.TikTok import TikTokHandler
+from src.handlers.resources.YandexMusic import YandexMusicHandler
 from src.handlers.resources.YouTube import YouTubeHandler
 
 HandlerFactory = Callable[[], BaseHandler]
 
 # Явная фиксация source-статусов вне stable runtime-контура.
 _NON_RUNTIME_SOURCE_STATUSES: dict[str, str] = {
-    "YandexMusic": "legacy",
     "VK": "in_development",
 }
 
@@ -93,7 +93,6 @@ def _default_descriptors() -> tuple[HandlerDescriptor, ...]:
     Важно: новые handlers добавляются декларативно через этот список.
 
     В intentionally excluded non-runtime зоне:
-    - `YandexMusic` остается в статусе legacy;
     - `VK` остается в статусе in_development.
     """
     return (
@@ -141,6 +140,14 @@ def _default_descriptors() -> tuple[HandlerDescriptor, ...]:
             feature_flags=("runtime_enabled",),
             factory=CoubHandler,
             supported_content_types=(ContentType.VIDEO,),
+        ),
+        HandlerDescriptor(
+            source_name="Yandex.Music",
+            pattern=YandexMusicHandler.PATTERN,
+            priority=60,
+            feature_flags=("runtime_enabled",),
+            factory=YandexMusicHandler,
+            supported_content_types=(ContentType.AUDIO,),
         ),
     )
 

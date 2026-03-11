@@ -7,12 +7,13 @@
 - YouTube (`shorts`, `channel`)
 - Instagram (`reels`, `media_group`, `stories`, `profile`)
 - COUB (`video`)
+- Yandex Music (`audio` для ссылок `track`)
 
 Дополнительно по статусам источников:
 
 - `VK Music` присутствует в коде как источник `в разработке`, но не считается частью текущего стабильного runtime-контура.
 - Текущая реализация `VK` считается недееспособной; `yt-dlp` не рассматривается как рабочая базовая технология для `VK`.
-- `YandexMusic` handler присутствует в коде как legacy-зона и не входит в стабильный runtime-контур.
+- `YandexMusic` зарегистрирован в стабильном runtime-контуре и обрабатывает track-ссылки в тип `audio`.
 
 Бот сохраняет статистику по чатам и пользователям.
 
@@ -232,10 +233,9 @@ python scripts/release_sync.py --tag v1.2.0 --write
 
 ## Статусы источников
 
-- В стабильном runtime зарегистрированы `TikTokHandler`, `YouTubeHandler`, `InstagramHandler`, `CoubHandler`.
+- В стабильном runtime зарегистрированы `TikTokHandler`, `YouTubeHandler`, `InstagramHandler`, `CoubHandler`, `YandexMusicHandler`.
 - `VKHandler` присутствует в коде и test/dev-контуре, но не считается частью стабильного runtime.
 - Текущая реализация `VK` недееспособна; `yt-dlp` не рассматривается как рабочая базовая технология для `VK`, поэтому для источника требуется отдельный R&D.
-- `YandexMusic` handler присутствует в коде как legacy-зона и не подключен в стабильный runtime.
 
 ## База данных
 

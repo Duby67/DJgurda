@@ -21,6 +21,10 @@ REELS_URL: Final[str] = "https://www.instagram.com/reel/DVYtOptkY_z/?igsh=YzNpdj
 # Ожидаем, что обработчик вернет type='media_group'.
 MEDIA_GROUP_URL: Final[str] = "https://www.instagram.com/p/DVk2sEcDPwp/?img_index=1&igsh=MTlwMWg5cXZ3cWt0bg=="
 
+# Кейс: пост Instagram из пользовательской ссылки.
+# Для пути `/p/<id>/` ожидаем type='media_group'.
+MEDIA_GROUP_URL_USER: Final[str] = "https://www.instagram.com/p/DVq1qjJDHBj/?igsh=Y2gyM2NwanludnJu"
+
 # Кейс: Stories-ссылка Instagram.
 # Ожидаем, что обработчик вернет type='stories'.
 STORIES_URL: Final[str] = "https://www.instagram.com/stories/elvirasharma/3847664882045214989?utm_source=ig_story_item_share&igsh=MXN6Ynp0NGNlaDhkbA=="
@@ -71,6 +75,12 @@ INSTAGRAM_TEST_CASES: Final[tuple[dict[str, str], ...]] = (
         "url": MEDIA_GROUP_URL,
         "expected_type": "media_group",
         "description": "Пост-карусель Instagram (несколько медиа).",
+    },
+    {
+        "name": "media_group_user",
+        "url": MEDIA_GROUP_URL_USER,
+        "expected_type": "media_group",
+        "description": "Пост Instagram из пользовательского примера (/p/<id>/).",
     },
     {
         "name": "stories",

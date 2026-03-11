@@ -5,6 +5,7 @@
 и обработки редиректов.
 """
 
+import base64
 import asyncio
 import logging
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -74,6 +75,54 @@ def _unwrap_interstitial_chain(url: str, max_hops: int = 3) -> str:
     return current
 
 
+def _extract_yandex_retpath_url(url: str) -> str | None:
+    """
+    Пробует извлечь исходный URL из `retpath` на странице `music.yandex.ru/showcaptcha`.
+    """
+    parts = urlsplit(url)
+    host = parts.netloc.lower()
+    if host != "music.yandex.ru" or not parts.path.lower().startswith("/showcaptcha"):
+        return None
+
+    query = parse_qs(parts.query)
+    for raw_retpath in query.get("retpath", []):
+        decoded = unquote(raw_retpath).strip()
+        if not decoded:
+            continue
+
+        # Yandex добавляет служебный хвост после ",", оставляем только base64-часть.
+        b64_candidate = decoded.split(",", 1)[0]
+        if not b64_candidate:
+            continue
+
+        padding = "=" * (-len(b64_candidate) % 4)
+        try:
+            unwrapped = base64.urlsafe_b64decode(f"{b64_candidate}{padding}").decode("utf-8").strip()
+        except Exception:
+            continue
+
+        if unwrapped.startswith(("http://", "https://")):
+            return unwrapped
+    return None
+
+
+def _restore_url_from_known_challenges(initial_url: str, final_url: str) -> str:
+    """
+    Восстанавливает контентный URL для известных anti-bot challenge-редиректов.
+    """
+    final_parts = urlsplit(final_url)
+    if (
+        final_parts.netloc.lower() == "music.yandex.ru"
+        and final_parts.path.lower().startswith("/showcaptcha")
+    ):
+        retpath_url = _extract_yandex_retpath_url(final_url)
+        if retpath_url:
+            return _unwrap_interstitial_chain(retpath_url)
+        return _unwrap_interstitial_chain(initial_url)
+
+    return final_url
+
+
 async def resolve_url(initial_url: str, timeout: int = 10) -> str:
     """
     Разрешает укороченную ссылку, получая конечный URL.
@@ -98,6 +147,7 @@ async def resolve_url(initial_url: str, timeout: int = 10) -> str:
                     timeout=aiohttp.ClientTimeout(total=timeout)
                 ) as resp:
                     final_url = _unwrap_interstitial_chain(str(resp.url))
+                    final_url = _restore_url_from_known_challenges(initial_url, final_url)
                     logger.debug(f"URL resolved via HEAD: {initial_url} -> {final_url}")
                     return final_url
                 
@@ -110,6 +160,7 @@ async def resolve_url(initial_url: str, timeout: int = 10) -> str:
                     timeout=aiohttp.ClientTimeout(total=timeout)
                 ) as resp:
                     final_url = _unwrap_interstitial_chain(str(resp.url))
+                    final_url = _restore_url_from_known_challenges(initial_url, final_url)
                     logger.debug(f"URL resolved via GET: {initial_url} -> {final_url}")
                     return final_url
                 

@@ -17,6 +17,14 @@ SHORTS_URL: Final[str] = "https://www.youtube.com/shorts/FTKTL9-hcGw"
 # Ожидаем, что обработчик вернет type='channel'.
 CHANNEL_PROFILE_URL: Final[str] = "https://www.youtube.com/@IDIM20247"
 
+# Кейс: YouTube Shorts (добавлен по пользовательской ссылке watch->shorts).
+# Ожидаем, что обработчик вернет type='shorts'.
+SHORTS_URL_FROM_WATCH_ID: Final[str] = "https://www.youtube.com/shorts/OUBWpfoBd9M"
+
+# Кейс: YouTube Shorts с query-параметром.
+# Ожидаем, что обработчик вернет type='shorts'.
+SHORTS_URL_WITH_QUERY: Final[str] = "https://youtube.com/shorts/p3Qgwjl7QfA?is=cO0DzvY4PAjCiKmj"
+
 # Кейс: interstitial-ссылка согласия YouTube, которая должна
 # распаковаться обратно в shorts URL.
 CONSENT_SHORTS_URL: Final[str] = (
@@ -51,6 +59,18 @@ YOUTUBE_TEST_CASES: Final[tuple[dict[str, str], ...]] = (
         "url": CONSENT_SHORTS_RELATIVE_URL,
         "expected_type": "shorts",
         "description": "YouTube consent-ссылка с относительным continue.",
+    },
+    {
+        "name": "shorts_from_watch_id",
+        "url": SHORTS_URL_FROM_WATCH_ID,
+        "expected_type": "shorts",
+        "description": "YouTube Shorts по ID из пользовательской watch-ссылки.",
+    },
+    {
+        "name": "shorts_with_query",
+        "url": SHORTS_URL_WITH_QUERY,
+        "expected_type": "shorts",
+        "description": "YouTube Shorts с query-параметром is.",
     },
     {
         "name": "channel_profile",
