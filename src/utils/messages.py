@@ -126,7 +126,8 @@ def build_caption(
 def build_error(
     error_message: str,
     url: str,
-    handler: SourceHandler
+    handler: SourceHandler,
+    reason: str | None = None,
 ) -> str:
     """
     Строит сообщение об ошибке.
@@ -135,14 +136,15 @@ def build_error(
         error_message: Текст ошибки
         url: Проблемный URL
         handler: Обработчик контента
+        reason: Краткая причина ошибки
         
     Возвращает:
         HTML-сообщение об ошибке
     """
     source = handler.source_name
     safe_url = html.escape(url, quote=True)
-    error_text = (
-        f"{EMOJI_ERROR} {error_message}.\n"
-        f"{emoji(source)} <a href='{safe_url}'>{source}</a>"
-    )
-    return error_text
+    lines = [f"{EMOJI_ERROR} {html.escape(error_message)}."]
+    if reason:
+        lines.append(f"Причина: {html.escape(reason)}.")
+    lines.append(f"{emoji(source)} <a href='{safe_url}'>{source}</a>")
+    return "\n".join(lines)

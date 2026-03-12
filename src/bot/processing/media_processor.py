@@ -79,14 +79,23 @@ async def process_block(
     """
     media_result: MediaResult | None = None
     chat_id = message.chat.id
+    errors_enabled = await get_errors_enabled(chat_id)
 
     try:
         async with DOWNLOAD_SEMAPHORE:
             handler_output = await handler.process(raw_url, user_context, resolved_url=resolved_url)
 
         if not handler_output:
-            if await get_errors_enabled(chat_id):
-                error_text = build_error("Не удалось загрузить контент", raw_url, handler)
+            if errors_enabled:
+                error_text = build_error(
+                    "Не удалось скачать контент",
+                    raw_url,
+                    handler,
+                    reason=(
+                        "ошибка скачивания или извлечения; "
+                        "ссылка может быть приватной, недоступной или временно ограниченной"
+                    ),
+                )
                 await message.answer(
                     text=error_text,
                     reply_parameters=ReplyParameters(
@@ -123,8 +132,16 @@ async def process_block(
                 await update_stats(message.chat.id, message.from_user.id, handler.source_name)
             return True
         except Exception:
-            if await get_errors_enabled(chat_id):
-                error_text = build_error("Не удалось отправить контент", raw_url, handler)
+            if errors_enabled:
+                error_text = build_error(
+                    "Не удалось отправить контент",
+                    raw_url,
+                    handler,
+                    reason=(
+                        "ошибка отправки в Telegram; "
+                        "возможны ограничения по размеру/формату или временный сбой API"
+                    ),
+                )
                 await message.answer(
                     text=error_text,
                     reply_parameters=ReplyParameters(
@@ -138,8 +155,13 @@ async def process_block(
             _cleanup_media_result(media_result)
 
     except Exception as exc:
-        if await get_errors_enabled(chat_id):
-            error_text = build_error("Внутренняя ошибка при обработке ссылки", raw_url, handler)
+        if errors_enabled:
+            error_text = build_error(
+                "Внутренняя ошибка при обработке ссылки",
+                raw_url,
+                handler,
+                reason="ошибка на этапе обработки; попробуйте повторить запрос позже",
+            )
             await message.answer(
                 text=error_text,
                 reply_parameters=ReplyParameters(

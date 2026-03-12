@@ -6,7 +6,7 @@
 
 ## Метаданные backlog
 
-- Последняя ревизия backlog: 2026-03-11 | version/tag: v1.2.4
+- Последняя ревизия backlog: 2026-03-13 | version/tag: v1.2.4
 
 ## Приоритет P0 (критично)
 
@@ -122,6 +122,10 @@
   - Для YouTube cookies вернуть безопасный auto-режим по умолчанию (`YOUTUBE_COOKIES_ENABLED=true`): валидный файл применяется автоматически, заглушка игнорируется, `false` отключает cookies принудительно. ✅ Выполнено (`src/config.py`, `src/utils/cookies.py`).
   - Для YouTube channel исправить расчет `🎬 Видео`: приоритет отдать `channel_video_count`/`video_count`, а `playlist_count` использовать только как fallback, чтобы не занижать общее число видео канала. ✅ Выполнено (`src/handlers/resources/YouTube/YouTubeChannel.py`).
   - Для YouTube channel извлекать метаданные с приоритетом вкладки `/videos` и переносить счетчики из нее, чтобы избежать ложных значений вида `🎬 Видео: 2` на главной вкладке канала. ✅ Выполнено (`src/handlers/resources/YouTube/YouTubeChannel.py`, `test/handlers/YouTube/test_youtube_channel_video_count.py`).
+  - Для multi-link orchestration в `media_router` зафиксировать block-исходы (`success/unsupported/failed`) и удалять исходное сообщение только при полном `success` по всем исходным ссылкам (без зависимости от количества запущенных tasks). ✅ Выполнено (`src/bot/processing/media_router.py`).
+  - Добавить unit-тесты пакетной обработки на сценарии `all success`, `partial failure`, `unsupported source` с проверкой условия удаления сообщения и per-link reply-цитаты для unsupported блока. ✅ Выполнено (`test/bot/processing/test_media_router_multi_link.py`).
+  - Для отправки ошибок использовать только chat-level настройку `errors_enabled` (`message.chat.id`) без user-level override; при `errors_enabled=false` error-reply не отправляется. ✅ Выполнено (`src/bot/processing/media_router.py`, `src/bot/processing/media_processor.py`, `test/bot/processing/test_media_processor_errors.py`, `test/bot/processing/test_media_router_multi_link.py`).
+  - Для `unsupported`/`download`/`send`/`internal` ошибок добавить краткую явную причину в тексте error-reply без избыточной детализации. ✅ Выполнено (`src/bot/processing/media_router.py`, `src/bot/processing/media_processor.py`, `src/utils/messages.py`).
 - Для деплоя заменить принудительное завершение контейнера (`docker rm -f`) на graceful-остановку (`docker stop --time 25`) с последующим удалением, чтобы `on_shutdown` успевал отправлять сообщение «Бот выключается...». ✅ Выполнено (`deploy/manager.sh`).
   - Усилить `on_shutdown`: отправка уведомления администратору не зависит от успешности чтения чатов из БД; ошибки получения чатов и закрытия БД логируются отдельно без срыва отправки уведомления. ✅ Выполнено (`src/bot/lifespan/shutdown.py`).
   - Для Instagram profile добавить устойчивый fallback: при сбое `yt-dlp` extractor пробовать `web_profile_info` API по username и использовать канонический profile URL c завершающим `/`. ✅ Выполнено (`src/handlers/resources/Instagram/InstagramProfile.py`, `test/handlers/Instagram/test_instagram_profile_helpers.py`).
