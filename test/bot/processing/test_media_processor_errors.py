@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import os
 import sys
 from pathlib import Path
@@ -22,7 +23,7 @@ os.environ.setdefault("BOT_TOKEN", "local-test-token")
 os.environ.setdefault("YANDEX_MUSIC_TOKEN", "local-test-token")
 os.environ.setdefault("YOUTUBE_COOKIES_ENABLED", "false")
 
-from src.bot.processing import media_processor
+media_processor_module = importlib.import_module("src.bot.processing.media_processor")
 
 
 class FakeMessage:
@@ -62,10 +63,10 @@ def test_load_failed_error_not_sent_when_errors_disabled(monkeypatch: Any) -> No
     async def fake_errors_enabled(_chat_id: int) -> bool:
         return False
 
-    monkeypatch.setattr(media_processor, "get_errors_enabled", fake_errors_enabled)
+    monkeypatch.setattr(media_processor_module, "get_errors_enabled", fake_errors_enabled)
 
     result = asyncio.run(
-        media_processor.process_block(
+        media_processor_module.process_block(
             idx=1,
             raw_url="https://example.com/fail",
             resolved_url="https://example.com/fail",
@@ -90,10 +91,10 @@ def test_load_failed_error_contains_reason_when_enabled(monkeypatch: Any) -> Non
     async def fake_errors_enabled(_chat_id: int) -> bool:
         return True
 
-    monkeypatch.setattr(media_processor, "get_errors_enabled", fake_errors_enabled)
+    monkeypatch.setattr(media_processor_module, "get_errors_enabled", fake_errors_enabled)
 
     result = asyncio.run(
-        media_processor.process_block(
+        media_processor_module.process_block(
             idx=1,
             raw_url="https://example.com/fail",
             resolved_url="https://example.com/fail",

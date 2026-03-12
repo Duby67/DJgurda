@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import os
 import sys
 from pathlib import Path
@@ -22,7 +23,7 @@ os.environ.setdefault("BOT_TOKEN", "local-test-token")
 os.environ.setdefault("YANDEX_MUSIC_TOKEN", "local-test-token")
 os.environ.setdefault("YOUTUBE_COOKIES_ENABLED", "false")
 
-from src.bot.processing import media_router
+media_router_module = importlib.import_module("src.bot.processing.media_router")
 
 
 class FakeHandler:
@@ -81,14 +82,14 @@ def test_delete_original_message_when_all_blocks_success(monkeypatch: Any) -> No
     async def fake_errors_enabled(_chat_id: int) -> bool:
         return True
 
-    monkeypatch.setattr(media_router, "split_into_blocks", lambda _text: blocks)
-    monkeypatch.setattr(media_router, "get_user_link", lambda _user: "user-link")
-    monkeypatch.setattr(media_router, "resolve_url", fake_resolve_url)
-    monkeypatch.setattr(media_router, "process_block", fake_process_block)
-    monkeypatch.setattr(media_router, "get_errors_enabled", fake_errors_enabled)
-    monkeypatch.setattr(media_router, "_get_service_manager", lambda: FakeManager())
+    monkeypatch.setattr(media_router_module, "split_into_blocks", lambda _text: blocks)
+    monkeypatch.setattr(media_router_module, "get_user_link", lambda _user: "user-link")
+    monkeypatch.setattr(media_router_module, "resolve_url", fake_resolve_url)
+    monkeypatch.setattr(media_router_module, "process_block", fake_process_block)
+    monkeypatch.setattr(media_router_module, "get_errors_enabled", fake_errors_enabled)
+    monkeypatch.setattr(media_router_module, "_get_service_manager", lambda: FakeManager())
 
-    asyncio.run(media_router.handle_media_message(message))
+    asyncio.run(media_router_module.handle_media_message(message))
 
     assert process_calls == ["https://a.example/1", "https://a.example/2"]
     assert message.deleted is True
@@ -122,14 +123,14 @@ def test_keep_original_message_on_partial_failure(monkeypatch: Any) -> None:
     async def fake_errors_enabled(_chat_id: int) -> bool:
         return True
 
-    monkeypatch.setattr(media_router, "split_into_blocks", lambda _text: blocks)
-    monkeypatch.setattr(media_router, "get_user_link", lambda _user: "user-link")
-    monkeypatch.setattr(media_router, "resolve_url", fake_resolve_url)
-    monkeypatch.setattr(media_router, "process_block", fake_process_block)
-    monkeypatch.setattr(media_router, "get_errors_enabled", fake_errors_enabled)
-    monkeypatch.setattr(media_router, "_get_service_manager", lambda: FakeManager())
+    monkeypatch.setattr(media_router_module, "split_into_blocks", lambda _text: blocks)
+    monkeypatch.setattr(media_router_module, "get_user_link", lambda _user: "user-link")
+    monkeypatch.setattr(media_router_module, "resolve_url", fake_resolve_url)
+    monkeypatch.setattr(media_router_module, "process_block", fake_process_block)
+    monkeypatch.setattr(media_router_module, "get_errors_enabled", fake_errors_enabled)
+    monkeypatch.setattr(media_router_module, "_get_service_manager", lambda: FakeManager())
 
-    asyncio.run(media_router.handle_media_message(message))
+    asyncio.run(media_router_module.handle_media_message(message))
 
     assert process_calls == [
         "https://ok.example/1",
@@ -173,14 +174,14 @@ def test_unsupported_block_blocks_deletion_and_replies_with_quote(monkeypatch: A
     async def fake_errors_enabled(_chat_id: int) -> bool:
         return True
 
-    monkeypatch.setattr(media_router, "split_into_blocks", lambda _text: blocks)
-    monkeypatch.setattr(media_router, "get_user_link", lambda _user: "user-link")
-    monkeypatch.setattr(media_router, "resolve_url", fake_resolve_url)
-    monkeypatch.setattr(media_router, "process_block", fake_process_block)
-    monkeypatch.setattr(media_router, "get_errors_enabled", fake_errors_enabled)
-    monkeypatch.setattr(media_router, "_get_service_manager", lambda: FakeManager())
+    monkeypatch.setattr(media_router_module, "split_into_blocks", lambda _text: blocks)
+    monkeypatch.setattr(media_router_module, "get_user_link", lambda _user: "user-link")
+    monkeypatch.setattr(media_router_module, "resolve_url", fake_resolve_url)
+    monkeypatch.setattr(media_router_module, "process_block", fake_process_block)
+    monkeypatch.setattr(media_router_module, "get_errors_enabled", fake_errors_enabled)
+    monkeypatch.setattr(media_router_module, "_get_service_manager", lambda: FakeManager())
 
-    asyncio.run(media_router.handle_media_message(message))
+    asyncio.run(media_router_module.handle_media_message(message))
 
     assert process_calls == [supported_raw]
     assert message.deleted is False
@@ -207,13 +208,58 @@ def test_unsupported_error_message_not_sent_when_errors_disabled(monkeypatch: An
     async def fake_errors_enabled(_chat_id: int) -> bool:
         return False
 
-    monkeypatch.setattr(media_router, "split_into_blocks", lambda _text: blocks)
-    monkeypatch.setattr(media_router, "get_user_link", lambda _user: "user-link")
-    monkeypatch.setattr(media_router, "resolve_url", fake_resolve_url)
-    monkeypatch.setattr(media_router, "get_errors_enabled", fake_errors_enabled)
-    monkeypatch.setattr(media_router, "_get_service_manager", lambda: FakeManager())
+    monkeypatch.setattr(media_router_module, "split_into_blocks", lambda _text: blocks)
+    monkeypatch.setattr(media_router_module, "get_user_link", lambda _user: "user-link")
+    monkeypatch.setattr(media_router_module, "resolve_url", fake_resolve_url)
+    monkeypatch.setattr(media_router_module, "get_errors_enabled", fake_errors_enabled)
+    monkeypatch.setattr(media_router_module, "_get_service_manager", lambda: FakeManager())
 
-    asyncio.run(media_router.handle_media_message(message))
+    asyncio.run(media_router_module.handle_media_message(message))
 
     assert message.deleted is False
     assert message.answers == []
+
+
+def test_multilink_with_requested_urls_keeps_message_on_unsupported(monkeypatch: Any) -> None:
+    """
+    Сценарий из ТЗ пользователя:
+    - unsupported `yandex`;
+    - supported `tiktok` и `instagram`.
+    Сообщение должно остаться, а unsupported-ссылка должна получить error-reply.
+    """
+    yandex_url = "https://yandex.ru/search/ASdacad"
+    tiktok_url = "https://www.tiktok.com/t/ZP8XA8HA8/"
+    instagram_url = "https://www.instagram.com/photo_by_malyshev?igsh=aGg5bHU3eTNjZ2Zk"
+    message = FakeMessage("\n".join([yandex_url, tiktok_url, instagram_url]))
+    process_calls: list[str] = []
+    handler = FakeHandler()
+
+    class FakeManager:
+        def get_handler(self, url: str) -> FakeHandler | None:
+            if "tiktok.com" in url or "instagram.com" in url:
+                return handler
+            return None
+
+    async def fake_resolve_url(url: str) -> str:
+        return url
+
+    async def fake_process_block(_idx: int, raw_url: str, *_args: Any, **_kwargs: Any) -> bool:
+        process_calls.append(raw_url)
+        return True
+
+    async def fake_errors_enabled(_chat_id: int) -> bool:
+        return True
+
+    monkeypatch.setattr(media_router_module, "get_user_link", lambda _user: "user-link")
+    monkeypatch.setattr(media_router_module, "resolve_url", fake_resolve_url)
+    monkeypatch.setattr(media_router_module, "process_block", fake_process_block)
+    monkeypatch.setattr(media_router_module, "get_errors_enabled", fake_errors_enabled)
+    monkeypatch.setattr(media_router_module, "_get_service_manager", lambda: FakeManager())
+
+    asyncio.run(media_router_module.handle_media_message(message))
+
+    assert process_calls == [tiktok_url, instagram_url]
+    assert message.deleted is False
+    assert len(message.answers) == 1
+    assert "Причина: неподдерживаемый источник" in message.answers[0]["text"]
+    assert message.answers[0]["reply_parameters"].quote == yandex_url
