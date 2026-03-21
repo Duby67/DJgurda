@@ -82,10 +82,21 @@ def step_exists(plan_payload: dict[str, Any], step_id: str) -> bool:
     return any(step.get("id") == step_id for step in plan_payload.get("plan", []))
 
 
+def checkpoint_status_map(approval_payload: dict[str, Any]) -> dict[str, str]:
+    """Возвращает map checkpoint_id -> status."""
+    return {
+        item["id"]: item.get("status", "unknown")
+        for item in approval_payload.get("checkpoints", [])
+    }
+
+
 def ensure_apply_allowed(run_summary: dict[str, Any], plan_payload: dict[str, Any]) -> None:
     """Проверяет, что lifecycle допускает apply-stage."""
     if not step_exists(plan_payload, IMPLEMENT_STEP_ID):
         raise ValueError("В plan.json отсутствует шаг implement_change")
+
+    approval_payload = run_summary.get("approval", {})
+    run_checks_status = checkpoint_status_map(approval_payload).get("run_checks", "awaiting_approval")
 
     allowed_statuses = {
         "context_loaded",
@@ -100,6 +111,8 @@ def ensure_apply_allowed(run_summary: dict[str, Any], plan_payload: dict[str, An
         raise ValueError(
             "Apply-stage можно запускать только когда run готов к implement_change",
         )
+    if run_checks_status not in {"approved", "not_required"}:
+        raise ValueError("Apply-stage требует завершенный pre-implementation checkpoint 'run_checks'")
 
 
 def resolve_applied_files(
@@ -388,6 +401,7 @@ def build_output(
     explicit_paths: list[str],
     summary_text: str,
     applied_by: str,
+    allow_empty_diff: bool,
 ) -> dict[str, Any]:
     """Фиксирует apply-stage и обновляет run bundle."""
     summary_path = run_dir / "run-summary.json"
@@ -409,6 +423,11 @@ def build_output(
     applied_files = resolve_applied_files(explicit_paths, run_summary)
     file_presence = file_presence_summary(applied_files)
     git_snapshot = collect_git_snapshot(applied_files)
+    if not allow_empty_diff and git_snapshot["diff_summary"]["file_count"] == 0:
+        raise ValueError(
+            "Apply-stage требует непустой git diff по указанным файлам. "
+            "Если нужно зафиксировать apply без diff осознанно, передайте --allow-empty-diff",
+        )
 
     diff_artifact_written = write_optional_text(diff_artifact_path, git_snapshot["diff_text"])
     apply_result = build_apply_result(
@@ -491,6 +510,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--summary-file", help="Путь к файлу с описанием внесенных изменений.")
     parser.add_argument("--applied-by", default="coder", help="Кто применил изменения в рамках run.")
     parser.add_argument(
+        "--allow-empty-diff",
+        action="store_true",
+        help="Разрешить apply-stage даже если git diff по выбранным файлам пуст.",
+    )
+    parser.add_argument(
         "--pretty",
         action="store_true",
         help="Печатать JSON с отступами.",
@@ -508,6 +532,7 @@ def main() -> int:
             explicit_paths=read_explicit_paths(args),
             summary_text=read_summary(args),
             applied_by=args.applied_by.strip() or "coder",
+            allow_empty_diff=args.allow_empty_diff,
         )
     except (FileNotFoundError, ValueError) as exc:
         json.dump(

@@ -53,15 +53,23 @@ def build_approval_checkpoints(route_result: dict[str, Any], plan_output: dict[s
     """Формирует approval checkpoints для run bundle."""
     tests_required = bool(route_result["context_pack"]["tests"])
     escalation_required = route_result["escalation"]["needed"]
+    run_checks_required = tests_required or escalation_required
+
+    if tests_required and escalation_required:
+        run_checks_reason = "recommended tests or sandbox checks exist and manual review is required before implementation"
+    elif tests_required:
+        run_checks_reason = "recommended tests or sandbox checks exist for this task"
+    elif escalation_required:
+        run_checks_reason = "manual review is required before implementation"
+    else:
+        run_checks_reason = "no explicit checks required by routing map"
 
     checkpoints = [
         {
             "id": "run_checks",
-            "required": tests_required,
-            "status": "awaiting_approval" if tests_required else "not_required",
-            "reason": "recommended tests or sandbox checks exist for this task"
-            if tests_required
-            else "no explicit checks required by routing map",
+            "required": run_checks_required,
+            "status": "awaiting_approval" if run_checks_required else "not_required",
+            "reason": run_checks_reason,
         },
         {
             "id": "commit",

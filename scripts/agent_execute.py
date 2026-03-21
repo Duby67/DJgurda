@@ -38,6 +38,14 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
+def checkpoint_status_map(approval_payload: dict[str, Any]) -> dict[str, str]:
+    """Возвращает map checkpoint_id -> status."""
+    return {
+        item["id"]: item.get("status", "unknown")
+        for item in approval_payload.get("checkpoints", [])
+    }
+
+
 def normalize_rel_path(value: str) -> str:
     """Нормализует относительный путь."""
     return value.strip().replace("\\", "/").lstrip("./")
@@ -162,9 +170,19 @@ def build_execution_state(
     loaded_context: dict[str, Any],
 ) -> dict[str, Any]:
     """Строит execution-state.json."""
-    needs_manual_review = run_summary["approval"]["needs_manual_review"]
-    next_action = "review_escalation_and_approve_implementation" if needs_manual_review else "implement_change"
-    status = "context_loaded_awaiting_manual_review" if needs_manual_review else "context_loaded"
+    approval_payload = run_summary["approval"]
+    needs_manual_review = approval_payload["needs_manual_review"]
+    run_checks_status = checkpoint_status_map(approval_payload).get("run_checks", "awaiting_approval")
+
+    if run_checks_status in {"approved", "not_required"}:
+        next_action = "implement_change"
+        status = "approved_for_implementation" if needs_manual_review or run_checks_status == "approved" else "context_loaded"
+    elif needs_manual_review:
+        next_action = "review_escalation_and_approve_implementation"
+        status = "context_loaded_awaiting_manual_review"
+    else:
+        next_action = "approve_run_checks_before_implementation"
+        status = "context_loaded_pending_run_checks_approval"
 
     return {
         "version": 1,
@@ -175,8 +193,9 @@ def build_execution_state(
         "loaded_at_utc": datetime.now(timezone.utc).isoformat(),
         "summary": loaded_context["summary"],
         "approval": {
-          "needs_manual_review": needs_manual_review,
-          "escalation_reasons": run_summary["approval"]["escalation_reasons"],
+            "needs_manual_review": needs_manual_review,
+            "escalation_reasons": approval_payload["escalation_reasons"],
+            "checkpoint_statuses": checkpoint_status_map(approval_payload),
         },
     }
 

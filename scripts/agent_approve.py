@@ -142,15 +142,18 @@ def derive_status_and_next_action(
     push_status = statuses.get(PUSH_ID, "awaiting_approval")
     current_phase = (execution_state or {}).get("phase")
     requested_checkpoints = ((execution_state or {}).get("approval_request") or {}).get("requested_checkpoints", [])
+    needs_manual_review = approval_payload.get("needs_manual_review", False)
 
     if "rejected" in statuses.values():
         return "approval_rejected", "review_rejection_or_replan"
 
     if current_phase == "context_loaded":
-        if run_checks_status == "approved":
+        if run_checks_status in {"approved", "not_required"}:
             return "approved_for_implementation", "implement_change"
         if run_checks_status == "awaiting_approval":
-            return "context_loaded_awaiting_manual_review", "review_escalation_and_approve_implementation"
+            if needs_manual_review:
+                return "context_loaded_awaiting_manual_review", "review_escalation_and_approve_implementation"
+            return "context_loaded_pending_run_checks_approval", "approve_run_checks_before_implementation"
         return "context_loaded", "review_context_state"
 
     if current_phase == "approval_requested":
@@ -195,7 +198,7 @@ def update_plan_steps(plan_payload: dict[str, Any], approval_payload: dict[str, 
 
     for step in updated.get("plan", []):
         if step.get("id") == "manual_review":
-            step["status"] = "completed" if run_checks_status in {"approved", "rejected"} else "pending"
+            step["status"] = "completed" if run_checks_status in {"approved", "not_required", "rejected"} else "pending"
         elif step.get("id") == "request_approval":
             if step.get("status") == "completed":
                 continue

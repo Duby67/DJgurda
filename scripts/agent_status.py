@@ -10,7 +10,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from agent_approve import RUN_CHECKS_ID, COMMIT_ID, PUSH_ID
+from agent_apply import collect_git_snapshot, ensure_apply_allowed, resolve_applied_files
+from agent_close import VALID_OUTCOMES, ensure_close_allowed
+from agent_commit import ensure_commit_allowed
 from agent_execute import DEFAULT_RUNS_DIR
+from agent_push import ensure_push_allowed
+from agent_request_approval import ensure_request_allowed, read_requested_checkpoints
 from agent_route import ROOT
 
 
@@ -263,12 +269,283 @@ def summarize_closure(close_payload: dict[str, Any] | None) -> dict[str, Any] | 
     }
 
 
+def step_exists(plan_payload: dict[str, Any], step_id: str) -> bool:
+    """Проверяет наличие шага в plan.json."""
+    return any(step.get("id") == step_id for step in plan_payload.get("plan", []))
+
+
+def is_run_checks_approval_allowed(approval_payload: dict[str, Any]) -> bool:
+    """Показывает, можно ли сейчас approve checkpoint run_checks."""
+    checkpoints = {
+        item["id"]: item
+        for item in approval_payload.get("checkpoints", [])
+    }
+    checkpoint = checkpoints.get(RUN_CHECKS_ID)
+    if checkpoint is None:
+        return False
+    if not checkpoint.get("required", True):
+        return False
+    return checkpoint.get("status") != "approved"
+
+
+def is_request_allowed(
+    *,
+    run_summary: dict[str, Any],
+    plan_payload: dict[str, Any],
+    approval_payload: dict[str, Any],
+    requested_checkpoints: list[str],
+) -> bool:
+    """Проверяет, можно ли сейчас собрать approval request для указанных checkpoints."""
+    if not requested_checkpoints:
+        return False
+    try:
+        ensure_request_allowed(run_summary, plan_payload, approval_payload, requested_checkpoints)
+    except ValueError:
+        return False
+    return True
+
+
+def auto_requested_checkpoints(approval_payload: dict[str, Any]) -> list[str]:
+    """Определяет checkpoints для approval request в default-режиме."""
+    try:
+        return read_requested_checkpoints(argparse.Namespace(checkpoint=None), approval_payload)
+    except ValueError:
+        return []
+
+
+def explain_run_checks_approval(approval_payload: dict[str, Any]) -> list[str]:
+    """Объясняет, почему run_checks approval доступен или недоступен."""
+    checkpoints = {
+        item["id"]: item
+        for item in approval_payload.get("checkpoints", [])
+    }
+    checkpoint = checkpoints.get(RUN_CHECKS_ID)
+    if checkpoint is None:
+        return ["run_checks_checkpoint_missing"]
+    if not checkpoint.get("required", True):
+        return ["run_checks_not_required"]
+
+    status = checkpoint.get("status", "unknown")
+    if status == "approved":
+        return ["run_checks_already_approved"]
+    if status == "rejected":
+        return ["run_checks_rejected"]
+    if status == "awaiting_approval":
+        return []
+    return [f"run_checks_status_{status}"]
+
+
+def can_create_commit(run_summary: dict[str, Any], approval_payload: dict[str, Any]) -> bool:
+    """Показывает, можно ли сейчас запускать commit-stage."""
+    try:
+        ensure_commit_allowed(run_summary, approval_payload)
+    except ValueError:
+        return False
+    return True
+
+
+def can_execute_push(run_summary: dict[str, Any], approval_payload: dict[str, Any]) -> bool:
+    """Показывает, можно ли сейчас запускать push-stage."""
+    try:
+        ensure_push_allowed(run_summary, approval_payload)
+    except ValueError:
+        return False
+    return True
+
+
+def closable_outcomes(run_summary: dict[str, Any]) -> list[str]:
+    """Возвращает список outcome, допустимых для agent_close.py."""
+    allowed: list[str] = []
+    for outcome in sorted(VALID_OUTCOMES):
+        try:
+            ensure_close_allowed(run_summary, outcome)
+        except ValueError:
+            continue
+        allowed.append(outcome)
+    return allowed
+
+
+def explain_request_approval(
+    *,
+    run_summary: dict[str, Any],
+    plan_payload: dict[str, Any],
+    approval_payload: dict[str, Any],
+    requested_checkpoints: list[str],
+) -> list[str]:
+    """Объясняет, почему approval request доступен или недоступен."""
+    if not requested_checkpoints:
+        return ["no_requestable_checkpoints"]
+    if not step_exists(plan_payload, "request_approval"):
+        return ["request_approval_step_missing"]
+
+    statuses = approval_summary_from_payload(approval_payload)["checkpoint_statuses"]
+    blockers: list[str] = []
+
+    allowed_statuses = {
+        "review_passed_pending_approval",
+        "review_partial_pending_approval",
+        "awaiting_commit_approval",
+        "approved_for_push_decision",
+        "awaiting_push_approval",
+    }
+    allowed_next_actions = {
+        "request_approval",
+        "request_commit_approval",
+        "decide_on_push",
+        "request_push_approval",
+        "await_commit_approval",
+        "await_push_approval",
+    }
+    if (
+        run_summary.get("status") not in allowed_statuses
+        and run_summary.get("next_action") not in allowed_next_actions
+    ):
+        blockers.append("review_not_completed_for_approval_request")
+
+    if PUSH_ID in requested_checkpoints:
+        if statuses.get(COMMIT_ID) != "approved":
+            blockers.append("push_requires_commit_approval")
+        commit_result_rel = run_summary.get("artifacts", {}).get("commit_result", "")
+        if not commit_result_rel:
+            blockers.append("push_requires_commit_artifact")
+        elif not (ROOT / normalize_rel_path(commit_result_rel)).is_file():
+            blockers.append("commit_artifact_missing")
+        if not run_summary.get("commit", {}).get("commit_created", False):
+            blockers.append("push_requires_real_commit")
+
+    for checkpoint_id in requested_checkpoints:
+        status = statuses.get(checkpoint_id, "missing")
+        if status not in {"awaiting_approval", "approved"}:
+            blockers.append(f"{checkpoint_id}_not_requestable_from_status_{status}")
+
+    try:
+        ensure_request_allowed(run_summary, plan_payload, approval_payload, requested_checkpoints)
+    except ValueError:
+        if not blockers:
+            blockers.append("approval_request_not_allowed")
+    return blockers
+
+
+def explain_commit_creation(run_summary: dict[str, Any], approval_payload: dict[str, Any]) -> list[str]:
+    """Объясняет, почему commit-stage доступен или недоступен."""
+    blockers: list[str] = []
+    statuses = approval_summary_from_payload(approval_payload)["checkpoint_statuses"]
+    if statuses.get(COMMIT_ID) != "approved":
+        blockers.append("commit_approval_missing")
+
+    try:
+        ensure_commit_allowed(run_summary, approval_payload)
+    except ValueError:
+        if not blockers:
+            blockers.append("commit_stage_not_ready")
+    return blockers
+
+
+def explain_push_execution(run_summary: dict[str, Any], approval_payload: dict[str, Any]) -> list[str]:
+    """Объясняет, почему push-stage доступен или недоступен."""
+    blockers: list[str] = []
+    statuses = approval_summary_from_payload(approval_payload)["checkpoint_statuses"]
+    if statuses.get(PUSH_ID) != "approved":
+        blockers.append("push_approval_missing")
+    if not run_summary.get("commit", {}).get("commit_created", False):
+        blockers.append("push_requires_real_commit")
+
+    try:
+        ensure_push_allowed(run_summary, approval_payload)
+    except ValueError:
+        if not blockers:
+            blockers.append("push_stage_not_ready")
+    return blockers
+
+
+def explain_run_close(run_summary: dict[str, Any]) -> list[str]:
+    """Объясняет, почему run можно или нельзя закрыть."""
+    outcomes = closable_outcomes(run_summary)
+    if outcomes:
+        return []
+    if run_summary.get("status") == "closed":
+        return ["run_already_closed"]
+    return ["no_supported_close_outcome_for_current_state"]
+
+
+def approval_summary_from_payload(approval_payload: dict[str, Any]) -> dict[str, Any]:
+    """Строит approval summary без повторного чтения файлов."""
+    checkpoints = approval_payload.get("checkpoints", [])
+    return {
+        "needs_manual_review": approval_payload.get("needs_manual_review", False),
+        "checkpoint_statuses": {
+            item["id"]: item.get("status", "unknown")
+            for item in checkpoints
+        },
+    }
+
+
+def build_action_blockers(
+    *,
+    run_summary: dict[str, Any],
+    plan_payload: dict[str, Any],
+    approval_payload: dict[str, Any],
+) -> dict[str, list[str]]:
+    """Строит blockers по конкретным lifecycle-действиям."""
+    implementation_diff_file_count = implementation_diff_count(run_summary)
+    implement_blockers = explain_implement(run_summary, plan_payload, implementation_diff_file_count)
+
+    auto_checkpoints = auto_requested_checkpoints(approval_payload)
+
+    return {
+        "approve_run_checks": explain_run_checks_approval(approval_payload),
+        "implement": implement_blockers,
+        "request_approval": explain_request_approval(
+            run_summary=run_summary,
+            plan_payload=plan_payload,
+            approval_payload=approval_payload,
+            requested_checkpoints=auto_checkpoints,
+        ),
+        "request_commit_approval": explain_request_approval(
+            run_summary=run_summary,
+            plan_payload=plan_payload,
+            approval_payload=approval_payload,
+            requested_checkpoints=[COMMIT_ID],
+        ),
+        "create_commit": explain_commit_creation(run_summary, approval_payload),
+        "request_push_approval": explain_request_approval(
+            run_summary=run_summary,
+            plan_payload=plan_payload,
+            approval_payload=approval_payload,
+            requested_checkpoints=[PUSH_ID],
+        ),
+        "push": explain_push_execution(run_summary, approval_payload),
+        "close_run": explain_run_close(run_summary),
+    }
+
+
+def explain_implement(
+    run_summary: dict[str, Any],
+    plan_payload: dict[str, Any],
+    implementation_diff_file_count: int | None,
+) -> list[str]:
+    """Объясняет, почему implement-stage доступен или недоступен."""
+    blockers: list[str] = []
+    try:
+        ensure_apply_allowed(run_summary, plan_payload)
+    except ValueError:
+        blockers.append("implement_stage_not_ready")
+        return blockers
+
+    if implementation_diff_file_count == 0:
+        blockers.append("empty_diff_requires_allow_empty_diff")
+    elif implementation_diff_file_count is None:
+        blockers.append("implementation_diff_unknown")
+    return blockers
+
+
 def build_blockers(
     *,
     run_summary: dict[str, Any],
     artifact_status: dict[str, Any],
     approval_summary: dict[str, Any],
     plan_summary: dict[str, Any],
+    action_blockers: dict[str, list[str]],
 ) -> list[str]:
     """Строит список текущих blockers для lifecycle run bundle."""
     blockers: list[str] = []
@@ -281,6 +558,14 @@ def build_blockers(
         blockers.append("approval_rejected")
     if approval_summary["needs_manual_review"] and "run_checks" in approval_summary["awaiting_approval"]:
         blockers.append("manual_review_not_approved")
+    if (
+        not approval_summary["needs_manual_review"]
+        and "run_checks" in approval_summary["awaiting_approval"]
+        and run_summary.get("next_action") == "approve_run_checks_before_implementation"
+    ):
+        blockers.append("run_checks_not_approved")
+    if "empty_diff_requires_allow_empty_diff" in action_blockers.get("implement", []):
+        blockers.append("empty_diff_requires_allow_empty_diff")
     if run_summary.get("status") == "awaiting_manual_review":
         blockers.append("context_not_loaded")
     if run_summary.get("status") == "verification_failed":
@@ -313,39 +598,103 @@ def build_blockers(
     ):
         blockers.append("plan_has_no_pending_steps")
 
-    return blockers
+    return list(dict.fromkeys(blockers))
 
 
 def build_readiness(
     *,
     run_summary: dict[str, Any],
+    plan_payload: dict[str, Any],
+    approval_payload: dict[str, Any],
     approval_summary: dict[str, Any],
-) -> dict[str, bool]:
+) -> dict[str, Any]:
     """Показывает, какие действия уже можно выполнять по текущему статусу."""
     if run_summary.get("status") == "closed":
         return {
+            "can_approve_run_checks": False,
             "can_implement": False,
+            "can_implement_with_allow_empty_diff": False,
+            "implementation_diff_file_count": None,
             "can_request_final_approval": False,
+            "can_request_approval": False,
+            "requestable_checkpoints": [],
             "can_request_commit_approval": False,
             "can_create_commit": False,
             "can_request_push_approval": False,
             "can_push": False,
+            "can_close_run": False,
+            "closable_outcomes": [],
         }
 
     checkpoint_statuses = approval_summary.get("checkpoint_statuses", {})
     run_checks_status = checkpoint_statuses.get("run_checks")
-    commit_status = checkpoint_statuses.get("commit")
-    push_status = checkpoint_statuses.get("push")
-    commit_created = bool(run_summary.get("commit", {}).get("commit_created"))
+    auto_checkpoints = auto_requested_checkpoints(approval_payload)
+    apply_diff_file_count = implementation_diff_count(run_summary)
+    can_request_auto = is_request_allowed(
+        run_summary=run_summary,
+        plan_payload=plan_payload,
+        approval_payload=approval_payload,
+        requested_checkpoints=auto_checkpoints,
+    )
+    can_request_commit = is_request_allowed(
+        run_summary=run_summary,
+        plan_payload=plan_payload,
+        approval_payload=approval_payload,
+        requested_checkpoints=[COMMIT_ID],
+    )
+    can_request_push = is_request_allowed(
+        run_summary=run_summary,
+        plan_payload=plan_payload,
+        approval_payload=approval_payload,
+        requested_checkpoints=[PUSH_ID],
+    )
+    can_close_outcomes = closable_outcomes(run_summary)
 
     return {
-        "can_implement": run_summary.get("next_action") == "implement_change",
-        "can_request_final_approval": run_summary.get("next_action") == "request_approval",
-        "can_request_commit_approval": run_checks_status in {"approved", "not_required"} and commit_status == "awaiting_approval",
-        "can_create_commit": run_summary.get("next_action") == "create_commit",
-        "can_request_push_approval": commit_status == "approved" and commit_created and push_status == "awaiting_approval",
-        "can_push": run_summary.get("next_action") == "execute_push",
+        "can_approve_run_checks": is_run_checks_approval_allowed(approval_payload),
+        "can_implement": (
+            run_checks_status in {"approved", "not_required"}
+            and _can_implement(run_summary, plan_payload, allow_empty_diff=False)
+        ),
+        "can_implement_with_allow_empty_diff": (
+            run_checks_status in {"approved", "not_required"}
+            and _can_implement(run_summary, plan_payload, allow_empty_diff=True)
+        ),
+        "implementation_diff_file_count": apply_diff_file_count,
+        "can_request_final_approval": can_request_auto,
+        "can_request_approval": can_request_auto,
+        "requestable_checkpoints": auto_checkpoints if can_request_auto else [],
+        "can_request_commit_approval": can_request_commit,
+        "can_create_commit": can_create_commit(run_summary, approval_payload),
+        "can_request_push_approval": can_request_push,
+        "can_push": can_execute_push(run_summary, approval_payload),
+        "can_close_run": bool(can_close_outcomes),
+        "closable_outcomes": can_close_outcomes,
     }
+
+
+def implementation_diff_count(run_summary: dict[str, Any]) -> int | None:
+    """Возвращает file_count для default apply-stage, если это можно определить безопасно."""
+    try:
+        applied_files = resolve_applied_files([], run_summary)
+        git_snapshot = collect_git_snapshot(applied_files)
+    except Exception:
+        return None
+    return git_snapshot["diff_summary"]["file_count"]
+
+
+def _can_implement(run_summary: dict[str, Any], plan_payload: dict[str, Any], *, allow_empty_diff: bool) -> bool:
+    """Проверяет, можно ли запускать apply-stage по реальным правилам."""
+    try:
+        ensure_apply_allowed(run_summary, plan_payload)
+    except ValueError:
+        return False
+    diff_file_count = implementation_diff_count(run_summary)
+    if diff_file_count is None:
+        return allow_empty_diff
+    if diff_file_count == 0 and not allow_empty_diff:
+        return False
+    return True
 
 
 def build_status(run_dir: Path) -> dict[str, Any]:
@@ -386,6 +735,11 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     artifact_status = collect_artifact_status(run_summary.get("artifacts", {}))
     plan_summary = summarize_plan(plan_payload)
     approval_summary = summarize_approval(approval_payload)
+    action_blockers = build_action_blockers(
+        run_summary=run_summary,
+        plan_payload=plan_payload,
+        approval_payload=approval_payload,
+    )
     approval_history_summary = summarize_approval_history(approval_history)
     verification_summary = summarize_verification(verification_payload)
     sandbox_summary = summarize_sandbox(sandbox_payload)
@@ -399,9 +753,12 @@ def build_status(run_dir: Path) -> dict[str, Any]:
         artifact_status=artifact_status,
         approval_summary=approval_summary,
         plan_summary=plan_summary,
+        action_blockers=action_blockers,
     )
     readiness = build_readiness(
         run_summary=run_summary,
+        plan_payload=plan_payload,
+        approval_payload=approval_payload,
         approval_summary=approval_summary,
     )
 
@@ -418,6 +775,7 @@ def build_status(run_dir: Path) -> dict[str, Any]:
         "approval": approval_summary,
         "readiness": readiness,
         "blockers": blockers,
+        "action_blockers": action_blockers,
     }
 
     if execution_state is not None:

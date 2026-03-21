@@ -1,10 +1,11 @@
-# Метаданные VCS и CI не нужны внутри runtime-образа.
+# Метаданные VCS и CI.
 .git
 .github/
 
 # Локальные env-файлы и кэши разработки.
 .env
 .env.*
+env.example
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -23,6 +24,11 @@ test/
 docs/
 local/
 README.md
+ARCHITECTURE.md
+
+# requirements корприруется отдельно
+requirements.txt
+requirements-dev.txt
 
 # Служебные файлы репозитория не нужны внутри контейнера.
 .gitignore
