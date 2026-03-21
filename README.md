@@ -1,60 +1,49 @@
 # DJgurda Bot
 
-Асинхронный Telegram-бот для обработки медиа-ссылок в чатах.  
-Текущий рабочий контур поддерживает:
+Асинхронный Telegram-бот для обработки медиа-ссылок в чатах.
 
-- TikTok (`video`, `profile`, `media_group`)
-- YouTube (`shorts`, `channel`)
-- Instagram (`reels`, `media_group`, `stories`, `profile`)
-- COUB (`video`)
-- Yandex Music (`audio` для ссылок `track`)
+Стабильный runtime-контур:
 
-Дополнительно по статусам источников:
+- TikTok
+- YouTube
+- Instagram
+- COUB
+- Yandex Music
 
-- `VK Music` присутствует в коде как источник `в разработке`, но не считается частью текущего стабильного runtime-контура.
-- Текущая реализация `VK` считается недееспособной; `yt-dlp` не рассматривается как рабочая базовая технология для `VK`.
-- `YandexMusic` зарегистрирован в стабильном runtime-контуре и обрабатывает track-ссылки в тип `audio`.
+Источник в статусе `in_development`:
 
-Бот сохраняет статистику по чатам и пользователям.
+- VK
 
-## Продуктовое допущение (mobile-first)
+Бот сохраняет статистику по чатам и пользователям и ориентирован на mobile-first Telegram UX.
 
-- Основной сценарий использования бота и просмотра полученного контента - мобильный клиент Telegram на телефонах.
-- При проектировании форматов ответов, подписей и медиа-групп приоритет отдается удобству чтения и просмотра на экранах смартфонов.
+## С чего читать проект
 
-## Главный контекст проекта
+Новая верхнеуровневая карта контекста:
 
-Основной источник контекста для разработчиков и AI-агентов:
+- [`AGENTS.md`](./AGENTS.md)
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+- [`docs/design-docs/index.md`](./docs/design-docs/index.md)
+- [`docs/product-specs/index.md`](./docs/product-specs/index.md)
+- [`docs/PLANS.md`](./docs/PLANS.md)
+- [`docs/RELIABILITY.md`](./docs/RELIABILITY.md)
+- [`docs/SECURITY.md`](./docs/SECURITY.md)
 
-- [`.github/ai-context.md`](./.github/ai-context.md)
-- [`docs/improvements.md`](./docs/improvements.md)
-
-Политика актуальности:
-
-- `README.md` и `.github/ai-context.md` - канонические документы верхнего уровня.
-- `docs/improvements.md`, `docs/release_notes.md` и `docs/deploy_layout.md` - поддерживаемые operational-документы.
-- Контекст всегда проверяется по коду в `src/`.
-- При любом обращении к `README.md` агент обязан дополнительно проверить `.github/ai-context.md` и `docs/improvements.md`.
-- В пользовательских caption хэштеги из заголовков контента должны удаляться; если заголовок после очистки пустой, используется нейтральный fallback-текст.
+Источником истины по поведению системы остается код в `src/`.
 
 ## Важный статус по структуре
 
-- `docs/` используется как каталог поддерживаемой документации верхнего уровня.
-- Каноничность внутри `docs/` определяется конкретными файлами: `docs/improvements.md`, `docs/release_notes.md` и `docs/deploy_layout.md` поддерживаются; обзорные карты в `docs/` остаются вторичными.
-- Active orchestration-контур уже опирается на typed runtime boundary (`MediaResult`); legacy compatibility-слой пока еще присутствует в коде как переходный слой.
-- `test/` Содержит скрипты для локальной проверки.
-  - `test/handlers/` smoke-скрипты для локальной проверки handlers.
-  - Все тесты (`pytest` и smoke-скрипты) запускать только с повышенными правами после явного подтверждения пользователя.
-  - Все тестовые прогоны запускать с таймаутом `--timeout 180` (где параметр поддерживается).
+- Верхнеуровневый контекст теперь раскладывается по небольшим тематическим файлам.
+- Архив старых mixed-документов переносится в `local/legacy-docs/` и не считается tracked source of truth.
+- `test/handlers/` остается полезным слоем для smoke-проверок, но не заменяет архитектурные и policy-документы.
 
 ## Карта `src/`
 
 - `src/` содержит основной код бота и runtime-контур.
 - `src/bot/` содержит файлы взаимодействия с Telegram через `aiogram`.
-- `src/data/` содержит runtime-файлы проекта (например, `db`, `cookies`) и локальные шаблонные артефакты для dev.
-- `src/handlers/` содержит логику обработчиков: общие базовые механики и четкое взаимодействие с конкретными ресурсами.
-- `src/middlewares/` содержит промежуточные скрипты; на текущем этапе в том числе слой работы с БД.
-- `src/utils/` содержит общие утилиты и служебные модули, которые можно использовать в разных сегментах кода без нарушения архитектуры.
+- `src/data/` содержит runtime-файлы проекта.
+- `src/handlers/` содержит реестр handlers, source logic и integration-facing processing.
+- `src/middlewares/` содержит chat-state middleware и DB access layer.
+- `src/utils/` содержит общие утилиты.
 
 ## Быстрый запуск
 
@@ -180,11 +169,11 @@
 - `/toggle_errors` - включение/выключение сообщений об ошибках источников.
 - `/toggle_notifications` - включение/выключение уведомлений о старте/остановке бота.
 
-## Схема расположения файлов (сервер и контейнер)
+## Deploy layout
 
 Подробная схема вынесена в отдельный файл:
 
-- [`docs/deploy_layout.md`](./docs/deploy_layout.md)
+- [`docs/design-docs/deploy-storage-layout.md`](./docs/design-docs/deploy-storage-layout.md)
 
 ## Release Notes
 
@@ -197,7 +186,7 @@
 - Скрипт проверки/подготовки релиза:
   - проверяет соответствие `__version__` и tag;
   - проверяет наличие секции в `docs/release_notes.md`;
-  - проверяет/обновляет метку ревизии backlog в `docs/improvements.md`.
+  - проверяет/обновляет метку ревизии backlog в `docs/exec-plans/tech-debt-tracker.md`.
 
 Проверка (без изменений файлов):
 
@@ -205,7 +194,7 @@
 python scripts/release_sync.py --tag v1.2.0
 ```
 
-Автодобавление шаблона в `docs/release_notes.md` и обновление ревизии в `docs/improvements.md`:
+Автодобавление шаблона в `docs/release_notes.md` и обновление ревизии в `docs/exec-plans/tech-debt-tracker.md`:
 
 ```bash
 python scripts/release_sync.py --tag v1.2.0 --write
@@ -223,9 +212,9 @@ python scripts/release_sync.py --tag v1.2.0 --write
 5. Подготовить `docs/release_notes.md`:
    - добавить секцию релиза `vX.Y.Z`;
    - перенести в нее список реально выполненных задач/изменений.
-6. Выполнить релизную чистку `docs/improvements.md`:
+6. Выполнить релизную чистку `docs/exec-plans/tech-debt-tracker.md`:
    - удалить из активного backlog только те задачи, которые уже отражены в `docs/release_notes.md` этого релиза.
-   - важно: очистка `docs/improvements.md` делается после фиксации задач в `docs/release_notes.md`.
+   - важно: очистка backlog делается после фиксации задач в `docs/release_notes.md`.
 7. Прогнать проверку синхронизации:
    - `python scripts/release_sync.py --tag vX.Y.Z` (или `--write` для автосинхронизации метаданных).
 8. Сделать финальный commit релиза (version + release notes + cleanup backlog).

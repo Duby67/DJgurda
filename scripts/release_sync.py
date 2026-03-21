@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Проверка и синхронизация версии релиза между tag, src/__init__.py, docs/release_notes.md и docs/improvements.md."""
+"""Проверка и синхронизация версии релиза между tag, src/__init__.py, docs/release_notes.md и docs/exec-plans/tech-debt-tracker.md."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 SRC_INIT = ROOT / "src" / "__init__.py"
 RELEASE_NOTES = DOCS / "release_notes.md"
-IMPROVEMENTS = DOCS / "improvements.md"
+TECH_DEBT = DOCS / "exec-plans" / "tech-debt-tracker.md"
 
 
 @dataclass
@@ -86,8 +86,8 @@ def ensure_release_notes_section(tag: str, release_date: str, env: str, write: b
     return SyncResult(True, [f"RELEASE_NOTES: добавлен шаблон раздела для tag '{tag}'"])
 
 
-def ensure_improvements_revision(tag: str, release_date: str, write: bool) -> SyncResult:
-    text = IMPROVEMENTS.read_text(encoding="utf-8")
+def ensure_tech_debt_revision(tag: str, release_date: str, write: bool) -> SyncResult:
+    text = TECH_DEBT.read_text(encoding="utf-8")
     metadata_header = "## Метаданные backlog"
     revision_prefix = "- Последняя ревизия backlog:"
     new_revision_line = f"{revision_prefix} {release_date} | version/tag: {tag}"
@@ -97,15 +97,15 @@ def ensure_improvements_revision(tag: str, release_date: str, write: bool) -> Sy
 
     if metadata_header not in text:
         if not write:
-            return SyncResult(False, ["IMPROVEMENTS: отсутствует раздел 'Метаданные backlog'"])
-        insert_anchor = "## Приоритет P0 (критично)"
+            return SyncResult(False, ["TECH_DEBT: отсутствует раздел 'Метаданные backlog'"])
+        insert_anchor = "## High Priority"
         insert_block = f"{metadata_header}\n{new_revision_line}\n\n"
         if insert_anchor in text:
             text = text.replace(insert_anchor, insert_block + insert_anchor, 1)
         else:
             text = text + ("\n" if not text.endswith("\n") else "") + insert_block
         changed = True
-        messages.append("IMPROVEMENTS: добавлен раздел 'Метаданные backlog'")
+        messages.append("TECH_DEBT: добавлен раздел 'Метаданные backlog'")
 
     revision_re = re.compile(rf"^{re.escape(revision_prefix)}\s+.+$", re.MULTILINE)
     match = revision_re.search(text)
@@ -113,21 +113,21 @@ def ensure_improvements_revision(tag: str, release_date: str, write: bool) -> Sy
         current_line = match.group(0).strip()
         if current_line != new_revision_line:
             if not write:
-                return SyncResult(False, [f"IMPROVEMENTS: метка ревизии не совпадает. Текущая: '{current_line}'"])
+                return SyncResult(False, [f"TECH_DEBT: метка ревизии не совпадает. Текущая: '{current_line}'"])
             text = text[: match.start()] + new_revision_line + text[match.end() :]
             changed = True
-            messages.append("IMPROVEMENTS: обновлена метка ревизии backlog")
+            messages.append("TECH_DEBT: обновлена метка ревизии backlog")
         else:
-            messages.append("IMPROVEMENTS: метка ревизии backlog актуальна")
+            messages.append("TECH_DEBT: метка ревизии backlog актуальна")
     else:
         if not write:
-            return SyncResult(False, ["IMPROVEMENTS: отсутствует строка 'Последняя ревизия backlog'"])
+            return SyncResult(False, ["TECH_DEBT: отсутствует строка 'Последняя ревизия backlog'"])
         text = text.replace(metadata_header, f"{metadata_header}\n{new_revision_line}", 1)
         changed = True
-        messages.append("IMPROVEMENTS: добавлена строка 'Последняя ревизия backlog'")
+        messages.append("TECH_DEBT: добавлена строка 'Последняя ревизия backlog'")
 
     if changed:
-        IMPROVEMENTS.write_text(text, encoding="utf-8")
+        TECH_DEBT.write_text(text, encoding="utf-8")
     return SyncResult(True, messages)
 
 
@@ -161,11 +161,11 @@ def main() -> int:
     for message in notes_result.messages:
         print(message)
 
-    improvements_result = ensure_improvements_revision(raw_tag, release_date, args.write)
-    for message in improvements_result.messages:
+    tech_debt_result = ensure_tech_debt_revision(raw_tag, release_date, args.write)
+    for message in tech_debt_result.messages:
         print(message)
 
-    if not notes_result.ok or not improvements_result.ok:
+    if not notes_result.ok or not tech_debt_result.ok:
         return 1
     return 0
 
