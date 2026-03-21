@@ -48,6 +48,9 @@ def collect_artifact_status(artifacts: dict[str, str]) -> dict[str, Any]:
             missing[key] = rel_path
 
     return {
+        "total": len(artifacts),
+        "available_count": len(available),
+        "missing_count": len(missing),
         "available": available,
         "missing": missing,
     }
@@ -82,6 +85,7 @@ def summarize_approval(approval_payload: dict[str, Any]) -> dict[str, Any]:
     checkpoints = approval_payload.get("checkpoints", [])
     awaiting = [item["id"] for item in checkpoints if item.get("status") == "awaiting_approval"]
     approved = [item["id"] for item in checkpoints if item.get("status") == "approved"]
+    rejected = [item["id"] for item in checkpoints if item.get("status") == "rejected"]
     skipped = [item["id"] for item in checkpoints if item.get("status") == "not_required"]
 
     return {
@@ -89,7 +93,13 @@ def summarize_approval(approval_payload: dict[str, Any]) -> dict[str, Any]:
         "escalation_reasons": approval_payload.get("escalation_reasons", []),
         "awaiting_approval": awaiting,
         "approved": approved,
+        "rejected": rejected,
         "not_required": skipped,
+        "checkpoint_statuses": {
+            item["id"]: item.get("status", "unknown")
+            for item in checkpoints
+        },
+        "checkpoint_details": checkpoints,
     }
 
 
@@ -100,12 +110,80 @@ def load_optional_json(path: Path) -> dict[str, Any] | None:
     return load_json(path)
 
 
+def summarize_approval_history(history_payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Сводит approval history к компактному формату."""
+    if history_payload is None:
+        return None
+
+    entries = history_payload.get("entries", [])
+    latest_entry = entries[-1] if entries else None
+
+    by_action: dict[str, int] = {}
+    by_checkpoint: dict[str, int] = {}
+    for entry in entries:
+        action = entry.get("action", "unknown")
+        checkpoint_id = entry.get("checkpoint_id", "unknown")
+        by_action[action] = by_action.get(action, 0) + 1
+        by_checkpoint[checkpoint_id] = by_checkpoint.get(checkpoint_id, 0) + 1
+
+    return {
+        "total_events": len(entries),
+        "by_action": by_action,
+        "by_checkpoint": by_checkpoint,
+        "latest_event": latest_entry,
+    }
+
+
+def build_blockers(
+    *,
+    run_summary: dict[str, Any],
+    artifact_status: dict[str, Any],
+    approval_summary: dict[str, Any],
+    plan_summary: dict[str, Any],
+) -> list[str]:
+    """Строит список текущих blockers для lifecycle run bundle."""
+    blockers: list[str] = []
+
+    if artifact_status["missing"]:
+        blockers.append("missing_artifacts")
+    if approval_summary["rejected"]:
+        blockers.append("approval_rejected")
+    if approval_summary["needs_manual_review"] and "run_checks" in approval_summary["awaiting_approval"]:
+        blockers.append("manual_review_not_approved")
+    if run_summary.get("status") == "awaiting_manual_review":
+        blockers.append("context_not_loaded")
+    if plan_summary.get("next_pending_step") is None and not approval_summary["rejected"]:
+        blockers.append("plan_has_no_pending_steps")
+
+    return blockers
+
+
+def build_readiness(
+    *,
+    run_summary: dict[str, Any],
+    approval_summary: dict[str, Any],
+) -> dict[str, bool]:
+    """Показывает, какие действия уже можно выполнять по текущему статусу."""
+    checkpoint_statuses = approval_summary.get("checkpoint_statuses", {})
+    run_checks_status = checkpoint_statuses.get("run_checks")
+    commit_status = checkpoint_statuses.get("commit")
+    push_status = checkpoint_statuses.get("push")
+
+    return {
+        "can_implement": run_summary.get("next_action") == "implement_change",
+        "can_request_commit_approval": run_checks_status in {"approved", "not_required"},
+        "can_request_push_approval": commit_status == "approved",
+        "can_push": push_status == "approved",
+    }
+
+
 def build_status(run_dir: Path) -> dict[str, Any]:
     """Собирает итоговый статус run bundle."""
     summary_path = run_dir / "run-summary.json"
     plan_path = run_dir / "plan.json"
     approval_path = run_dir / "approval-checkpoints.json"
     execution_state_path = run_dir / "execution-state.json"
+    approval_history_path = run_dir / "approval-history.json"
 
     if not summary_path.is_file():
         raise FileNotFoundError(f"Не найден файл: {summary_path}")
@@ -118,10 +196,22 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     plan_payload = load_json(plan_path)
     approval_payload = load_json(approval_path)
     execution_state = load_optional_json(execution_state_path)
+    approval_history = load_optional_json(approval_history_path)
 
     artifact_status = collect_artifact_status(run_summary.get("artifacts", {}))
     plan_summary = summarize_plan(plan_payload)
     approval_summary = summarize_approval(approval_payload)
+    approval_history_summary = summarize_approval_history(approval_history)
+    blockers = build_blockers(
+        run_summary=run_summary,
+        artifact_status=artifact_status,
+        approval_summary=approval_summary,
+        plan_summary=plan_summary,
+    )
+    readiness = build_readiness(
+        run_summary=run_summary,
+        approval_summary=approval_summary,
+    )
 
     output: dict[str, Any] = {
         "run_id": run_summary["run_id"],
@@ -134,15 +224,20 @@ def build_status(run_dir: Path) -> dict[str, Any]:
         "artifacts": artifact_status,
         "plan": plan_summary,
         "approval": approval_summary,
+        "readiness": readiness,
+        "blockers": blockers,
     }
 
     if execution_state is not None:
         output["execution_state"] = {
             "phase": execution_state.get("phase"),
             "status": execution_state.get("status"),
+            "next_action": execution_state.get("next_action"),
             "loaded_at_utc": execution_state.get("loaded_at_utc"),
             "summary": execution_state.get("summary", {}),
         }
+    if approval_history_summary is not None:
+        output["approval_history"] = approval_history_summary
 
     return output
 
@@ -170,8 +265,19 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     """Точка входа CLI."""
     args = parse_args()
-    run_dir = resolve_run_dir(args)
-    result = build_status(run_dir)
+    try:
+        run_dir = resolve_run_dir(args)
+        result = build_status(run_dir)
+    except (FileNotFoundError, ValueError) as exc:
+        json.dump(
+            {"error": str(exc)},
+            sys.stdout,
+            ensure_ascii=False,
+            indent=2 if args.pretty else None,
+        )
+        if args.pretty:
+            sys.stdout.write("\n")
+        return 1
 
     json.dump(
         result,
