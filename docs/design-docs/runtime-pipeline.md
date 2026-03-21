@@ -2,34 +2,34 @@
 
 ## Purpose
 
-This file describes the main runtime path and ownership boundaries.
+Этот файл описывает главный runtime path и границы ответственности.
 
 ## Flow
 
-1. Telegram update enters `src/bot/`.
-2. Link extraction and routing happen in `src/bot/processing/`.
-3. `resolve_url` normalizes or unwraps the incoming URL.
-4. `HandlerRegistry` and `ServiceManager` choose the source handler.
-5. The handler produces a typed `MediaResult`.
-6. Sender logic converts that result into Telegram API calls.
-7. Stats and chat settings are persisted through the DB layer.
+1. Telegram update попадает в `src/bot/`.
+2. Извлечение ссылок и routing происходят в `src/bot/processing/`.
+3. `resolve_url` нормализует или unwrap-ит входящий URL.
+4. `HandlerRegistry` и `ServiceManager` выбирают source handler.
+5. Handler производит typed `MediaResult`.
+6. Sender logic превращает этот результат в Telegram API calls.
+7. Статистика и настройки чата сохраняются через DB layer.
 
 ## Boundaries
 
-- `src/bot/` owns orchestration and Telegram-facing behavior.
-- `src/handlers/` owns source-specific extraction and transformation.
-- `src/middlewares/db/` owns persistence concerns.
-- `src/utils/` owns shared helper logic, not business orchestration.
+- `src/bot/` владеет orchestration и Telegram-facing behavior.
+- `src/handlers/` владеет source-specific extraction и transformation.
+- `src/middlewares/db/` владеет persistence concerns.
+- `src/utils/` владеет shared helper logic, а не бизнес-оркестрацией.
 
 ## Stable Contracts
 
-- `handler.process()` should produce `MediaResult` for the active runtime flow.
-- Sender selection is driven by content type rather than source-specific branching.
-- Chat enable/disable state is enforced in middleware before most message handling.
+- `handler.process()` должен производить `MediaResult` для активного runtime flow.
+- Выбор sender-а должен определяться content type, а не source-specific branching.
+- Состояние включения/выключения бота должно проверяться middleware до основной обработки сообщений.
 
 ## Risks To Keep Visible
 
-- external APIs and anti-bot behavior;
-- runtime file handling and cleanup;
-- chat settings and stats DB behavior;
-- multi-link orchestration edge cases.
+- внешние API и anti-bot поведение;
+- обработка и cleanup runtime-файлов;
+- поведение DB-слоя для настроек и статистики;
+- edge cases в multi-link orchestration.

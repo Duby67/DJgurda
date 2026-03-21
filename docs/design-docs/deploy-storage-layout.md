@@ -2,30 +2,30 @@
 
 ## Purpose
 
-This file describes how deploy, cookies, database paths, and runtime temp storage are organized.
+Этот файл описывает, как организованы deploy, cookies, database paths и runtime temp storage.
 
 ## Main Rules
 
-- Runtime database and cookies are mounted into the container.
-- Runtime temp files live under `src/data/runtime` inside the container.
-- `local/cookies` is for local smoke and manual testing only.
-- `deploy/cookies` is the deploy-side materialization area and should not store tracked secrets.
-- Runtime should create and clean temp storage itself.
-- `deploy/manager.sh` must stay compatible with both `dev` and `prod`.
+- Runtime database и cookies монтируются в контейнер.
+- Runtime temp files живут внутри контейнера под `src/data/runtime`.
+- `local/cookies` предназначен только для local smoke и ручных проверок.
+- `deploy/cookies` служит deploy-side materialization area и не должен хранить tracked secrets.
+- Runtime должен сам создавать и очищать temp storage.
+- `deploy/manager.sh` должен оставаться совместимым и с `dev`, и с `prod`.
 
 ## Key Path Contracts
 
-- database path is driven by `BOT_DB_PATH`;
-- shared cookies directory is driven by `COOKIES_DIR`;
-- explicit `*_COOKIES_PATH` values override the shared cookies directory;
-- runtime temp storage stays under `/app/src/data/runtime` in containerized execution.
+- database path задается через `BOT_DB_PATH`;
+- общая cookies directory задается через `COOKIES_DIR`;
+- явные `*_COOKIES_PATH` переопределяют общую cookies directory;
+- runtime temp storage остается под `/app/src/data/runtime` при containerized execution.
 
 ## Deploy Notes
 
-- GitHub Actions may materialize `deploy/cookies` from optional secrets.
-- If secrets are missing, deploy should continue by reusing existing server-side cookies.
-- `bot.db` lives outside the container and is mounted in.
-- Runtime temp storage no longer relies on an external `runtime` volume.
+- GitHub Actions может materialize `deploy/cookies` из optional secrets.
+- Если secrets отсутствуют, deploy должен продолжаться с reuse уже существующих server-side cookies.
+- `bot.db` живет вне контейнера и монтируется внутрь.
+- Runtime temp storage больше не опирается на внешний `runtime` volume.
 
 ## Read Next
 

@@ -2,20 +2,20 @@
 
 ## Purpose
 
-This file defines the quality bar for changes.
+Этот файл задает quality bar для изменений в репозитории.
 
 ## Baseline
 
-- the change is understandable from narrow context;
-- behavior changes are reflected in docs when needed;
-- riskier paths have targeted checks or tests;
-- source status and runtime boundaries remain explicit;
-- no hidden broadening of scope happened during implementation.
+- изменение должно быть понятно из узкого и обоснованного контекста;
+- изменение поведения должно отражаться в docs, если это нужно;
+- у рискованных путей должны быть целевые проверки или тесты;
+- статусы источников и runtime boundaries должны оставаться явными;
+- по ходу реализации не должно происходить скрытого расширения scope.
 
 ## Review Questions
 
-- Was the context pack small and justified?
-- Did the change stay inside the intended subsystem?
-- Are stable and experimental paths still clearly separated?
-- Did docs move closer to the code instead of drifting away from it?
-- Were risky checks left unrun, and if so, was that stated explicitly?
+- Был ли context pack достаточно маленьким и обоснованным?
+- Осталось ли изменение внутри планируемой подсистемы?
+- Сохранилось ли явное разделение stable и experimental путей?
+- Стали ли docs ближе к коду, а не дальше от него?
+- Если рискованные проверки не запускались, было ли это явно указано?

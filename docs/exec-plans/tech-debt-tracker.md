@@ -2,93 +2,93 @@
 
 ## Purpose
 
-This file is the tracked backlog for open technical debt and unresolved architecture risks.
+Этот файл является tracked backlog для открытого техдолга и незакрытых архитектурных рисков.
 
-## Метаданные backlog
+## Backlog Metadata
 
 - Последняя ревизия backlog: 2026-03-13 | version/tag: v1.2.4
 
 ## High Priority
 
-### 1. HTML-safe captions
+### 1. HTML-Safe Captions
 
 - Problem:
-  - caption assembly still risks invalid HTML if truncation cuts through markup.
+  - сборка caption все еще может давать невалидный HTML, если обрезка попадает внутрь разметки.
 - Impact:
-  - Telegram send failures on otherwise valid processing results.
-- Main area:
+  - Telegram send failures даже при корректном результате обработки.
+- Main Area:
   - `src/utils/messages.py`
 
-### 2. DB degradation visibility
+### 2. DB Degradation Visibility
 
 - Problem:
-  - DB read failures can collapse into silent defaults instead of explicit degradation.
+  - ошибки чтения из БД могут схлопываться в defaults вместо явной деградации.
 - Impact:
-  - production behavior changes without a clear operational signal.
-- Main areas:
+  - поведение в production меняется без понятного operational signal.
+- Main Areas:
   - `src/middlewares/bot_enabled.py`
   - `src/middlewares/db/processing/bot_settings_processor.py`
 
-### 3. Atomic stats updates
+### 3. Atomic Stats Updates
 
 - Problem:
-  - `Source` creation in stats flow is not guaranteed to be atomic under concurrency.
+  - создание `Source` в stats flow не гарантированно атомарно при конкуренции.
 - Impact:
-  - race conditions and possible stats loss.
-- Main areas:
+  - возможны race conditions и потеря части статистики.
+- Main Areas:
   - `src/middlewares/db/processing/stats_processor.py`
   - `src/middlewares/db/models/sources.py`
 
-### 4. Docs cleanup after typed-runtime transition
+### 4. Docs Cleanup After Typed-Runtime Transition
 
 - Problem:
-  - parts of the repository still describe outdated legacy boundaries.
+  - часть репозитория все еще описывает устаревшие legacy boundaries.
 - Impact:
-  - confusing future changes and agent context selection.
-- Main areas:
+  - будущие изменения и выбор агентного контекста становятся менее понятными.
+- Main Areas:
   - tracked docs
-  - selected code comments and docstrings
+  - отдельные code comments и docstrings
 
 ## Medium Priority
 
-### 5. URL extraction and routing robustness
+### 5. URL Extraction And Routing Robustness
 
-- Improve URL extraction to avoid punctuation-related false negatives.
-- Consider parallelized `resolve_url` with bounded concurrency for multi-link batches.
+- Улучшить извлечение URL, чтобы не ловить false negative из-за хвостовой пунктуации.
+- Рассмотреть parallelized `resolve_url` с ограниченной конкурентностью для multi-link batches.
 
-### 6. Chat settings read amplification
+### 6. Chat Settings Read Amplification
 
-- Current middleware flow reads chat settings too often.
-- Introduce a bounded cache and explicit invalidation strategy.
+- Текущий middleware flow слишком часто читает chat settings.
+- Нужны bounded cache и явная стратегия invalidation.
 
-### 7. Runtime ownership of service manager
+### 7. Runtime Ownership Of Service Manager
 
-- Remove duplicate runtime ownership patterns for `ServiceManager`.
-- Move toward one application-level ownership model.
+- Убрать дублирование runtime ownership для `ServiceManager`.
+- Сдвинуться к одной application-level модели владения.
 
-### 8. External dependency resilience
+### 8. External Dependency Resilience
 
-- Add per-source metrics, clearer timeout/retry expectations, and explicit degrade signals.
-- Keep `VK` on a separate R&D track instead of presenting it as a stabilization task.
+- Добавить per-source metrics, более явные ожидания по timeout/retry и explicit degrade signals.
+- Держать `VK` отдельным R&D-треком, а не оформлять его как обычную stabilization-задачу.
 
 ## Low Priority
 
-### 9. Helper deduplication
+### 9. Helper Deduplication
 
-- Extract repeated lightweight helpers only after higher-priority correctness and resilience work.
+- Выносить повторяющиеся lightweight helpers только после закрытия более важных задач по correctness и resilience.
 
-### 10. Toggle command cleanup
+### 10. Toggle Command Cleanup
 
-- Reduce repeated toggle flow patterns once more urgent runtime issues are resolved.
+- Сокращать повтор шаблонов toggle-flow уже после более срочных runtime-задач.
 
 ## Next Iteration Order
 
-1. HTML-safe captions and routing correctness.
-2. DB resilience and atomic stats behavior.
-3. Remaining docs cleanup after architecture transition.
-4. URL extraction, resolve performance, and chat settings cache.
+1. HTML-safe captions и routing correctness.
+2. DB resilience и atomic stats behavior.
+3. Оставшийся docs cleanup после архитектурного перехода.
+4. URL extraction, resolve performance и cache для chat settings.
 
 ## Archived Source Notes
 
-- Deeper historical backlog and migration notes now live in `local/legacy-docs/` and `local/REFACTORING.md`.
-- Those files are archive input, not the primary tracked backlog.
+- Более глубокие исторические backlog- и migration-notes теперь лежат в `local/legacy-docs/` и `local/REFACTORING.md`.
+- Эти файлы являются archive input, а не основным tracked backlog.

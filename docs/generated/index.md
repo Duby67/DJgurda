@@ -2,10 +2,10 @@
 
 ## Purpose
 
-This directory is reserved for machine-generated reference artifacts.
+Эта директория зарезервирована для machine-generated reference artifacts.
 
 ## Rules
 
-- Generated files are reference material, not policy.
-- Do not mix generated output with architectural guidance in the same file.
-- Prefer deterministic regeneration over manual edits.
+- Generated files являются reference-материалом, а не policy.
+- Нельзя смешивать generated output и архитектурные указания в одном файле.
+- Предпочтителен детерминированный regeneration, а не ручные правки.

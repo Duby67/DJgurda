@@ -2,14 +2,14 @@
 
 ## Goal
 
-Move repository context from a few overloaded files into a small set of focused, agent-friendly documents.
+Перенести контекст репозитория из нескольких перегруженных файлов в набор небольших и agent-friendly документов.
 
 ## Scope
 
-- create the new document structure;
-- split old context by topic;
-- archive replaced context files under `local/`;
-- keep the new top-level reading path short and predictable.
+- создать новую структуру документов;
+- разложить старый контекст по темам;
+- архивировать замененные файлы в `local/`;
+- сделать верхнеуровневый reading path коротким и предсказуемым.
 
 ## Current Sources Being Migrated
 
@@ -24,6 +24,6 @@ Move repository context from a few overloaded files into a small set of focused,
 
 ## Success Criteria
 
-- agents can find architecture, product, reliability, security, and plan context without reading large mixed files;
-- legacy context files are no longer the primary source of truth;
-- the repository has a clear reading order from root policies to module-specific context.
+- агент может найти архитектурный, продуктовый, reliability-, security- и planning-контекст без чтения больших mixed-файлов;
+- legacy context files больше не являются основным источником истины;
+- у репозитория есть понятный reading order от root policies до module-specific context.

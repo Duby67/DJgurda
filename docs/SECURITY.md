@@ -2,23 +2,23 @@
 
 ## Purpose
 
-This file captures security, secret-handling, and approval boundaries for the repository.
+Этот файл фиксирует security-, secret-handling- и approval-границы репозитория.
 
 ## Secret Rules
 
-- Secrets must not be committed to tracked files.
-- `local/` may contain sensitive or stale material and is not a tracked policy source.
-- Deploy-side secret materialization must stay separate from tracked source files.
-- Cookie files are operational artifacts, not repository knowledge documents.
+- Секреты не должны попадать в tracked-файлы.
+- `local/` может содержать чувствительные или устаревшие материалы и не является tracked policy source.
+- Deploy-side materialization секретов должна быть отделена от tracked source files.
+- Cookie-файлы - это operational artifacts, а не knowledge-documents репозитория.
 
 ## Access Rules
 
-- Remote server access is a human-only operation unless an explicitly approved safe workflow exists.
-- Agents should not perform SSH, RDP, WinRM, or ad hoc remote shell actions.
-- Approval is required before `push`, release, tag creation, or infrastructure-changing actions.
+- Удаленный доступ к серверу остается действием человека, если только не существует явно одобренный безопасный workflow.
+- Агентам нельзя выполнять SSH, RDP, WinRM или ad hoc remote shell действия.
+- Approval обязателен перед `push`, release, созданием tag и инфраструктурными изменениями.
 
 ## Repository Hygiene
 
-- Prefer UTF-8 without BOM for tracked files.
-- Treat `.env`, `venv/`, caches, and other local environment artifacts as non-canonical.
-- Keep tracked docs free from copied secrets, local paths that reveal credentials, or deploy-only values.
+- Для tracked-файлов предпочитать UTF-8 без BOM.
+- `.env`, `venv/`, caches и другие локальные environment artifacts считать неканоничными.
+- Не допускать, чтобы в tracked docs попадали секреты, чувствительные локальные пути или deploy-only значения.

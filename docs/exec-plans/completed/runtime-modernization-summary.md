@@ -2,16 +2,16 @@
 
 ## Purpose
 
-This file keeps a short tracked summary of the modernization work that was previously described across mixed backlog documents.
+Этот файл хранит короткое tracked-summary по модернизации runtime, которая раньше была размазана по mixed backlog-документам.
 
 ## Completed Themes
 
-- typed runtime boundary centered on `MediaResult`;
-- sender registry and handler registry adoption;
-- source-status cleanup with `YandexMusic` in stable runtime and `VK` in development-only status;
-- runtime storage and cookies lifecycle cleanup;
-- gradual reduction of legacy compatibility and mixin-heavy boundaries.
+- typed runtime boundary вокруг `MediaResult`;
+- внедрение sender registry и handler registry;
+- cleanup статусов источников: `YandexMusic` в stable runtime, `VK` только в development-only статусе;
+- cleanup lifecycle для runtime storage и cookies;
+- постепенное сокращение legacy compatibility и mixin-heavy boundaries.
 
 ## Why Keep This
 
-These changes explain the current shape of the system and help readers understand why older legacy descriptions should no longer be treated as current architecture.
+Эти изменения объясняют текущую форму системы и помогают понять, почему старые legacy-описания больше не стоит считать актуальной архитектурой.

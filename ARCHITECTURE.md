@@ -1,10 +1,10 @@
 # Architecture
 
-## Назначение
+## Purpose
 
 Этот файл дает короткую карту системы и маршрутизирует к более узким документам.
 
-## Сводка системы
+## System Summary
 
 DJgurda Bot - асинхронный Telegram-бот для обработки медиа-ссылок в чатах. Пользователь отправляет ссылку, бот определяет источник, извлекает контент и отправляет результат в унифицированном формате обратно в чат.
 
@@ -20,18 +20,18 @@ DJgurda Bot - асинхронный Telegram-бот для обработки �
 
 - VK
 
-## Главный runtime-поток
+## Core Runtime Flow
 
 `Telegram update -> router -> media_router -> resolve_url -> HandlerRegistry/ServiceManager -> handler.process() -> MediaResult -> sender registry -> Telegram API`
 
-## Текущая архитектурная граница
+## Current Architecture Boundary
 
 - Рабочая boundary-модель опирается на typed result `MediaResult`.
 - Stable runtime больше не должен опираться на broad legacy payload как на основной контракт.
 - Stable gateways строятся вокруг composition-based services.
 - Внешние источники считаются нестабильной внешней средой, а не надежной частью системы.
 
-## Подсистемы
+## Subsystems
 
 - `src/bot/`
   - Telegram-роутеры, команды, orchestration, startup и shutdown.
@@ -44,7 +44,7 @@ DJgurda Bot - асинхронный Telegram-бот для обработки �
 - `deploy/`
   - container packaging, deploy scripts и sync tooling.
 
-## Ключевые входы
+## Key Entrypoints
 
 - `src/main.py`
 - `src/config.py`
@@ -53,14 +53,14 @@ DJgurda Bot - асинхронный Telegram-бот для обработки �
 - `src/bot/lifespan/startup.py`
 - `src/bot/lifespan/shutdown.py`
 
-## Важные ограничения
+## Key Constraints
 
 - Основной UX-контекст - mobile Telegram.
 - Webhook-режим сейчас не реализован.
 - `VK` не должен восприниматься как stable runtime-source.
 - `tests/` и `test/` не являются общим source of truth, кроме согласованных handler smoke flows.
 
-## Читать дальше
+## Read Next
 
 - `docs/design-docs/index.md`
 - `docs/product-specs/index.md`

@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This index routes readers to focused product expectations.
+Этот индекс маршрутизирует читателя к узким продуктовым ожиданиям.
 
 ## Documents
 
 - `docs/product-specs/mobile-chat-usage.md`
-  - primary usage model and UX expectations for chat users.
+  - основная usage-model и UX-ожидания для пользователей чатов.

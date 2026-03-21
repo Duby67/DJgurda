@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This index routes readers to focused architecture and design documents.
+Этот индекс маршрутизирует читателя к узким архитектурным и design-документам.
 
 ## Read First
 
@@ -12,8 +12,8 @@ This index routes readers to focused architecture and design documents.
 ## Documents
 
 - `docs/design-docs/core-beliefs.md`
-  - design principles and constraints for code, docs, and agent workflows.
+  - дизайн-принципы и ограничения для кода, docs и agent workflows.
 - `docs/design-docs/runtime-pipeline.md`
-  - runtime data flow and subsystem boundaries.
+  - runtime data flow и границы подсистем.
 - `docs/design-docs/deploy-storage-layout.md`
-  - deploy, runtime storage, cookies, and path contracts.
+  - deploy, runtime storage, cookies и path contracts.

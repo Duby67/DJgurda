@@ -2,13 +2,13 @@
 
 ## Purpose
 
-This directory stores completed execution plans that remain useful as historical context.
+Эта директория хранит завершенные execution plans, которые еще полезны как исторический контекст.
 
 ## Rule
 
-When an active plan is finished, move it here only if it still explains an important architectural decision or migration path.
+Когда активный план завершен, переносить его сюда стоит только если он по-прежнему объясняет важную архитектурную развилку или migration path.
 
 ## Current Summaries
 
 - `docs/exec-plans/completed/runtime-modernization-summary.md`
-  - short historical summary of the typed runtime and source-status cleanup.
+  - короткое историческое summary по typed runtime и cleanup статусов источников.

@@ -2,10 +2,10 @@
 
 ## Purpose
 
-This directory stores compact external reference material prepared for local agent use.
+Эта директория хранит компактные внешние reference-материалы, подготовленные для локального использования агентами.
 
 ## Rules
 
-- Keep each reference file narrow and tool-specific.
-- Prefer short summaries or extracted constraints over large dumps.
-- Do not treat references as repository policy unless another tracked doc says so.
+- Каждый reference-файл должен быть узким и tool-specific.
+- Лучше хранить короткие summaries или extracted constraints, чем большие dumps.
+- Нельзя считать references policy-источником, если другой tracked-doc явно этого не говорит.

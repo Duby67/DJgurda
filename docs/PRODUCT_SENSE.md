@@ -2,20 +2,20 @@
 
 ## Purpose
 
-This file explains how to choose product-friendly behavior when multiple technical options are possible.
+Этот файл объясняет, как принимать продуктовые решения, когда возможны несколько технических вариантов.
 
 ## Rules
 
-- Optimize for fast and readable delivery in Telegram chats.
-- Treat mobile readability as the default UX constraint.
-- Avoid noisy captions and confusing partial-success behavior.
-- Prefer graceful degradation over brittle feature promises.
-- Keep stable sources predictable; treat experimental sources as explicitly non-stable.
+- Оптимизировать результат под быстрый и удобочитаемый сценарий в Telegram-чатах.
+- Считать mobile readability базовым UX-ограничением.
+- Избегать шумных caption и неочевидного поведения при partial success.
+- Предпочитать graceful degradation вместо хрупких продуктовых обещаний.
+- Держать stable sources предсказуемыми, а experimental sources явно помечать как нестабильные.
 
 ## Practical Defaults
 
-- captions should be compact and useful on phone screens;
-- content titles should not degrade into hashtag spam;
-- partial success should be explained clearly instead of silently looking complete;
-- command behavior in a chat should feel predictable and local to that chat;
-- unsupported sources should fail clearly without pretending to be temporarily stable.
+- caption должны быть компактными и полезными на экране телефона;
+- заголовки контента не должны превращаться в набор хэштегов;
+- partial success должен объясняться явно, а не выглядеть как полный успех;
+- поведение команд должно быть предсказуемым и локальным для конкретного чата;
+- unsupported sources должны завершаться понятным сообщением, а не выглядеть как временно рабочие.

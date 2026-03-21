@@ -2,17 +2,17 @@
 
 ## Purpose
 
-This file captures the stable design beliefs that should guide changes.
+Этот файл фиксирует устойчивые design-beliefs, которыми нужно руководствоваться при изменениях.
 
 ## Beliefs
 
-- The repository should explain itself in small, role-focused documents.
-- Agents should load minimal context before touching code.
-- The runtime contract should stay explicit and typed.
-- Stable and experimental sources must remain clearly separated.
-- Reliability is more important than broad feature claims.
-- Human approval is required before irreversible git or infrastructure actions.
-- Product output should stay optimized for mobile Telegram usage.
-- Code should be trusted more than stale documentation.
-- Generated reference artifacts should not become policy by accident.
-- One document should answer one class of questions instead of mixing product, deploy, backlog, and architecture in one place.
+- Репозиторий должен объяснять себя через небольшие role-focused документы.
+- Агенты должны загружать минимальный контекст перед изменением кода.
+- Runtime contract должен оставаться явным и typed.
+- Stable и experimental sources должны быть четко разделены.
+- Надежность важнее широких, но хрупких feature claims.
+- Human approval обязателен перед необратимыми git- или infrastructure-действиями.
+- Продуктовый результат должен оставаться оптимизированным под mobile Telegram usage.
+- Коду нужно доверять больше, чем устаревшей документации.
+- Generated reference artifacts не должны случайно превращаться в policy.
+- Один документ должен отвечать на один класс вопросов, а не смешивать product, deploy, backlog и architecture.

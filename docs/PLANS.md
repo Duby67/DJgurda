@@ -2,10 +2,10 @@
 
 ## Purpose
 
-This file is the entrypoint for implementation planning documents.
+Этот файл служит входной точкой для planning-документов.
 
 ## Read Here
 
-- `docs/exec-plans/active/index.md` for ongoing work.
-- `docs/exec-plans/tech-debt-tracker.md` for open debt and known risks.
-- `docs/exec-plans/completed/index.md` for historical plans worth keeping.
+- `docs/exec-plans/active/index.md` для текущих инициатив.
+- `docs/exec-plans/tech-debt-tracker.md` для открытого техдолга и известных рисков.
+- `docs/exec-plans/completed/index.md` для исторических планов, которые еще полезны.
