@@ -122,7 +122,7 @@ def validate_action_transition(
     if checkpoint_id == PUSH_ID:
         if statuses.get(COMMIT_ID) != "approved":
             raise ValueError("Нельзя approve checkpoint 'push' до approval checkpoint 'commit'")
-        if current_phase not in {"commit_recorded", "push_requested"}:
+        if current_phase not in {"commit_recorded", "approval_requested", "push_requested"}:
             raise ValueError("Нельзя approve checkpoint 'push' до фиксации commit-stage")
 
     if checkpoint_id in {COMMIT_ID, PUSH_ID} and current_phase == "context_loaded":
@@ -141,6 +141,7 @@ def derive_status_and_next_action(
     commit_status = statuses.get(COMMIT_ID, "awaiting_approval")
     push_status = statuses.get(PUSH_ID, "awaiting_approval")
     current_phase = (execution_state or {}).get("phase")
+    requested_checkpoints = ((execution_state or {}).get("approval_request") or {}).get("requested_checkpoints", [])
 
     if "rejected" in statuses.values():
         return "approval_rejected", "review_rejection_or_replan"
@@ -153,6 +154,16 @@ def derive_status_and_next_action(
         return "context_loaded", "review_context_state"
 
     if current_phase == "approval_requested":
+        if PUSH_ID in requested_checkpoints:
+            if push_status == "approved" and commit_status == "approved":
+                return "push_approved_pending_execution", "execute_push"
+            if push_status == "awaiting_approval":
+                return "awaiting_push_approval", "await_push_approval"
+        if COMMIT_ID in requested_checkpoints:
+            if commit_status == "approved":
+                return "commit_approved_pending_execution", "create_commit"
+            if commit_status == "awaiting_approval":
+                return "awaiting_commit_approval", "await_commit_approval"
         if commit_status == "approved":
             return "commit_approved_pending_execution", "create_commit"
         if commit_status == "awaiting_approval":

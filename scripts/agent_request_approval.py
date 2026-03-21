@@ -159,6 +159,8 @@ def ensure_request_allowed(
         commit_result_rel = run_summary.get("artifacts", {}).get("commit_result", "")
         if not commit_result_rel or not (ROOT / normalize_rel_path(commit_result_rel)).is_file():
             raise ValueError("Нельзя запрашивать push approval до фиксации commit-stage")
+        if not run_summary.get("commit", {}).get("commit_created", False):
+            raise ValueError("Нельзя запрашивать push approval до создания реального commit")
 
     for checkpoint_id in requested_checkpoints:
         status = statuses.get(checkpoint_id)

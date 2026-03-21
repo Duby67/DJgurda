@@ -227,6 +227,23 @@ def summarize_commit(commit_payload: dict[str, Any] | None) -> dict[str, Any] | 
     }
 
 
+def summarize_push_execution(push_payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Сводит push result к компактному формату."""
+    if push_payload is None:
+        return None
+
+    return {
+        "recorded_at_utc": push_payload.get("recorded_at_utc"),
+        "pushed_by": push_payload.get("pushed_by"),
+        "mode": push_payload.get("mode"),
+        "remote": push_payload.get("remote"),
+        "branch": push_payload.get("branch"),
+        "push_created": push_payload.get("push_created", False),
+        "push_stdout": push_payload.get("git_push_stdout", ""),
+        "warnings": push_payload.get("warnings", []),
+    }
+
+
 def build_blockers(
     *,
     run_summary: dict[str, Any],
@@ -257,10 +274,21 @@ def build_blockers(
         blockers.append("review_failed")
     if run_summary.get("status") == "review_blocked":
         blockers.append("review_blocked")
+    if run_summary.get("status") == "push_failed":
+        blockers.append("push_failed")
+    if run_summary.get("status") == "push_blocked":
+        blockers.append("push_blocked")
     if (
         plan_summary.get("next_pending_step") is None
         and not approval_summary["rejected"]
         and not approval_summary["awaiting_approval"]
+        and run_summary.get("next_action") not in {
+            "create_commit",
+            "execute_push",
+            "run_complete",
+            "await_commit_approval",
+            "await_push_approval",
+        }
     ):
         blockers.append("plan_has_no_pending_steps")
 
@@ -285,7 +313,7 @@ def build_readiness(
         "can_request_commit_approval": run_checks_status in {"approved", "not_required"} and commit_status == "awaiting_approval",
         "can_create_commit": run_summary.get("next_action") == "create_commit",
         "can_request_push_approval": commit_status == "approved" and commit_created and push_status == "awaiting_approval",
-        "can_push": push_status == "approved" and commit_created,
+        "can_push": run_summary.get("next_action") == "execute_push",
     }
 
 
@@ -301,6 +329,7 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     review_result_path = run_dir / "review-result.json"
     approval_request_path = run_dir / "approval-request.json"
     commit_result_path = run_dir / "commit-result.json"
+    push_result_path = run_dir / "push-result.json"
 
     if not summary_path.is_file():
         raise FileNotFoundError(f"Не найден файл: {summary_path}")
@@ -319,6 +348,7 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     review_payload = load_optional_json(review_result_path)
     approval_request_payload = load_optional_json(approval_request_path)
     commit_payload = load_optional_json(commit_result_path)
+    push_payload = load_optional_json(push_result_path)
 
     artifact_status = collect_artifact_status(run_summary.get("artifacts", {}))
     plan_summary = summarize_plan(plan_payload)
@@ -329,6 +359,7 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     review_summary = summarize_review(review_payload)
     approval_request_summary = summarize_approval_request(approval_request_payload)
     commit_summary = summarize_commit(commit_payload)
+    push_summary = summarize_push_execution(push_payload)
     blockers = build_blockers(
         run_summary=run_summary,
         artifact_status=artifact_status,
@@ -375,6 +406,8 @@ def build_status(run_dir: Path) -> dict[str, Any]:
         output["approval_request"] = approval_request_summary
     if commit_summary is not None:
         output["commit"] = commit_summary
+    if push_summary is not None:
+        output["push_execution"] = push_summary
 
     return output
 
