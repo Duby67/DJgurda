@@ -1,0 +1,310 @@
+{
+  "version": 1,
+  "description": "Machine-readable routing map for agent-first task classification and context loading.",
+  "base_context_pack": {
+    "agents": [
+      "AGENTS.md"
+    ],
+    "docs": [
+      "ARCHITECTURE.md",
+      "docs/RELIABILITY.md",
+      "docs/SECURITY.md"
+    ],
+    "notes": [
+      "README.md is human-facing and not a source of truth for agents.",
+      "Do not use local/ as a primary source of truth without an explicit user request.",
+      "Code in src/ has priority over outdated markdown context."
+    ]
+  },
+  "task_types": [
+    {
+      "id": "bot_command_change",
+      "label": "Bot Command Change",
+      "read_agents": [
+        "AGENTS.md",
+        "src/bot/AGENTS.md"
+      ],
+      "read_docs": [
+        "ARCHITECTURE.md",
+        "docs/PRODUCT_SENSE.md"
+      ],
+      "read_code": [
+        "src/bot/commands/",
+        "src/middlewares/bot_enabled.py",
+        "src/middlewares/db/processing/bot_settings_processor.py"
+      ],
+      "check_tests": [
+        "test/bot/processing/"
+      ],
+      "notes": [
+        "Read bot_settings_processor.py only if the command affects chat state or settings."
+      ]
+    },
+    {
+      "id": "media_routing_bugfix",
+      "label": "Media Routing Bugfix",
+      "read_agents": [
+        "AGENTS.md",
+        "src/bot/AGENTS.md",
+        "src/bot/processing/AGENTS.md",
+        "src/handlers/AGENTS.md"
+      ],
+      "read_docs": [
+        "ARCHITECTURE.md",
+        "docs/RELIABILITY.md",
+        "docs/design-docs/runtime-pipeline.md",
+        "docs/exec-plans/tech-debt-tracker.md"
+      ],
+      "read_code": [
+        "src/bot/processing/media_router.py",
+        "src/bot/processing/media_processor.py",
+        "src/bot/processing/link_extractor.py",
+        "src/utils/messages.py"
+      ],
+      "check_tests": [
+        "test/bot/processing/test_media_router_multi_link.py",
+        "test/bot/processing/test_media_processor_errors.py",
+        "test/handlers/test_cleanup_helpers.py"
+      ]
+    },
+    {
+      "id": "caption_or_error_message_change",
+      "label": "Caption Or Error Message Change",
+      "read_agents": [
+        "AGENTS.md",
+        "src/bot/processing/AGENTS.md"
+      ],
+      "read_docs": [
+        "docs/PRODUCT_SENSE.md",
+        "docs/RELIABILITY.md"
+      ],
+      "read_code": [
+        "src/utils/messages.py",
+        "src/bot/processing/media_processor.py",
+        "src/bot/processing/media_router.py"
+      ],
+      "check_tests": [
+        "test/bot/processing/test_media_processor_errors.py",
+        "test/handlers/test_cleanup_helpers.py"
+      ]
+    },
+    {
+      "id": "stable_source_handler_fix",
+      "label": "Stable Source Handler Fix",
+      "read_agents": [
+        "AGENTS.md",
+        "src/handlers/AGENTS.md",
+        "src/handlers/resources/AGENTS.md",
+        "test/handlers/AGENTS.md"
+      ],
+      "read_docs": [
+        "ARCHITECTURE.md",
+        "docs/RELIABILITY.md",
+        "docs/design-docs/runtime-pipeline.md"
+      ],
+      "read_code": [
+        "src/handlers/resources/<Source>/",
+        "src/handlers/registry.py",
+        "src/handlers/manager.py"
+      ],
+      "check_tests": [
+        "test/handlers/<Source>/test_<source>_handlers_local.py",
+        "test/handlers/<Source>/"
+      ],
+      "notes": [
+        "Read manager.py only if the task affects handler registration or selection."
+      ]
+    },
+    {
+      "id": "vk_research_or_bugfix",
+      "label": "VK Research Or VK Bugfix",
+      "read_agents": [
+        "AGENTS.md",
+        "src/handlers/AGENTS.md",
+        "src/handlers/resources/AGENTS.md",
+        "src/handlers/resources/VK/AGENTS.md",
+        "test/handlers/AGENTS.md"
+      ],
+      "read_docs": [
+        "docs/RELIABILITY.md",
+        "docs/exec-plans/tech-debt-tracker.md"
+      ],
+      "read_code": [
+        "src/handlers/resources/VK/",
+        "src/handlers/registry.py"
+      ],
+      "check_tests": [
+        "test/handlers/VK/test_vk_handlers_local.py",
+        "test/handlers/VK/VK_urls.py"
+      ],
+      "notes": [
+        "Do not treat this task as stable-runtime stabilization without an explicit user decision.",
+        "Read registry.py only if the task affects source status."
+      ]
+    },
+    {
+      "id": "db_settings_or_stats_change",
+      "label": "DB Settings Or Stats Change",
+      "read_agents": [
+        "AGENTS.md",
+        "src/middlewares/AGENTS.md",
+        "src/middlewares/db/AGENTS.md",
+        "src/bot/AGENTS.md"
+      ],
+      "read_docs": [
+        "ARCHITECTURE.md",
+        "docs/RELIABILITY.md",
+        "docs/exec-plans/tech-debt-tracker.md"
+      ],
+      "read_code": [
+        "src/middlewares/db/core.py",
+        "src/middlewares/db/models/",
+        "src/middlewares/db/processing/",
+        "src/middlewares/bot_enabled.py"
+      ],
+      "check_tests": [
+        "test/bot/processing/"
+      ],
+      "notes": [
+        "Read src/bot/AGENTS.md and bot-level tests only if the task affects runtime orchestration."
+      ]
+    },
+    {
+      "id": "runtime_contract_or_registry_change",
+      "label": "Runtime Contract Or Registry Change",
+      "read_agents": [
+        "AGENTS.md",
+        "src/handlers/AGENTS.md",
+        "src/bot/AGENTS.md",
+        "src/bot/processing/AGENTS.md"
+      ],
+      "read_docs": [
+        "ARCHITECTURE.md",
+        "docs/design-docs/runtime-pipeline.md",
+        "docs/RELIABILITY.md"
+      ],
+      "read_code": [
+        "src/handlers/contracts.py",
+        "src/handlers/registry.py",
+        "src/handlers/manager.py",
+        "src/bot/processing/media_processor.py",
+        "src/bot/processing/senders/"
+      ],
+      "check_tests": [
+        "test/bot/processing/",
+        "test/handlers/test_cleanup_helpers.py",
+        "test/handlers/<Source>/"
+      ]
+    },
+    {
+      "id": "deploy_or_infra_change",
+      "label": "Deploy Or Infra Change",
+      "read_agents": [
+        "AGENTS.md"
+      ],
+      "read_docs": [
+        "docs/SECURITY.md",
+        "docs/RELIABILITY.md",
+        "docs/design-docs/deploy-storage-layout.md",
+        "docs/release_notes.md"
+      ],
+      "read_code": [
+        "deploy/",
+        ".github/workflows/",
+        "src/config.py",
+        "src/utils/runtime_storage.py"
+      ],
+      "check_tests": [
+        "isolated-or-manual-infra-checks"
+      ],
+      "notes": [
+        "Runtime-sensitive checks require explicit user approval."
+      ]
+    },
+    {
+      "id": "docs_only_change",
+      "label": "Docs-Only Change",
+      "read_agents": [
+        "AGENTS.md"
+      ],
+      "read_docs": [
+        "tracked-docs-relevant-to-scope"
+      ],
+      "read_code": [
+        "only-the-code-needed-to-verify-behavior"
+      ],
+      "check_tests": [],
+      "notes": [
+        "Tests are usually not required.",
+        "At minimum, verify that the docs do not diverge from code."
+      ]
+    },
+    {
+      "id": "release_or_versioning_change",
+      "label": "Release Or Versioning Change",
+      "read_agents": [
+        "AGENTS.md"
+      ],
+      "read_docs": [
+        "docs/release_notes.md",
+        "docs/PLANS.md",
+        "docs/exec-plans/tech-debt-tracker.md"
+      ],
+      "read_code": [
+        "src/__init__.py",
+        "scripts/release_sync.py"
+      ],
+      "check_tests": [
+        "scripts/release_sync.py"
+      ],
+      "notes": [
+        "Other checks depend on release scope and require explicit approval."
+      ]
+    },
+    {
+      "id": "test_harness_or_smoke_setup_change",
+      "label": "Test Harness Or Smoke Setup Change",
+      "read_agents": [
+        "AGENTS.md",
+        "test/AGENTS.md",
+        "test/handlers/AGENTS.md"
+      ],
+      "read_docs": [
+        "docs/RELIABILITY.md",
+        "docs/SECURITY.md"
+      ],
+      "read_code": [
+        "test/handlers/_local_cookie_setup.py",
+        "test/handlers/",
+        "src/"
+      ],
+      "check_tests": [
+        "affected-local-smoke-path",
+        "helper-tests-near-changed-files"
+      ],
+      "notes": [
+        "Read the relevant src-level AGENTS.md for the touched source or subsystem."
+      ]
+    }
+  ],
+  "context_expansion_rules": {
+    "allowed_when": [
+      "task-specific code directly calls a neighboring module",
+      "a test failure points to a neighboring subsystem",
+      "a local AGENTS.md explicitly routes to a neighboring zone",
+      "the task changes a contract, registry, or shared helper"
+    ],
+    "avoid_by_default": [
+      "src/",
+      "test/",
+      "local/",
+      "unrelated source folders inside src/handlers/resources/"
+    ]
+  },
+  "default_escalation_cases": [
+    "the task changes typed contracts or the stable runtime source list",
+    "the patch spreads from one source into several sources",
+    "the task changes bot orchestration, DB semantics, and handler behavior in one increment",
+    "validation requires cookies, secrets, network, or isolated execution"
+  ]
+}
