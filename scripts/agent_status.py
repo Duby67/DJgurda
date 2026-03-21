@@ -134,6 +134,51 @@ def summarize_approval_history(history_payload: dict[str, Any] | None) -> dict[s
     }
 
 
+def summarize_verification(verification_payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Сводит verification result к компактному формату."""
+    if verification_payload is None:
+        return None
+
+    checks = verification_payload.get("checks", [])
+    failed_checks = [item.get("id") for item in checks if item.get("status") == "failed"]
+    blocked_checks = [item.get("id") for item in checks if item.get("status") == "blocked"]
+
+    return {
+        "verified_at_utc": verification_payload.get("verified_at_utc"),
+        "verified_by": verification_payload.get("verified_by"),
+        "conclusion": verification_payload.get("conclusion"),
+        "summary": verification_payload.get("summary", ""),
+        "check_summary": verification_payload.get("check_summary", {}),
+        "failed_checks": failed_checks,
+        "blocked_checks": blocked_checks,
+        "log_count": len(verification_payload.get("logs", [])),
+    }
+
+
+def summarize_sandbox(sandbox_payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Сводит sandbox result к компактному формату."""
+    if sandbox_payload is None:
+        return None
+
+    checks = sandbox_payload.get("checks", [])
+    failed_checks = [item.get("id") for item in checks if item.get("status") == "failed"]
+    blocked_checks = [item.get("id") for item in checks if item.get("status") == "blocked"]
+
+    return {
+        "sandboxed_at_utc": sandbox_payload.get("sandboxed_at_utc"),
+        "sandboxed_by": sandbox_payload.get("sandboxed_by"),
+        "environment": sandbox_payload.get("environment"),
+        "sandbox_ref": sandbox_payload.get("sandbox_ref", ""),
+        "conclusion": sandbox_payload.get("conclusion"),
+        "summary": sandbox_payload.get("summary", ""),
+        "check_summary": sandbox_payload.get("check_summary", {}),
+        "failed_checks": failed_checks,
+        "blocked_checks": blocked_checks,
+        "log_count": len(sandbox_payload.get("logs", [])),
+        "artifact_count": len(sandbox_payload.get("artifacts", [])),
+    }
+
+
 def build_blockers(
     *,
     run_summary: dict[str, Any],
@@ -152,6 +197,14 @@ def build_blockers(
         blockers.append("manual_review_not_approved")
     if run_summary.get("status") == "awaiting_manual_review":
         blockers.append("context_not_loaded")
+    if run_summary.get("status") == "verification_failed":
+        blockers.append("verification_failed")
+    if run_summary.get("status") == "verification_blocked":
+        blockers.append("verification_blocked")
+    if run_summary.get("status") == "sandbox_failed":
+        blockers.append("sandbox_failed")
+    if run_summary.get("status") == "sandbox_blocked":
+        blockers.append("sandbox_blocked")
     if plan_summary.get("next_pending_step") is None and not approval_summary["rejected"]:
         blockers.append("plan_has_no_pending_steps")
 
@@ -184,6 +237,8 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     approval_path = run_dir / "approval-checkpoints.json"
     execution_state_path = run_dir / "execution-state.json"
     approval_history_path = run_dir / "approval-history.json"
+    verification_result_path = run_dir / "verification-result.json"
+    sandbox_result_path = run_dir / "sandbox-result.json"
 
     if not summary_path.is_file():
         raise FileNotFoundError(f"Не найден файл: {summary_path}")
@@ -197,11 +252,15 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     approval_payload = load_json(approval_path)
     execution_state = load_optional_json(execution_state_path)
     approval_history = load_optional_json(approval_history_path)
+    verification_payload = load_optional_json(verification_result_path)
+    sandbox_payload = load_optional_json(sandbox_result_path)
 
     artifact_status = collect_artifact_status(run_summary.get("artifacts", {}))
     plan_summary = summarize_plan(plan_payload)
     approval_summary = summarize_approval(approval_payload)
     approval_history_summary = summarize_approval_history(approval_history)
+    verification_summary = summarize_verification(verification_payload)
+    sandbox_summary = summarize_sandbox(sandbox_payload)
     blockers = build_blockers(
         run_summary=run_summary,
         artifact_status=artifact_status,
@@ -238,6 +297,10 @@ def build_status(run_dir: Path) -> dict[str, Any]:
         }
     if approval_history_summary is not None:
         output["approval_history"] = approval_history_summary
+    if verification_summary is not None:
+        output["verification"] = verification_summary
+    if sandbox_summary is not None:
+        output["sandbox"] = sandbox_summary
 
     return output
 
