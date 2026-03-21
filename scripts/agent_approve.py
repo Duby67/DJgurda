@@ -119,8 +119,11 @@ def validate_action_transition(
     statuses = checkpoint_status_map(approval_payload)
     current_phase = (execution_state or {}).get("phase", "")
 
-    if checkpoint_id == PUSH_ID and statuses.get(COMMIT_ID) != "approved":
-        raise ValueError("Нельзя approve checkpoint 'push' до approval checkpoint 'commit'")
+    if checkpoint_id == PUSH_ID:
+        if statuses.get(COMMIT_ID) != "approved":
+            raise ValueError("Нельзя approve checkpoint 'push' до approval checkpoint 'commit'")
+        if current_phase not in {"commit_recorded", "push_requested"}:
+            raise ValueError("Нельзя approve checkpoint 'push' до фиксации commit-stage")
 
     if checkpoint_id in {COMMIT_ID, PUSH_ID} and current_phase == "context_loaded":
         raise ValueError(
@@ -149,12 +152,26 @@ def derive_status_and_next_action(
             return "context_loaded_awaiting_manual_review", "review_escalation_and_approve_implementation"
         return "context_loaded", "review_context_state"
 
+    if current_phase == "approval_requested":
+        if commit_status == "approved":
+            return "commit_approved_pending_execution", "create_commit"
+        if commit_status == "awaiting_approval":
+            return "awaiting_commit_approval", "await_commit_approval"
+        return "approval_requested", "review_approval_request"
+
+    if current_phase == "commit_recorded":
+        if push_status == "approved":
+            return "push_approved_pending_execution", "execute_push"
+        if push_status == "awaiting_approval":
+            return "approved_for_push_decision", "decide_on_push"
+        return "commit_recorded", "review_push_state"
+
     if commit_status == "approved" and push_status == "approved":
         return "fully_approved", "ready_for_push_execution"
     if commit_status == "approved":
-        return "approved_for_push_decision", "decide_on_push"
+        return "commit_approved_pending_execution", "create_commit"
     if commit_status == "awaiting_approval":
-        return "awaiting_commit_approval", "request_commit_approval"
+        return "awaiting_commit_approval", "await_commit_approval"
     return "planned", "continue_run"
 
 
@@ -169,7 +186,10 @@ def update_plan_steps(plan_payload: dict[str, Any], approval_payload: dict[str, 
         if step.get("id") == "manual_review":
             step["status"] = "completed" if run_checks_status in {"approved", "rejected"} else "pending"
         elif step.get("id") == "request_approval":
-            step["status"] = "completed" if all_approved else "pending"
+            if step.get("status") == "completed":
+                continue
+            if all_approved:
+                step["status"] = "completed"
     return updated
 
 

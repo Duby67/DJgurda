@@ -179,6 +179,54 @@ def summarize_sandbox(sandbox_payload: dict[str, Any] | None) -> dict[str, Any] 
     }
 
 
+def summarize_review(review_payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Сводит review result к компактному формату."""
+    if review_payload is None:
+        return None
+
+    return {
+        "reviewed_at_utc": review_payload.get("reviewed_at_utc"),
+        "reviewed_by": review_payload.get("reviewed_by"),
+        "conclusion": review_payload.get("conclusion"),
+        "summary": review_payload.get("summary", ""),
+        "finding_count": review_payload.get("finding_count", 0),
+        "risk_count": review_payload.get("risk_count", 0),
+        "findings": review_payload.get("findings", []),
+        "residual_risks": review_payload.get("residual_risks", []),
+    }
+
+
+def summarize_approval_request(approval_request_payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Сводит approval request packet к компактному формату."""
+    if approval_request_payload is None:
+        return None
+
+    return {
+        "requested_at_utc": approval_request_payload.get("requested_at_utc"),
+        "requested_by": approval_request_payload.get("requested_by"),
+        "summary": approval_request_payload.get("summary", ""),
+        "requested_checkpoints": approval_request_payload.get("requested_checkpoints", []),
+    }
+
+
+def summarize_commit(commit_payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Сводит commit result к компактному формату."""
+    if commit_payload is None:
+        return None
+
+    return {
+        "recorded_at_utc": commit_payload.get("recorded_at_utc"),
+        "committed_by": commit_payload.get("committed_by"),
+        "mode": commit_payload.get("mode"),
+        "message": commit_payload.get("message", ""),
+        "files": commit_payload.get("files", []),
+        "commit_created": commit_payload.get("commit_created", False),
+        "commit_hash": commit_payload.get("commit_hash"),
+        "diff_summary": commit_payload.get("git", {}).get("diff_summary", {}),
+        "warnings": commit_payload.get("git", {}).get("warnings", []),
+    }
+
+
 def build_blockers(
     *,
     run_summary: dict[str, Any],
@@ -205,7 +253,15 @@ def build_blockers(
         blockers.append("sandbox_failed")
     if run_summary.get("status") == "sandbox_blocked":
         blockers.append("sandbox_blocked")
-    if plan_summary.get("next_pending_step") is None and not approval_summary["rejected"]:
+    if run_summary.get("status") == "review_failed":
+        blockers.append("review_failed")
+    if run_summary.get("status") == "review_blocked":
+        blockers.append("review_blocked")
+    if (
+        plan_summary.get("next_pending_step") is None
+        and not approval_summary["rejected"]
+        and not approval_summary["awaiting_approval"]
+    ):
         blockers.append("plan_has_no_pending_steps")
 
     return blockers
@@ -221,12 +277,15 @@ def build_readiness(
     run_checks_status = checkpoint_statuses.get("run_checks")
     commit_status = checkpoint_statuses.get("commit")
     push_status = checkpoint_statuses.get("push")
+    commit_created = bool(run_summary.get("commit", {}).get("commit_created"))
 
     return {
         "can_implement": run_summary.get("next_action") == "implement_change",
-        "can_request_commit_approval": run_checks_status in {"approved", "not_required"},
-        "can_request_push_approval": commit_status == "approved",
-        "can_push": push_status == "approved",
+        "can_request_final_approval": run_summary.get("next_action") == "request_approval",
+        "can_request_commit_approval": run_checks_status in {"approved", "not_required"} and commit_status == "awaiting_approval",
+        "can_create_commit": run_summary.get("next_action") == "create_commit",
+        "can_request_push_approval": commit_status == "approved" and commit_created and push_status == "awaiting_approval",
+        "can_push": push_status == "approved" and commit_created,
     }
 
 
@@ -239,6 +298,9 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     approval_history_path = run_dir / "approval-history.json"
     verification_result_path = run_dir / "verification-result.json"
     sandbox_result_path = run_dir / "sandbox-result.json"
+    review_result_path = run_dir / "review-result.json"
+    approval_request_path = run_dir / "approval-request.json"
+    commit_result_path = run_dir / "commit-result.json"
 
     if not summary_path.is_file():
         raise FileNotFoundError(f"Не найден файл: {summary_path}")
@@ -254,6 +316,9 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     approval_history = load_optional_json(approval_history_path)
     verification_payload = load_optional_json(verification_result_path)
     sandbox_payload = load_optional_json(sandbox_result_path)
+    review_payload = load_optional_json(review_result_path)
+    approval_request_payload = load_optional_json(approval_request_path)
+    commit_payload = load_optional_json(commit_result_path)
 
     artifact_status = collect_artifact_status(run_summary.get("artifacts", {}))
     plan_summary = summarize_plan(plan_payload)
@@ -261,6 +326,9 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     approval_history_summary = summarize_approval_history(approval_history)
     verification_summary = summarize_verification(verification_payload)
     sandbox_summary = summarize_sandbox(sandbox_payload)
+    review_summary = summarize_review(review_payload)
+    approval_request_summary = summarize_approval_request(approval_request_payload)
+    commit_summary = summarize_commit(commit_payload)
     blockers = build_blockers(
         run_summary=run_summary,
         artifact_status=artifact_status,
@@ -301,6 +369,12 @@ def build_status(run_dir: Path) -> dict[str, Any]:
         output["verification"] = verification_summary
     if sandbox_summary is not None:
         output["sandbox"] = sandbox_summary
+    if review_summary is not None:
+        output["review"] = review_summary
+    if approval_request_summary is not None:
+        output["approval_request"] = approval_request_summary
+    if commit_summary is not None:
+        output["commit"] = commit_summary
 
     return output
 
