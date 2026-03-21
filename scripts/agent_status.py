@@ -806,6 +806,85 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     return output
 
 
+def render_human_status(status_payload: dict[str, Any]) -> str:
+    """Рендерит короткий human-readable статус run bundle."""
+    readiness = status_payload.get("readiness", {})
+    action_blockers = status_payload.get("action_blockers", {})
+    blockers = status_payload.get("blockers", [])
+    plan = status_payload.get("plan", {})
+    approval = status_payload.get("approval", {})
+
+    lines: list[str] = [
+        f"Run: {status_payload.get('run_id', 'unknown')}",
+        f"State: {status_payload.get('status', 'unknown')} -> {status_payload.get('next_action', 'unknown')}",
+        f"Task: {status_payload.get('task_type', {}).get('id', 'unknown')}",
+    ]
+
+    next_step = plan.get("next_pending_step")
+    if next_step:
+        lines.append(
+            "Next plan step: "
+            f"{next_step.get('id', 'unknown')} ({next_step.get('owner', 'unknown')})"
+        )
+
+    available_actions: list[str] = []
+    if readiness.get("can_approve_run_checks"):
+        available_actions.append("approve_run_checks")
+    if readiness.get("can_implement"):
+        available_actions.append("implement")
+    elif readiness.get("can_implement_with_allow_empty_diff"):
+        available_actions.append("implement_with_allow_empty_diff")
+    if readiness.get("can_request_approval"):
+        checkpoints = readiness.get("requestable_checkpoints", [])
+        if checkpoints:
+            available_actions.append(f"request_approval[{', '.join(checkpoints)}]")
+    if readiness.get("can_request_commit_approval"):
+        available_actions.append("request_commit_approval")
+    if readiness.get("can_create_commit"):
+        available_actions.append("create_commit")
+    if readiness.get("can_request_push_approval"):
+        available_actions.append("request_push_approval")
+    if readiness.get("can_push"):
+        available_actions.append("push")
+    if readiness.get("can_close_run"):
+        closable = readiness.get("closable_outcomes", [])
+        if closable:
+            available_actions.append(f"close_run[{', '.join(closable)}]")
+
+    lines.append(
+        "Available actions: "
+        + (", ".join(available_actions) if available_actions else "none")
+    )
+
+    if approval.get("awaiting_approval"):
+        lines.append("Awaiting approval: " + ", ".join(approval["awaiting_approval"]))
+
+    if blockers:
+        lines.append("Global blockers: " + ", ".join(blockers))
+    else:
+        lines.append("Global blockers: none")
+
+    priority_actions = [
+        "approve_run_checks",
+        "implement",
+        "request_approval",
+        "create_commit",
+        "push",
+        "close_run",
+    ]
+    priority_lines: list[str] = []
+    for action_name in priority_actions:
+        action_reasons = action_blockers.get(action_name, [])
+        if action_reasons:
+            priority_lines.append(f"{action_name}: " + ", ".join(action_reasons[:3]))
+
+    if priority_lines:
+        lines.append("Action blockers:")
+        lines.extend(f"- {line}" for line in priority_lines)
+
+    return "\n".join(lines) + "\n"
+
+
 def parse_args() -> argparse.Namespace:
     """Парсит аргументы CLI."""
     parser = argparse.ArgumentParser(
@@ -823,6 +902,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Печатать JSON с отступами.",
     )
+    parser.add_argument(
+        "--human",
+        action="store_true",
+        help="Печатать короткий человекочитаемый статус вместо JSON.",
+    )
     return parser.parse_args()
 
 
@@ -833,15 +917,22 @@ def main() -> int:
         run_dir = resolve_run_dir(args)
         result = build_status(run_dir)
     except (FileNotFoundError, ValueError) as exc:
-        json.dump(
-            {"error": str(exc)},
-            sys.stdout,
-            ensure_ascii=False,
-            indent=2 if args.pretty else None,
-        )
-        if args.pretty:
-            sys.stdout.write("\n")
+        if args.human:
+            sys.stdout.write(f"Error: {exc}\n")
+        else:
+            json.dump(
+                {"error": str(exc)},
+                sys.stdout,
+                ensure_ascii=False,
+                indent=2 if args.pretty else None,
+            )
+            if args.pretty:
+                sys.stdout.write("\n")
         return 1
+
+    if args.human:
+        sys.stdout.write(render_human_status(result))
+        return 0
 
     json.dump(
         result,
