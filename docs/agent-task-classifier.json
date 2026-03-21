@@ -307,8 +307,7 @@
           "верси"
         ],
         "path_prefixes_any": [
-          "scripts/",
-          "docs/"
+          "scripts/"
         ],
         "file_names_any": [
           "release_sync.py",
