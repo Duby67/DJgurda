@@ -244,6 +244,25 @@ def summarize_push_execution(push_payload: dict[str, Any] | None) -> dict[str, A
     }
 
 
+def summarize_closure(close_payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Сводит close result к компактному формату."""
+    if close_payload is None:
+        return None
+
+    final_state = close_payload.get("final_state", {})
+    return {
+        "closed_at_utc": close_payload.get("closed_at_utc"),
+        "closed_by": close_payload.get("closed_by"),
+        "outcome": close_payload.get("outcome"),
+        "summary": close_payload.get("summary", ""),
+        "note_count": len(close_payload.get("notes", [])),
+        "status_before_close": close_payload.get("status_before_close"),
+        "next_action_before_close": close_payload.get("next_action_before_close"),
+        "commit_created": final_state.get("commit_created", False),
+        "push_created": final_state.get("push_created", False),
+    }
+
+
 def build_blockers(
     *,
     run_summary: dict[str, Any],
@@ -256,6 +275,8 @@ def build_blockers(
 
     if artifact_status["missing"]:
         blockers.append("missing_artifacts")
+    if run_summary.get("status") == "closed":
+        return blockers
     if approval_summary["rejected"]:
         blockers.append("approval_rejected")
     if approval_summary["needs_manual_review"] and "run_checks" in approval_summary["awaiting_approval"]:
@@ -301,6 +322,16 @@ def build_readiness(
     approval_summary: dict[str, Any],
 ) -> dict[str, bool]:
     """Показывает, какие действия уже можно выполнять по текущему статусу."""
+    if run_summary.get("status") == "closed":
+        return {
+            "can_implement": False,
+            "can_request_final_approval": False,
+            "can_request_commit_approval": False,
+            "can_create_commit": False,
+            "can_request_push_approval": False,
+            "can_push": False,
+        }
+
     checkpoint_statuses = approval_summary.get("checkpoint_statuses", {})
     run_checks_status = checkpoint_statuses.get("run_checks")
     commit_status = checkpoint_statuses.get("commit")
@@ -330,6 +361,7 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     approval_request_path = run_dir / "approval-request.json"
     commit_result_path = run_dir / "commit-result.json"
     push_result_path = run_dir / "push-result.json"
+    close_result_path = run_dir / "close-result.json"
 
     if not summary_path.is_file():
         raise FileNotFoundError(f"Не найден файл: {summary_path}")
@@ -349,6 +381,7 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     approval_request_payload = load_optional_json(approval_request_path)
     commit_payload = load_optional_json(commit_result_path)
     push_payload = load_optional_json(push_result_path)
+    close_payload = load_optional_json(close_result_path)
 
     artifact_status = collect_artifact_status(run_summary.get("artifacts", {}))
     plan_summary = summarize_plan(plan_payload)
@@ -360,6 +393,7 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     approval_request_summary = summarize_approval_request(approval_request_payload)
     commit_summary = summarize_commit(commit_payload)
     push_summary = summarize_push_execution(push_payload)
+    close_summary = summarize_closure(close_payload)
     blockers = build_blockers(
         run_summary=run_summary,
         artifact_status=artifact_status,
@@ -408,6 +442,8 @@ def build_status(run_dir: Path) -> dict[str, Any]:
         output["commit"] = commit_summary
     if push_summary is not None:
         output["push_execution"] = push_summary
+    if close_summary is not None:
+        output["closure"] = close_summary
 
     return output
 
