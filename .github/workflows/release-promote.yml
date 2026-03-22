@@ -1,0 +1,180 @@
+name: Promote Release Between Branches
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: "Ветка-источник для promotion"
+        required: true
+        type: string
+      target_branch:
+        description: "Целевая ветка promotion"
+        required: true
+        type: string
+      target_kind:
+        description: "Тип целевой ветки: auto для dev/main, preview/stable для нестандартной ветки"
+        required: true
+        default: auto
+        type: choice
+        options:
+          - auto
+          - preview
+          - stable
+      release_env:
+        description: "Опциональный env для release_sync.py; по умолчанию вычисляется автоматически"
+        required: false
+        type: string
+      execute:
+        description: "Реально выполнить merge/version bump/tag на runner"
+        required: true
+        default: false
+        type: boolean
+      push:
+        description: "После execute запушить ветку и tag в origin"
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: release-promote-${{ inputs.target_branch }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate promotion inputs
+        shell: bash
+        run: |
+          if [ "${{ inputs.push }}" = "true" ] && [ "${{ inputs.execute }}" != "true" ]; then
+            echo "push=true requires execute=true" >&2
+            exit 1
+          fi
+
+      - name: Prepare local branches and tags
+        shell: bash
+        env:
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          git fetch origin +refs/heads/*:refs/remotes/origin/* --tags --prune
+
+          git show-ref --verify --quiet "refs/remotes/origin/${SOURCE_BRANCH}" || {
+            echo "Source branch origin/${SOURCE_BRANCH} not found" >&2
+            exit 1
+          }
+          git show-ref --verify --quiet "refs/remotes/origin/${TARGET_BRANCH}" || {
+            echo "Target branch origin/${TARGET_BRANCH} not found" >&2
+            exit 1
+          }
+
+          git checkout -B "${SOURCE_BRANCH}" "origin/${SOURCE_BRANCH}"
+          git checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
+          git checkout "${SOURCE_BRANCH}"
+
+      - name: Configure git identity
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Build dry-run promotion plan
+        shell: bash
+        env:
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          TARGET_KIND: ${{ inputs.target_kind }}
+          RELEASE_ENV: ${{ inputs.release_env }}
+        run: |
+          mkdir -p release-artifacts
+
+          ARGS=(
+            --source-branch "${SOURCE_BRANCH}"
+            --target-branch "${TARGET_BRANCH}"
+          )
+
+          if [ "${TARGET_KIND}" != "auto" ]; then
+            ARGS+=(--target-kind "${TARGET_KIND}")
+          fi
+
+          if [ -n "${RELEASE_ENV}" ]; then
+            ARGS+=(--release-env "${RELEASE_ENV}")
+          fi
+
+          python scripts/release_promote.py "${ARGS[@]}" --pretty > release-artifacts/plan.json
+          python scripts/release_promote.py "${ARGS[@]}" --human > release-artifacts/plan.txt
+
+          {
+            echo "## Release Promotion Plan"
+            echo
+            echo '```text'
+            cat release-artifacts/plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload dry-run artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-promotion-plan
+          path: release-artifacts/plan.*
+
+      - name: Execute promotion
+        if: ${{ inputs.execute }}
+        shell: bash
+        env:
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          TARGET_KIND: ${{ inputs.target_kind }}
+          RELEASE_ENV: ${{ inputs.release_env }}
+          PUSH: ${{ inputs.push }}
+        run: |
+          ARGS=(
+            --source-branch "${SOURCE_BRANCH}"
+            --target-branch "${TARGET_BRANCH}"
+            --execute
+          )
+
+          if [ "${TARGET_KIND}" != "auto" ]; then
+            ARGS+=(--target-kind "${TARGET_KIND}")
+          fi
+
+          if [ -n "${RELEASE_ENV}" ]; then
+            ARGS+=(--release-env "${RELEASE_ENV}")
+          fi
+
+          if [ "${PUSH}" = "true" ]; then
+            ARGS+=(--push)
+          fi
+
+          python scripts/release_promote.py "${ARGS[@]}" --pretty > release-artifacts/execution.json
+          python -c "import json, pathlib; data=json.loads(pathlib.Path('release-artifacts/execution.json').read_text(encoding='utf-8')); plan=data['plan']; execution=data['execution']; lines=[f\"Strategy: {plan['strategy']}\", f\"Source branch: {plan['source_branch']}\", f\"Target branch: {plan['target_branch']} ({plan['target_kind']})\", f\"Next release: {plan['next_release']['tag']} ({plan['next_release']['version']})\", f\"Checked out branch: {execution['checked_out_branch']}\", f\"Version updated to: {execution['version_updated_to']}\", f\"Tag created: {execution['release_tag_created']}\", f\"Pushed: {'yes' if execution['pushed'] else 'no'}\"]; pathlib.Path('release-artifacts/execution.txt').write_text('\\n'.join(lines)+'\\n', encoding='utf-8')"
+
+          {
+            echo "## Release Promotion Execution"
+            echo
+            echo '```text'
+            cat release-artifacts/execution.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload execution artifacts
+        if: ${{ inputs.execute }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-promotion-execution
+          path: release-artifacts/execution.*

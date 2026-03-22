@@ -217,8 +217,10 @@
   - `scripts/release_dev.py`
   - `scripts/release_main.py`
   - `scripts/release_sync.py`
+  - `.github/workflows/release-promote.yml`
 - Check Tests:
   - dry-run `scripts/release_promote.py` / `scripts/release_dev.py` / `scripts/release_main.py` по целевой ветке;
+  - при изменении manual promotion flow сверять `.github/workflows/release-promote.yml`;
   - прогон `scripts/release_sync.py` при необходимости;
   - другие проверки только по scope релиза и после approval пользователя
 
