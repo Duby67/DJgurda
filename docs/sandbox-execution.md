@@ -22,6 +22,26 @@ Sandbox обязателен или предпочтителен, если:
 - smoke-пути, требующие operational artifacts;
 - диагностика, которая не должна загрязнять основной workspace.
 
+## Current Adapter Model
+
+Текущая реализация поддерживает:
+
+- `local_dry_run`
+  - строит machine-readable preview sandbox plan и command logs без реального исполнения;
+- `docker`
+  - выполняет verification-команды в isolated container;
+- `github_actions`
+  - зарезервирован как будущий adapter и пока возвращает `blocked`.
+
+## Current Operational Rules
+
+- `docker` сейчас является единственным реальным execution backend внутри swarm-контура;
+- `local_dry_run` полезен для preview, smoke orchestration и fallback-сценариев, но не заменяет реальную verification execution;
+- при недоступности Docker sandbox-run должен завершаться явным blocked-state, а не молча деградировать;
+- sandbox работает поверх isolated workspace, а не поверх основного корня репозитория;
+- сетевой доступ в Docker sandbox выключен по умолчанию;
+- env/secrets должны передаваться только через явный allowlist.
+
 ## Expected Sandbox Result
 
 `sandbox-result.json` должен по возможности возвращать:

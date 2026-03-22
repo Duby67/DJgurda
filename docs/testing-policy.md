@@ -33,6 +33,7 @@
   - `required_checks`;
   - `optional_checks`;
   - `allowed_commands`.
+- `local_dry_run` не считается реальным execution backend: он подходит для preview orchestration и artifact planning, но не заменяет фактический запуск проверок.
 
 ## Verification Artifact
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Этот документ кратко описывает, как запускать swarm-oriented automation в репозитории и какие команды являются основными точками входа.
+Этот документ кратко описывает, как запускать swarm-oriented automation в репозитории и какие команды являются основными точками входа в текущем Phase 3 контуре.
 
 ## Prerequisites
 
@@ -16,7 +16,11 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 
 ## Main Entry Points
 
-Основные module-path команды:
+Основной front door:
+
+- `python -m scripts.agents.mcp`
+
+Нижележащие module-path команды:
 
 - `python -m scripts.agents.routing.route`
 - `python -m scripts.agents.routing.plan`
@@ -26,40 +30,57 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 - `python -m scripts.release.automation.promote`
 - `python -m scripts.release.automation.sync`
 
+`scripts.agents.mcp` строит run bundle, создает isolated workspace, инициирует role jobs и служит основным пользовательским входом для swarm orchestration.
+
 ## Common Commands
 
-### Classify A Task
+### Plan A Task
 
 ```powershell
-.\venv\Scripts\python.exe -m scripts.agents.routing.route `
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  plan_task `
   --prompt "Исправить release flow документацию" `
   --path docs/release-flow.md `
   --pretty
 ```
 
-### Build A Run Bundle
+### Start A Swarm Run
 
 ```powershell
-.\venv\Scripts\python.exe -m scripts.agents.routing.run `
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  start_swarm_run `
   --prompt "Исправить удаление исходного сообщения при multi-link routing" `
   --path src/bot/processing/media_router.py `
-  --pretty
-```
-
-### Load Context For An Existing Run
-
-```powershell
-.\venv\Scripts\python.exe -m scripts.agents.lifecycle.execute `
-  --run-id demo-media-router `
+  --sandbox-adapter local_dry_run `
   --pretty
 ```
 
 ### Check Run Status
 
 ```powershell
-.\venv\Scripts\python.exe -m scripts.agents.lifecycle.status `
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  show_run_status `
   --run-id demo-media-router `
   --human
+```
+
+### Claim And Complete An External Role Job
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  claim_role_job `
+  --run-id demo-media-router `
+  --job-id coder `
+  --claimed-by external-runtime
+```
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  complete_role_job `
+  --run-id demo-media-router `
+  --job-id coder `
+  --sandbox-adapter local_dry_run `
+  --result-json "{\"summary\":\"changes applied\",\"applied_files\":[\"docs/swarm-usage.md\"]}"
 ```
 
 ### Preview Promotion To Dev
@@ -94,6 +115,8 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 
 - route/plan/status можно использовать как безопасные read-oriented команды
 - lifecycle-этапы после planning могут менять run artifacts
+- `start_swarm_run` создает `workspace.json`, `jobs/index.json` и другие orchestration artifacts в `runs/<run-id>/`
+- `local_dry_run` строит sandbox preview, а `docker` является реальным execution backend для sandbox-проверок
 - `commit`, `push`, merge и release promotion вверх по веткам выполняются только по явному запросу разработчика
 - реальные тесты и smoke-прогоны все еще требуют явного approval пользователя
 
@@ -101,10 +124,11 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 
 Обычный ежедневный путь работы выглядит так:
 
-1. Сначала классифицировать задачу через `scripts.agents.routing.route`.
-2. При необходимости собрать run bundle через `scripts.agents.routing.run`.
-3. Проверять progress и blockers через `scripts.agents.lifecycle.status`.
-4. Для продвижения preview и release использовать `scripts.release.automation.promote`.
+1. Сначала спланировать задачу через `scripts.agents.mcp plan_task`.
+2. Запустить orchestration через `scripts.agents.mcp start_swarm_run`.
+3. Проверять progress и blockers через `scripts.agents.mcp show_run_status`.
+4. Для внешних AI-ролей использовать `claim_role_job` / `complete_role_job` / `fail_role_job`.
+5. Для продвижения preview и release использовать `scripts.release.automation.promote`.
 
 ## Related Docs
 

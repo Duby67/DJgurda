@@ -8,6 +8,14 @@
 
 - `scripts/config.py`
   - общий `ROOT` и базовая конфигурация automation-слоя
+- `scripts/agents/mcp/`
+  - repo-local front door для swarm orchestration и VSCode task entrypoints
+- `scripts/agents/executor.py`
+  - orchestration слой для role jobs, dependency order и handoff между local/external ролями
+- `scripts/agents/workspace.py`
+  - isolated workspace planning и materialization через `git worktree` или dirty snapshot overlay
+- `scripts/agents/sandbox_adapters.py`
+  - adapter-based sandbox execution для `local_dry_run`, `docker` и будущих backend'ов
 - `scripts/agents/routing/`
   - классификация задач, сбор context pack, построение run bundle и initial plan
 - `scripts/agents/lifecycle/`
@@ -59,6 +67,7 @@
 
 После отказа от wrapper-файлов канонический способ запуска Python automation-скриптов такой:
 
+- `python -m scripts.agents.mcp`
 - `python -m scripts.agents.routing.route`
 - `python -m scripts.agents.routing.run`
 - `python -m scripts.agents.lifecycle.status`
@@ -69,6 +78,10 @@
 
 Типовые команды, которые агент может использовать как отправную точку:
 
+- swarm front door:
+  - `python -m scripts.agents.mcp plan_task --prompt "..." --path path/to/file --pretty`
+  - `python -m scripts.agents.mcp start_swarm_run --prompt "..." --sandbox-adapter local_dry_run --pretty`
+  - `python -m scripts.agents.mcp show_run_status --run-id <run-id> --human`
 - классификация задачи:
   - `python -m scripts.agents.routing.route --prompt "..." --path path/to/file --pretty`
 - сбор run bundle:
@@ -86,6 +99,8 @@
 
 - Не читать весь `scripts/` по умолчанию.
 - Начинать с нужного домена:
+  - `mcp` для пользовательского входа и orchestration-команд
+  - `executor` для role jobs, workspace и sandbox handoff
   - `routing` для классификации и подготовки
   - `lifecycle` для выполнения run bundle
   - `release` для promotion, tag и versioning
