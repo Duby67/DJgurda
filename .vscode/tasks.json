@@ -1,0 +1,89 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Plan task",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "plan_task",
+        "--prompt",
+        "${input:swarmPrompt}",
+        "--pretty"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Start swarm run",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "start_swarm_run",
+        "--prompt",
+        "${input:swarmPrompt}",
+        "--sandbox-adapter",
+        "local_dry_run",
+        "--pretty"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Show run status",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "show_run_status",
+        "--run-id",
+        "${input:swarmRunId}",
+        "--human"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Request commit approval",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "request_commit_approval",
+        "--run-id",
+        "${input:swarmRunId}",
+        "--pretty"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Request push approval",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "request_push_approval",
+        "--run-id",
+        "${input:swarmRunId}",
+        "--pretty"
+      ],
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "swarmPrompt",
+      "type": "promptString",
+      "description": "Swarm task prompt"
+    },
+    {
+      "id": "swarmRunId",
+      "type": "promptString",
+      "description": "Swarm run id"
+    }
+  ]
+}
