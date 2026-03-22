@@ -146,6 +146,34 @@ def test_start_swarm_run_prepares_workspace_and_local_jobs() -> None:
         cleanup_run_dir(run_dir)
 
 
+def test_start_autonomous_swarm_run_reaches_first_stable_boundary() -> None:
+    run_id = f"mcp-auto-start-{uuid4().hex}"
+    result = run_module(
+        "-m",
+        "scripts.agents.mcp",
+        "start_autonomous_swarm_run",
+        "--prompt",
+        "Обновить swarm usage docs",
+        "--run-id",
+        run_id,
+        "--pretty",
+    )
+
+    run_dir = ROOT / "runs" / run_id
+    try:
+        assert result.returncode == 0, result.stderr or result.stdout
+        payload = json.loads(result.stdout)
+        assert payload["tool"] == "start_autonomous_swarm_run"
+        assert (run_dir / "workspace.json").is_file()
+        assert (run_dir / "jobs" / "index.json").is_file()
+        assert payload["cycle"]["cycle_status"] == "human_or_terminal_boundary"
+        assert payload["cycle"]["run_status"] == "context_loaded_pending_run_checks_approval"
+        assert payload["status"]["status"] == "context_loaded_pending_run_checks_approval"
+        assert payload["status"]["next_action"] == "approve_run_checks_before_implementation"
+    finally:
+        cleanup_run_dir(run_dir)
+
+
 def test_show_run_status_includes_workspace_and_jobs() -> None:
     run_id = f"mcp-status-{uuid4().hex}"
     run_module(
@@ -894,6 +922,7 @@ def test_tasks_json_calls_front_door_commands() -> None:
     assert labels == {
         "Plan task",
         "Start swarm run",
+        "Start autonomous swarm run",
         "Continue swarm run",
         "Preview sandbox plan",
         "Build swarm test image",
@@ -917,5 +946,5 @@ def test_tasks_json_calls_front_door_commands() -> None:
             continue
         assert "scripts.agents.mcp" in args
         assert command.endswith(r"venv\Scripts\python.exe")
-        if task["label"] in {"Start swarm run", "Continue swarm run"}:
+        if task["label"] in {"Start swarm run", "Start autonomous swarm run", "Continue swarm run"}:
             assert "local_dry_run" not in args

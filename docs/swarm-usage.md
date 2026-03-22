@@ -54,6 +54,16 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
   --pretty
 ```
 
+### Start An Autonomous Swarm Run
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  start_autonomous_swarm_run `
+  --prompt "Исправить удаление исходного сообщения при multi-link routing" `
+  --path src/bot/processing/media_router.py `
+  --pretty
+```
+
 ### Continue A Swarm Run
 
 ```powershell
@@ -187,6 +197,7 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 - route/plan/status можно использовать как безопасные read-oriented команды
 - lifecycle-этапы после planning могут менять run artifacts
 - `start_swarm_run` создает `workspace.json`, `jobs/index.json` и другие orchestration artifacts в `runs/<run-id>/`
+- `start_autonomous_swarm_run` делает то же самое, но сразу доводит run до первого external handoff или human boundary
 - `preview_sandbox_plan` и `show_diff_preview` дают CLI-first UX без ручного чтения JSON и patch-файлов
 - `show_run_status --human`, `show_job_queue --human` и `show_diff_preview --human` пишут `run-status.md`, `job-queue.md` и `diff-preview.md` прямо в run bundle
 - `run_dispatcher` помогает снять ручной шов на уровне UX, но опирается на общий executor/job contract
@@ -200,7 +211,7 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 Обычный ежедневный путь работы выглядит так:
 
 1. Сначала спланировать задачу через `scripts.agents.mcp plan_task`.
-2. Запустить orchestration через `scripts.agents.mcp start_swarm_run`.
+2. Запустить orchestration через `scripts.agents.mcp start_autonomous_swarm_run`, а `start_swarm_run` оставить как более низкоуровневый controlled entrypoint.
 3. Проверять progress через `show_run_status`, очередь ролей через `show_job_queue`, а изменения через `show_diff_preview`.
 4. Для sandbox intent использовать `preview_sandbox_plan`.
 5. После approval или других ручных шагов возобновлять orchestration через `scripts.agents.mcp continue_swarm_run`.

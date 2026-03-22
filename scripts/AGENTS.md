@@ -81,6 +81,7 @@
 - swarm front door:
   - `python -m scripts.agents.mcp plan_task --prompt "..." --path path/to/file --pretty`
   - `python -m scripts.agents.mcp start_swarm_run --prompt "..." --pretty`
+  - `python -m scripts.agents.mcp start_autonomous_swarm_run --prompt "..." --pretty`
   - `python -m scripts.agents.mcp continue_swarm_run --run-id <run-id> --pretty`
   - `python -m scripts.agents.mcp show_run_status --run-id <run-id> --human`
   - `python -m scripts.agents.mcp show_job_queue --run-id <run-id> --human`

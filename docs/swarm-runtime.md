@@ -21,6 +21,7 @@
 
 - `plan_task`
 - `start_swarm_run`
+- `start_autonomous_swarm_run`
 - `continue_swarm_run`
 - `show_run_status`
 - `show_job_queue`
@@ -173,6 +174,12 @@ External AI job нельзя завершать напрямую из `queued`:
 - затем запускает dispatcher loop;
 - сам доходит до следующего external handoff или human boundary;
 - возвращает компактную сводку по run status, next action и событиям цикла.
+
+`start_autonomous_swarm_run` поднимает этот UX еще на один уровень:
+
+- сначала создает новый run bundle;
+- затем сразу же выполняет первый `run_autonomous_cycle`;
+- возвращает уже не только `run_id`, но и первую автономную сводку по boundary или external handoff.
 
 ## Isolated Workspace
 

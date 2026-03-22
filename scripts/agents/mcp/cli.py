@@ -135,6 +135,38 @@ def build_start_swarm_run(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def build_start_autonomous_swarm_run(args: argparse.Namespace) -> dict[str, Any]:
+    """Builds a run bundle and immediately executes the first autonomous cycle."""
+    prompt = read_prompt(command_inputs(args))
+    paths = read_paths(command_inputs(args))
+    run_id = normalize_rel_path(args.run_id) if args.run_id else generate_run_id("swarm")
+    runs_dir = ROOT / normalize_runs_dir(args.runs_dir)
+    run_dir = runs_dir / run_id
+
+    bundle = build_run_bundle(prompt=prompt, paths=paths, run_id=run_id, run_dir=run_dir)
+    cycle = run_autonomous_cycle(
+        run_dir,
+        runtime_target=args.runtime_target,
+        claimed_by=args.claimed_by,
+        sandbox_adapter=args.sandbox_adapter or "",
+        max_cycles=args.max_cycles,
+    )
+    status_payload = build_run_status(run_dir)
+
+    return {
+        "tool": "start_autonomous_swarm_run",
+        "run_id": run_id,
+        "run_dir": str(run_dir.relative_to(ROOT)).replace("\\", "/"),
+        "bundle": {
+            "task_type": bundle["summary"]["task_type"],
+            "status": bundle["summary"]["status"],
+            "next_action": bundle["summary"]["next_action"],
+        },
+        "cycle": cycle,
+        "status": status_payload,
+    }
+
+
 def build_continue_swarm_run(args: argparse.Namespace) -> dict[str, Any]:
     """Continues orchestration for an existing run bundle."""
     run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
@@ -472,6 +504,8 @@ def handle_tool(command: str, args: argparse.Namespace) -> dict[str, Any]:
         return build_plan_task(args)
     if command == "start_swarm_run":
         return build_start_swarm_run(args)
+    if command == "start_autonomous_swarm_run":
+        return build_start_autonomous_swarm_run(args)
     if command == "continue_swarm_run":
         return build_continue_swarm_run(args)
     if command == "show_run_status":
@@ -566,6 +600,28 @@ def parse_args() -> argparse.Namespace:
         choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER, GITHUB_ACTIONS_ADAPTER],
         help="Optional sandbox adapter override for automated verification steps.",
     )
+
+    autonomous_start_parser = subparsers.add_parser(
+        "start_autonomous_swarm_run",
+        help="Build a run bundle and immediately execute the first autonomous cycle.",
+    )
+    add_prompt_paths(autonomous_start_parser)
+    add_pretty_flag(autonomous_start_parser)
+    autonomous_start_parser.add_argument("--run-id", help="Optional explicit run id.")
+    autonomous_start_parser.add_argument(
+        "--runs-dir",
+        default=str(normalize_runs_dir("runs")),
+        help="Base directory for runs (default: runs).",
+    )
+    autonomous_start_parser.add_argument("--claimed-by", default="ux_dispatcher", help="Identity used for claim operations.")
+    autonomous_start_parser.add_argument("--runtime-target", default="codex", help="External runtime target label.")
+    autonomous_start_parser.add_argument(
+        "--sandbox-adapter",
+        default=None,
+        choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER, GITHUB_ACTIONS_ADAPTER],
+        help="Optional sandbox adapter override when the autonomous cycle resumes local orchestration.",
+    )
+    autonomous_start_parser.add_argument("--max-cycles", type=int, default=8, help="Maximum autonomous iterations per invocation.")
 
     continue_parser = subparsers.add_parser("continue_swarm_run", help="Continue orchestration for an existing run.")
     add_pretty_flag(continue_parser)

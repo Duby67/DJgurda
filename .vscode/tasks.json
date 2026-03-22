@@ -30,6 +30,20 @@
       "problemMatcher": []
     },
     {
+      "label": "Start autonomous swarm run",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "start_autonomous_swarm_run",
+        "--prompt",
+        "${input:swarmPrompt}",
+        "--pretty"
+      ],
+      "problemMatcher": []
+    },
+    {
       "label": "Continue swarm run",
       "type": "process",
       "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
