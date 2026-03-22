@@ -59,6 +59,23 @@
 - `python -m scripts.release.automation.promote`
 - `python -m scripts.release.automation.sync`
 
+## Common Commands
+
+Типовые команды, которые агент может использовать как отправную точку:
+
+- классификация задачи:
+  - `python -m scripts.agents.routing.route --prompt "..." --path path/to/file --pretty`
+- сбор run bundle:
+  - `python -m scripts.agents.routing.run --prompt "..." --path path/to/file --pretty`
+- статус run:
+  - `python -m scripts.agents.lifecycle.status --run-id <run-id> --human`
+- preview promotion:
+  - `python -m scripts.release.automation.promote --source-branch swarm-dev --target-branch dev --target-kind preview --human`
+- stable promotion:
+  - `python -m scripts.release.automation.promote --source-branch dev --target-branch main --target-kind stable --human`
+- release sync:
+  - `python -m scripts.release.automation.sync --tag v1.2.4`
+
 ## Context Rules
 
 - Не читать весь `scripts/` по умолчанию.
