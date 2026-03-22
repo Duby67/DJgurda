@@ -1,0 +1,379 @@
+{
+  "version": 1,
+  "description": "Machine-readable task classifier config for mapping prompts and changed areas to routing ids.",
+  "routing_source": "docs/agent-task-routing.json",
+  "default_task_type": "docs_only_change",
+  "manual_review_task_type": "runtime_contract_or_registry_change",
+  "precedence": [
+    "vk_research_or_bugfix",
+    "runtime_contract_or_registry_change",
+    "deploy_or_infra_change",
+    "db_settings_or_stats_change",
+    "media_routing_bugfix",
+    "stable_source_handler_fix",
+    "bot_command_change",
+    "caption_or_error_message_change",
+    "test_harness_or_smoke_setup_change",
+    "release_or_versioning_change",
+    "docs_only_change"
+  ],
+  "global_signals": {
+    "docs_only_paths": [
+      "README.md",
+      "AGENTS.md",
+      "ARCHITECTURE.md",
+      "docs/"
+    ],
+    "code_paths": [
+      "src/",
+      "deploy/",
+      ".github/workflows/",
+      "scripts/",
+      "test/"
+    ],
+    "high_risk_keywords": [
+      "contract",
+      "registry",
+      "contenttype",
+      "mediaresult",
+      "runtime boundary",
+      "schema",
+      "migration",
+      "push",
+      "release",
+      "deploy",
+      "infra"
+    ]
+  },
+  "task_types": [
+    {
+      "id": "bot_command_change",
+      "description_ru": "Изменения команд бота и chat-control поведения.",
+      "match": {
+        "prompt_keywords_any": [
+          "/help",
+          "/info",
+          "/statistics",
+          "/start",
+          "/stop",
+          "/toggle_bot",
+          "/toggle_errors",
+          "/toggle_notifications",
+          "bot command",
+          "команд",
+          "toggle"
+        ],
+        "path_prefixes_any": [
+          "src/bot/commands/"
+        ],
+        "file_names_any": [
+          "help.py",
+          "info.py",
+          "statistics.py",
+          "toggle_bot.py",
+          "toggle_errors.py",
+          "toggle_notifications.py"
+        ]
+      }
+    },
+    {
+      "id": "media_routing_bugfix",
+      "description_ru": "Ошибки в routing и orchestration обработки ссылок.",
+      "match": {
+        "prompt_keywords_any": [
+          "media router",
+          "routing",
+          "resolve_url",
+          "multi-link",
+          "caption",
+          "unsupported",
+          "block outcome",
+          "router",
+          "ссылк",
+          "маршрутиз",
+          "обработк"
+        ],
+        "path_prefixes_any": [
+          "src/bot/processing/"
+        ],
+        "file_names_any": [
+          "media_router.py",
+          "media_processor.py",
+          "link_extractor.py",
+          "messages.py"
+        ]
+      }
+    },
+    {
+      "id": "caption_or_error_message_change",
+      "description_ru": "Изменения пользовательских caption и error messages.",
+      "match": {
+        "prompt_keywords_any": [
+          "caption",
+          "error message",
+          "error reply",
+          "сообщени",
+          "подпис",
+          "ошибк"
+        ],
+        "path_prefixes_any": [
+          "src/utils/",
+          "src/bot/processing/"
+        ],
+        "file_names_any": [
+          "messages.py",
+          "media_processor.py",
+          "media_router.py"
+        ]
+      }
+    },
+    {
+      "id": "stable_source_handler_fix",
+      "description_ru": "Изменения stable source handler-ов вне VK.",
+      "match": {
+        "prompt_keywords_any": [
+          "handler",
+          "tiktok",
+          "youtube",
+          "instagram",
+          "coub",
+          "yandex music",
+          "source handler",
+          "обработчик",
+          "источник"
+        ],
+        "path_prefixes_any": [
+          "src/handlers/resources/TikTok/",
+          "src/handlers/resources/YouTube/",
+          "src/handlers/resources/Instagram/",
+          "src/handlers/resources/Coub/",
+          "src/handlers/resources/YandexMusic/"
+        ]
+      },
+      "exclude": {
+        "path_prefixes_any": [
+          "src/handlers/resources/VK/"
+        ],
+        "prompt_keywords_any": [
+          "vk",
+          "vkontakte"
+        ]
+      }
+    },
+    {
+      "id": "vk_research_or_bugfix",
+      "description_ru": "Любые задачи по VK как отдельному R&D-треку.",
+      "match": {
+        "prompt_keywords_any": [
+          "vk",
+          "vkontakte",
+          "vk music",
+          "playlist",
+          "audio extraction"
+        ],
+        "path_prefixes_any": [
+          "src/handlers/resources/VK/",
+          "test/handlers/VK/"
+        ],
+        "file_names_any": [
+          "VKHandler.py",
+          "VKAudio.py",
+          "VKPlaylist.py",
+          "VKUrlService.py"
+        ]
+      }
+    },
+    {
+      "id": "db_settings_or_stats_change",
+      "description_ru": "Изменения middleware/db, настроек чата и статистики.",
+      "match": {
+        "prompt_keywords_any": [
+          "database",
+          "db",
+          "sqlalchemy",
+          "stats",
+          "bot_enabled",
+          "settings",
+          "cache",
+          "upsert",
+          "бд",
+          "статист",
+          "настройк"
+        ],
+        "path_prefixes_any": [
+          "src/middlewares/",
+          "src/middlewares/db/"
+        ],
+        "file_names_any": [
+          "bot_enabled.py",
+          "bot_settings_processor.py",
+          "stats_processor.py",
+          "core.py",
+          "sources.py",
+          "stats.py"
+        ]
+      }
+    },
+    {
+      "id": "runtime_contract_or_registry_change",
+      "description_ru": "Изменения typed contract, registry, sender dispatch или runtime boundary.",
+      "match": {
+        "prompt_keywords_any": [
+          "contract",
+          "registry",
+          "content type",
+          "contenttype",
+          "mediaresult",
+          "sender registry",
+          "runtime boundary",
+          "typed",
+          "контракт",
+          "реестр",
+          "границ"
+        ],
+        "path_prefixes_any": [
+          "src/handlers/",
+          "src/bot/processing/senders/"
+        ],
+        "file_names_any": [
+          "contracts.py",
+          "registry.py",
+          "manager.py",
+          "media_processor.py"
+        ]
+      }
+    },
+    {
+      "id": "deploy_or_infra_change",
+      "description_ru": "Изменения деплоя, workflows, runtime storage и инфраструктуры.",
+      "match": {
+        "prompt_keywords_any": [
+          "deploy",
+          "docker",
+          "workflow",
+          "github actions",
+          "infra",
+          "runtime storage",
+          "cookies sync",
+          "деплой",
+          "инфра"
+        ],
+        "path_prefixes_any": [
+          "deploy/",
+          ".github/workflows/",
+          "scripts/"
+        ],
+        "file_names_any": [
+          "Dockerfile",
+          "manager.sh",
+          "runtime_storage.py",
+          "deploy-dev.yml",
+          "deploy-prod.yml"
+        ]
+      }
+    },
+    {
+      "id": "docs_only_change",
+      "description_ru": "Изменения только в документации без кодового scope.",
+      "match": {
+        "path_prefixes_any": [
+          "docs/"
+        ],
+        "file_names_any": [
+          "README.md",
+          "AGENTS.md",
+          "ARCHITECTURE.md"
+        ]
+      },
+      "heuristics": {
+        "prefer_when_all_changed_paths_match": [
+          "README.md",
+          "AGENTS.md",
+          "ARCHITECTURE.md",
+          "docs/"
+        ]
+      }
+    },
+    {
+      "id": "release_or_versioning_change",
+      "description_ru": "Изменения версий, release notes и release sync.",
+      "match": {
+        "prompt_keywords_any": [
+          "release",
+          "version",
+          "tag",
+          "promote",
+          "merge to dev",
+          "merge to main",
+          "release notes",
+          "релиз",
+          "верси"
+        ],
+        "path_prefixes_any": [
+          "scripts/release/",
+          ".github/workflows/"
+        ],
+        "file_names_any": [
+          "release-promote.yml",
+          "release-flow.md",
+          "release_notes.md"
+        ]
+      }
+    },
+    {
+      "id": "test_harness_or_smoke_setup_change",
+      "description_ru": "Изменения тестового контура, smoke setup, cookies setup и helper scripts.",
+      "match": {
+        "prompt_keywords_any": [
+          "smoke test",
+          "test harness",
+          "cookie setup",
+          "cleanup helper",
+          "pytest",
+          "тест",
+          "smoke",
+          "cookie"
+        ],
+        "path_prefixes_any": [
+          "test/"
+        ],
+        "file_names_any": [
+          "_local_cookie_setup.py",
+          "test_cleanup_helpers.py"
+        ]
+      }
+    }
+  ],
+  "tie_break_rules": [
+    {
+      "when_ids_overlap": [
+        "stable_source_handler_fix",
+        "vk_research_or_bugfix"
+      ],
+      "prefer": "vk_research_or_bugfix",
+      "reason": "VK is a separate R&D track and should not be classified as a normal stable source fix."
+    },
+    {
+      "when_ids_overlap": [
+        "docs_only_change",
+        "release_or_versioning_change"
+      ],
+      "prefer": "release_or_versioning_change",
+      "reason": "Release docs usually imply versioning workflow rather than plain documentation work."
+    },
+    {
+      "when_ids_overlap": [
+        "media_routing_bugfix",
+        "caption_or_error_message_change"
+      ],
+      "prefer": "media_routing_bugfix",
+      "reason": "Caption or error text changes inside processing often affect runtime behavior and need broader routing context."
+    }
+  ],
+  "manual_review_cases": [
+    "Multiple high-risk task types match with similar confidence.",
+    "The task touches both deploy/infra and runtime contracts.",
+    "The task changes registry/contracts together with DB semantics.",
+    "The task requests push, release, or other irreversible actions."
+  ]
+}

@@ -1,11 +1,11 @@
 # Release Notes
 
-## Как вести release notes
+## How To Write Release Notes
 
 Для каждого заметного изменения добавляй новую секцию по шаблону:
 
 ```md
-## YYYY-MM-DD | version/tag: <значение> | env: <dev/prod/both>
+## YYYY-MM-DD | version/tag: <value> | env: <dev/prod/both>
 - Что изменилось:
   - ...
 - Важно для деплоя:
