@@ -252,9 +252,14 @@
       ],
       "read_code": [
         "src/__init__.py",
+        "scripts/release_versioning.py",
+        "scripts/release_promote.py",
+        "scripts/release_dev.py",
+        "scripts/release_main.py",
         "scripts/release_sync.py"
       ],
       "check_tests": [
+        "dry-run release_promote.py/release_dev.py/release_main.py for the target branch",
         "scripts/release_sync.py"
       ],
       "notes": [

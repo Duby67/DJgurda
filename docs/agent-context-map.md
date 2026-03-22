@@ -212,8 +212,13 @@
   - `docs/exec-plans/tech-debt-tracker.md`
 - Read Code:
   - `src/__init__.py`
+  - `scripts/release_versioning.py`
+  - `scripts/release_promote.py`
+  - `scripts/release_dev.py`
+  - `scripts/release_main.py`
   - `scripts/release_sync.py`
 - Check Tests:
+  - dry-run `scripts/release_promote.py` / `scripts/release_dev.py` / `scripts/release_main.py` по целевой ветке;
   - прогон `scripts/release_sync.py` при необходимости;
   - другие проверки только по scope релиза и после approval пользователя
 

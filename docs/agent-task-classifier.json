@@ -302,6 +302,9 @@
           "release",
           "version",
           "tag",
+          "promote",
+          "merge to dev",
+          "merge to main",
           "release notes",
           "релиз",
           "верси"
@@ -310,6 +313,10 @@
           "scripts/"
         ],
         "file_names_any": [
+          "release_promote.py",
+          "release_dev.py",
+          "release_main.py",
+          "release_versioning.py",
           "release_sync.py",
           "release_notes.md"
         ]
