@@ -17,6 +17,7 @@ from scripts.agents.executor import (
     fail_external_job,
     start_or_continue_run,
 )
+from scripts.agents.lifecycle import commit as commit_stage
 from scripts.agents.lifecycle.approve import build_output as build_approval_action_output
 from scripts.agents.lifecycle.request_approval import build_output as build_request_approval_output
 from scripts.agents.lifecycle.status import build_status as build_run_status, render_human_status
@@ -402,6 +403,32 @@ def build_approve_run_checks_and_continue(args: argparse.Namespace) -> dict[str,
     }
 
 
+def build_approve_commit_and_continue(args: argparse.Namespace) -> dict[str, Any]:
+    """Approves commit and immediately executes the commit-stage inside the isolated workspace."""
+    run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
+    approval = build_approval_action_output(
+        run_dir,
+        checkpoint_id="commit",
+        action="approve",
+        note=getattr(args, "note", ""),
+    )
+    commit_result = None
+    if approval.get("status") == "commit_approved_pending_execution":
+        run_summary = load_json(run_dir / "run-summary.json")
+        commit_result = commit_stage.build_output(
+            run_dir,
+            message=commit_stage.read_message(args, run_summary),
+            files=commit_stage.read_commit_files(args, run_summary),
+            committed_by=(getattr(args, "committed_by", "") or "release_manager").strip() or "release_manager",
+            execute=not bool(getattr(args, "dry_run", False)),
+        )
+    return {
+        "tool": "approve_commit_and_continue",
+        "approval": approval,
+        "commit": commit_result,
+    }
+
+
 def build_run_dispatcher(args: argparse.Namespace) -> dict[str, Any]:
     """Claims or surfaces the next external job as a Codex-oriented work item."""
     run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
@@ -545,6 +572,8 @@ def handle_tool(command: str, args: argparse.Namespace) -> dict[str, Any]:
         return build_checkpoint_action(args, checkpoint="run_checks", action="approve", tool_name="approve_run_checks")
     if command == "approve_run_checks_and_continue":
         return build_approve_run_checks_and_continue(args)
+    if command == "approve_commit_and_continue":
+        return build_approve_commit_and_continue(args)
     if command == "approve_commit":
         return build_checkpoint_action(args, checkpoint="commit", action="approve", tool_name="approve_commit")
     if command == "reject_checkpoint":
@@ -756,6 +785,30 @@ def parse_args() -> argparse.Namespace:
         help="Base directory for runs (default: runs).",
     )
     approve_commit_parser.add_argument("--note", default="", help="Optional approval note.")
+
+    approve_commit_and_continue_parser = subparsers.add_parser(
+        "approve_commit_and_continue",
+        help="Approve commit and immediately execute the commit-stage in the isolated workspace.",
+    )
+    add_pretty_flag(approve_commit_and_continue_parser)
+    approve_commit_and_continue_parser.add_argument("--run-dir", help="Path to a run bundle.")
+    approve_commit_and_continue_parser.add_argument("--run-id", help="Run id inside runs-dir.")
+    approve_commit_and_continue_parser.add_argument(
+        "--runs-dir",
+        default=str(normalize_runs_dir("runs")),
+        help="Base directory for runs (default: runs).",
+    )
+    approve_commit_and_continue_parser.add_argument("--note", default="", help="Optional approval note.")
+    approve_commit_and_continue_parser.add_argument("--message", default="", help="Commit message.")
+    approve_commit_and_continue_parser.add_argument("--message-file", help="Path to a file with the commit message.")
+    approve_commit_and_continue_parser.add_argument("--file", action="append", help="File for commit-stage. Can be repeated.")
+    approve_commit_and_continue_parser.add_argument("--files-file", help="Path to a newline-separated list of commit files.")
+    approve_commit_and_continue_parser.add_argument("--committed-by", default="release_manager", help="Who records the commit-stage.")
+    approve_commit_and_continue_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Record commit-stage without executing git add/git commit.",
+    )
 
     reject_parser = subparsers.add_parser("reject_checkpoint", help="Reject a lifecycle checkpoint.")
     add_pretty_flag(reject_parser)

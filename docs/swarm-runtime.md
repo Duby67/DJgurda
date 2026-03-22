@@ -31,6 +31,7 @@
 - `run_dispatcher_loop`
 - `run_autonomous_cycle`
 - `approve_run_checks_and_continue`
+- `approve_commit_and_continue`
 - `submit_role_result`
 - `approve_run_checks`
 - `approve_commit`
@@ -252,6 +253,7 @@ UX wrappers для approval:
 - `approve_run_checks`
 - `approve_run_checks_and_continue`
 - `approve_commit`
+- `approve_commit_and_continue`
 - `reject_checkpoint`
 
 Они используют тот же lifecycle approval contract, что и низкоуровневая команда approve-stage.
@@ -261,6 +263,13 @@ UX wrappers для approval:
 - сначала записывает approval для `run_checks`;
 - если run действительно перешел в `approved_for_implementation`, сразу запускает `run_autonomous_cycle`;
 - тем самым убирает еще один ручной шов между human approval и следующим external handoff.
+
+`approve_commit_and_continue` закрывает следующий шов:
+
+- сначала записывает approval для `commit`;
+- затем сразу выполняет `commit-stage` внутри isolated workspace;
+- по умолчанию создает реальный git commit в detached/swarm workspace;
+- после этого останавливается на `decide_on_push` или `push_approved_pending_execution`, не обходя отдельную push-boundary.
 
 ## CLI-First UX Surface
 
