@@ -135,6 +135,7 @@ python -m src.main
 - планы и техдолг - `docs/PLANS.md`
 - swarm automation usage - `docs/swarm-usage.md`
 - release flow - `docs/release-flow.md`
+- release promote examples - `docs/release-promote-examples.md`
 - история релизов - `docs/release_notes.md`
 
 ## Замечание для разработчиков

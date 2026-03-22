@@ -11,6 +11,7 @@
 - `scripts/release/rules/versioning.py`
 - `.github/workflows/release-promote.yml`
 - `scripts/AGENTS.md`
+- `docs/release-promote-examples.md`
 
 Канонический локальный запуск теперь делается через module-path:
 
