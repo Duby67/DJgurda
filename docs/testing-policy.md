@@ -28,6 +28,11 @@
 - Если задача меняет contract, registry или shared helper, verification может расширяться на соседние области.
 - Если check зависит от env, cookies, secrets или сети, его нужно считать environment-sensitive и выносить в sandbox либо запускать только после отдельного approval.
 - Smoke-checks полезны для runtime confidence, но не заменяют policy и code-level reasoning.
+- Для каждого `task_type` должен существовать verification profile с:
+  - `risk_level`;
+  - `required_checks`;
+  - `optional_checks`;
+  - `allowed_commands`.
 
 ## Verification Artifact
 
@@ -44,3 +49,4 @@
 - `docs/RELIABILITY.md`
 - `docs/sandbox-execution.md`
 - `docs/swarm-usage.md`
+- `docs/verification-profiles.json`

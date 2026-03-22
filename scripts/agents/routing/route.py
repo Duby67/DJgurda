@@ -328,6 +328,44 @@ def build_context_trace(
     return trace
 
 
+def detect_policy_conflicts(
+    *,
+    selected_task_id: str,
+    prompt: str,
+    paths: list[str],
+    context_pack: dict[str, list[str]],
+) -> list[str]:
+    """Detects conflicts between selected routing and high-level repository policy."""
+    conflicts: list[str] = []
+    prompt_text = normalize_text(prompt)
+    normalized_paths = [normalize_path(item) for item in paths]
+
+    referenced_local = any(
+        item.startswith("local/")
+        for category in ("agents", "docs", "code", "tests")
+        for item in context_pack.get(category, [])
+    )
+    explicit_local_scope = "local/" in prompt_text or any(path.startswith("local/") for path in normalized_paths)
+    if referenced_local and not explicit_local_scope:
+        conflicts.append("local_context_selected_without_explicit_request")
+
+    if selected_task_id == "stable_source_handler_fix" and any(path.startswith("src/handlers/resources/VK/") for path in normalized_paths):
+        conflicts.append("vk_selected_inside_stable_runtime_task")
+
+    if selected_task_id == "docs_only_change":
+        non_docs_paths = [
+            path for path in normalized_paths
+            if not (
+                path.startswith("docs/")
+                or path in {"AGENTS.md", "ARCHITECTURE.md", "README.md"}
+            )
+        ]
+        if non_docs_paths:
+            conflicts.append("docs_only_task_contains_non_docs_paths")
+
+    return unique_keep_order(conflicts)
+
+
 def collect_subsystem_tags(paths: list[str]) -> list[str]:
     """Грубо классифицирует измененные пути по подсистемам."""
     tags: list[str] = []
@@ -391,6 +429,12 @@ def build_output(
     selected_task_id, candidates = select_task_type(classifier, prompt, paths)
     context_pack = build_context_pack(routing, selected_task_id)
     context_trace = build_context_trace(routing, selected_task_id)
+    policy_conflicts = detect_policy_conflicts(
+        selected_task_id=selected_task_id,
+        prompt=prompt,
+        paths=paths,
+        context_pack=context_pack,
+    )
     needs_escalation, escalation_reasons = detect_escalation(
         classifier=classifier,
         selected_task_id=selected_task_id,
@@ -417,12 +461,16 @@ def build_output(
         "context_pack": context_pack,
         "context_trace": context_trace,
         "routing_diagnostics": {
-            "instruction_conflict": "multiple_task_types_match_with_similar_confidence" in escalation_reasons,
+            "instruction_conflict": (
+                "multiple_task_types_match_with_similar_confidence" in escalation_reasons
+                or bool(policy_conflicts)
+            ),
             "conflict_reason": (
                 "multiple_task_types_match_with_similar_confidence"
                 if "multiple_task_types_match_with_similar_confidence" in escalation_reasons
-                else ""
+                else (policy_conflicts[0] if policy_conflicts else "")
             ),
+            "policy_conflicts": policy_conflicts,
         },
         "escalation": {
             "needed": needs_escalation,

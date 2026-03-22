@@ -227,6 +227,231 @@ def render_context_summary_markdown(
     )
 
 
+def read_resolved_text_files(loaded_context: dict[str, Any], *, categories: tuple[str, ...]) -> list[dict[str, str]]:
+    """Reads resolved text files from selected categories."""
+    documents: list[dict[str, str]] = []
+    for category in categories:
+        for entry in loaded_context.get("resolved", {}).get(category, []):
+            if entry.get("kind") != "file" or entry.get("status") != "resolved":
+                continue
+            rel_path = entry.get("path", "")
+            if not rel_path:
+                continue
+            absolute = ROOT / rel_path
+            try:
+                text = absolute.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            documents.append(
+                {
+                    "category": category,
+                    "path": rel_path,
+                    "text": text,
+                }
+            )
+    return documents
+
+
+def extract_section_bullets(text: str) -> dict[str, list[str]]:
+    """Extracts bullets grouped by markdown heading."""
+    current_heading = "root"
+    sections: dict[str, list[str]] = {current_heading: []}
+
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        if stripped.startswith("#"):
+            current_heading = stripped.lstrip("#").strip()
+            sections.setdefault(current_heading, [])
+            continue
+        if stripped.startswith("- "):
+            sections.setdefault(current_heading, []).append(stripped[2:].strip())
+
+    return sections
+
+
+def line_contains_negation(line: str) -> bool:
+    """Detects whether a policy line expresses prohibition or negation."""
+    normalized = f" {line.casefold()} "
+    return any(
+        token in normalized
+        for token in (
+            " do not ",
+            " don't ",
+            " does not ",
+            " doesn't ",
+            " must not ",
+            " never ",
+            " can't ",
+            " cannot ",
+            " not ",
+            " не ",
+            " нельзя ",
+            " запрещ",
+        )
+    )
+
+
+def contains_any(text: str, patterns: tuple[str, ...]) -> bool:
+    """Checks whether a normalized string contains any of the patterns."""
+    return any(pattern in text for pattern in patterns)
+
+
+def is_local_source_of_truth_conflict(line: str, *, has_negation: bool) -> bool:
+    """Detects permissive local/ source-of-truth statements."""
+    if "source of truth" not in line or "local/" not in line or has_negation:
+        return False
+    return contains_any(
+        line,
+        (
+            "is source of truth",
+            "are source of truth",
+            "the source of truth",
+            "является источником истины",
+            "являются источником истины",
+            "считать источником истины",
+            "treat as source of truth",
+            "considered source of truth",
+        ),
+    )
+
+
+def is_tests_source_of_truth_conflict(line: str, *, has_negation: bool) -> bool:
+    """Detects permissive tests-as-source-of-truth statements."""
+    if "source of truth" not in line or "tests" not in line or has_negation:
+        return False
+    return contains_any(
+        line,
+        (
+            "is source of truth",
+            "are source of truth",
+            "the source of truth",
+            "являются источником истины",
+            "считать источником истины",
+            "treat as source of truth",
+            "considered source of truth",
+        ),
+    )
+
+
+def is_push_without_approval_conflict(line: str, *, has_negation: bool) -> bool:
+    """Detects explicit permissions to push without approval."""
+    if "push" not in line or has_negation:
+        return False
+    return contains_any(
+        line,
+        (
+            "push without approval",
+            "allow push without approval",
+            "can push without approval",
+            "можно push без approval",
+            "можно push без подтвержд",
+            "разрешен push без approval",
+            "разрешен push без подтвержд",
+        ),
+    )
+
+
+def detect_loaded_policy_conflicts(documents: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Detects simple policy conflicts inside loaded tracked docs."""
+    conflicts: list[dict[str, str]] = []
+    for document in documents:
+        for line in document["text"].splitlines():
+            normalized = line.casefold()
+            has_negation = line_contains_negation(line)
+            if is_local_source_of_truth_conflict(normalized, has_negation=has_negation):
+                conflicts.append(
+                    {
+                        "path": document["path"],
+                        "reason": "local_marked_as_source_of_truth",
+                    }
+                )
+            if is_tests_source_of_truth_conflict(normalized, has_negation=has_negation):
+                conflicts.append(
+                    {
+                        "path": document["path"],
+                        "reason": "tests_marked_as_source_of_truth",
+                    }
+                )
+            if is_push_without_approval_conflict(normalized, has_negation=has_negation):
+                conflicts.append(
+                    {
+                        "path": document["path"],
+                        "reason": "push_without_approval_rule_detected",
+                    }
+                )
+
+    unique: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for conflict in conflicts:
+        key = (conflict["path"], conflict["reason"])
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(conflict)
+    return unique
+
+
+def build_context_brief(
+    *,
+    loaded_context: dict[str, Any],
+    run_summary: dict[str, Any],
+    plan_payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Builds a compact semantic brief for the loaded context."""
+    documents = read_resolved_text_files(loaded_context, categories=("agents", "docs"))
+    policy_conflicts = [
+        {
+            "path": "routing",
+            "reason": reason,
+        }
+        for reason in run_summary.get("routing_diagnostics", {}).get("policy_conflicts", [])
+    ]
+    policy_conflicts.extend(detect_loaded_policy_conflicts(documents))
+
+    constraints: list[str] = []
+    invariants: list[str] = []
+    adjacent_modules: list[str] = []
+    risk_areas: list[str] = []
+
+    for document in documents:
+        sections = extract_section_bullets(document["text"])
+        for heading, bullets in sections.items():
+            lower_heading = heading.casefold()
+            if any(token in lower_heading for token in ("constraint", "rule", "approval", "access", "security", "change rules", "context rules")):
+                constraints.extend(bullets)
+            if any(token in lower_heading for token in ("invariant", "stable contracts", "boundary", "key constraints")):
+                invariants.extend(bullets)
+            if "read next" in lower_heading:
+                adjacent_modules.extend(bullets)
+            if any(token in lower_heading for token in ("risk", "known gaps", "high-risk", "debt")):
+                risk_areas.extend(bullets)
+
+    unresolved_items = loaded_context.get("unresolved_items", [])
+    open_questions = [
+        f"Resolve context item: {item.get('item', '')}"
+        for item in unresolved_items
+        if item.get("blocking")
+    ]
+    open_questions.extend(
+        f"Resolve policy conflict: {item['reason']}"
+        for item in policy_conflicts
+    )
+
+    known_risks = plan_payload.get("known_risks", [])
+    brief = {
+        "constraints": list(dict.fromkeys(constraints))[:12],
+        "invariants": list(dict.fromkeys(invariants))[:12],
+        "known_risks": known_risks,
+        "risk_areas": list(dict.fromkeys(risk_areas))[:12],
+        "open_questions": list(dict.fromkeys(open_questions))[:12],
+        "adjacent_modules": list(dict.fromkeys(adjacent_modules))[:12],
+        "policy_conflicts": policy_conflicts,
+        "context_gaps": unresolved_items,
+        "active_initiatives": plan_payload.get("active_initiatives", []),
+    }
+    return brief
+
+
 def update_plan_for_context_loaded(plan_payload: dict[str, Any]) -> dict[str, Any]:
     """Обновляет plan.json после загрузки контекста."""
     updated = json.loads(json.dumps(plan_payload, ensure_ascii=False))
@@ -241,6 +466,7 @@ def update_plan_for_context_loaded(plan_payload: dict[str, Any]) -> dict[str, An
 def build_execution_state(
     run_summary: dict[str, Any],
     loaded_context: dict[str, Any],
+    context_brief: dict[str, Any],
 ) -> dict[str, Any]:
     """Строит execution-state.json."""
     approval_payload = run_summary["approval"]
@@ -248,8 +474,12 @@ def build_execution_state(
     run_checks_status = checkpoint_status_map(approval_payload).get("run_checks", "awaiting_approval")
     routing_diagnostics = run_summary.get("routing_diagnostics", {})
     unresolved_context = loaded_context["summary"]["blocking_unresolved_items"] > 0
+    policy_conflicts = context_brief.get("policy_conflicts", [])
 
     if routing_diagnostics.get("instruction_conflict", False):
+        next_action = "resolve_instruction_conflict"
+        status = "instruction_conflict"
+    elif policy_conflicts:
         next_action = "resolve_instruction_conflict"
         status = "instruction_conflict"
     elif unresolved_context:
@@ -275,6 +505,7 @@ def build_execution_state(
         "summary": loaded_context["summary"],
         "unresolved_items": loaded_context.get("unresolved_items", []),
         "routing_diagnostics": routing_diagnostics,
+        "context_brief": context_brief,
         "approval": {
             "needs_manual_review": needs_manual_review,
             "escalation_reasons": approval_payload["escalation_reasons"],
@@ -313,29 +544,39 @@ def build_output(run_dir: Path) -> dict[str, Any]:
     run_summary = load_json(summary_path)
 
     loaded_context = build_loaded_context(context_pack)
-    execution_state = build_execution_state(run_summary, loaded_context)
+    context_brief = build_context_brief(
+        loaded_context=loaded_context,
+        run_summary=run_summary,
+        plan_payload=plan_payload,
+    )
+    execution_state = build_execution_state(run_summary, loaded_context, context_brief)
     updated_plan = update_plan_for_context_loaded(plan_payload)
 
     loaded_context_path = run_dir / "loaded-context.json"
     execution_state_path = run_dir / "execution-state.json"
+    context_brief_path = run_dir / "context-brief.json"
     context_summary_path = run_dir / "context-summary.md"
 
     write_json(loaded_context_path, loaded_context)
     write_json(execution_state_path, execution_state)
+    write_json(context_brief_path, context_brief)
     context_summary_path.write_text(
         render_context_summary_markdown(run_summary, loaded_context),
         encoding="utf-8",
     )
     write_json(plan_path, updated_plan)
 
+    artifacts = run_summary.setdefault("artifacts", {})
     run_summary["status"] = execution_state["status"]
     run_summary["next_action"] = execution_state["next_action"]
-    run_summary["artifacts"]["loaded_context"] = str(loaded_context_path.relative_to(ROOT)).replace("\\", "/")
-    run_summary["artifacts"]["execution_state"] = str(execution_state_path.relative_to(ROOT)).replace("\\", "/")
-    run_summary["artifacts"]["context_summary"] = str(context_summary_path.relative_to(ROOT)).replace("\\", "/")
+    artifacts["loaded_context"] = str(loaded_context_path.relative_to(ROOT)).replace("\\", "/")
+    artifacts["execution_state"] = str(execution_state_path.relative_to(ROOT)).replace("\\", "/")
+    artifacts["context_brief"] = str(context_brief_path.relative_to(ROOT)).replace("\\", "/")
+    artifacts["context_summary"] = str(context_summary_path.relative_to(ROOT)).replace("\\", "/")
     run_summary["context"] = {
         "summary": loaded_context["summary"],
         "unresolved_items": loaded_context.get("unresolved_items", []),
+        "brief": context_brief,
     }
     write_json(summary_path, run_summary)
 

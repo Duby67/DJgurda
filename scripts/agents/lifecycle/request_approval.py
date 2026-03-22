@@ -259,10 +259,20 @@ def render_markdown_packet(packet: dict[str, Any]) -> str:
     residual_risk_lines = packet.get("review", {}).get("residual_risks", [])
     risks_block = "\n".join(f"- {item}" for item in residual_risk_lines) or "- none"
     context_summary = packet.get("context", {}).get("summary", {})
+    context_brief = packet.get("context", {}).get("brief", {})
     unresolved_items = packet.get("context", {}).get("unresolved_items", [])
     unresolved_block = "\n".join(
         f"- `{item.get('category', 'unknown')}` -> `{item.get('item', '')}`"
         for item in unresolved_items
+    ) or "- none"
+    constraints_block = "\n".join(f"- {item}" for item in context_brief.get("constraints", [])) or "- none"
+    known_risks_block = "\n".join(
+        f"- {item.get('title', '')} [{item.get('priority', 'unknown')}]"
+        for item in context_brief.get("known_risks", [])
+    ) or "- none"
+    policy_conflicts_block = "\n".join(
+        f"- `{item.get('path', 'unknown')}`: {item.get('reason', '')}"
+        for item in context_brief.get("policy_conflicts", [])
     ) or "- none"
     changed_files = packet.get("changed_files", {}).get("changed_files", [])
     changed_files_block = "\n".join(f"- `{item}`" for item in changed_files) or "- none"
@@ -291,6 +301,12 @@ def render_markdown_packet(packet: dict[str, Any]) -> str:
         f"- Missing Items: {context_summary.get('missing_items', 0)}\n"
         f"- Blocking Unresolved: {context_summary.get('blocking_unresolved_items', 0)}\n"
         f"- Advisory Unresolved: {context_summary.get('advisory_unresolved_items', 0)}\n"
+        "### Constraints\n\n"
+        f"{constraints_block}\n\n"
+        "### Known Risks\n\n"
+        f"{known_risks_block}\n\n"
+        "### Policy Conflicts\n\n"
+        f"{policy_conflicts_block}\n\n"
         f"{unresolved_block}\n\n"
         "## Changed Files\n\n"
         f"{changed_files_block}\n\n"

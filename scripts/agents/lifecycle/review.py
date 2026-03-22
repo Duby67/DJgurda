@@ -203,6 +203,7 @@ def build_output(
     plan_path = run_dir / "plan.json"
     execution_state_path = run_dir / "execution-state.json"
     review_result_path = run_dir / "review-result.json"
+    review_report_path = run_dir / "review-report.json"
 
     if not summary_path.is_file():
         raise FileNotFoundError(f"Не найден файл: {summary_path}")
@@ -235,6 +236,7 @@ def build_output(
 
     artifacts = run_summary.setdefault("artifacts", {})
     artifacts["review_result"] = str(review_result_path.relative_to(ROOT)).replace("\\", "/")
+    artifacts["review_report"] = str(review_report_path.relative_to(ROOT)).replace("\\", "/")
 
     run_summary["status"] = status
     run_summary["next_action"] = next_action
@@ -248,6 +250,7 @@ def build_output(
     }
 
     write_json(review_result_path, review_result)
+    write_json(review_report_path, review_result)
     write_json(plan_path, updated_plan)
     if updated_execution_state is not None:
         write_json(execution_state_path, updated_execution_state)
@@ -263,6 +266,7 @@ def build_output(
         "risk_count": len(risks),
         "artifacts": {
             "review_result": artifacts["review_result"],
+            "review_report": artifacts["review_report"],
         },
     }
 

@@ -118,6 +118,9 @@ def build_run_summary(
         "recommended_agents": plan_output["recommended_agents"],
         "changed_paths": route_result["changed_paths"],
         "routing_diagnostics": route_result.get("routing_diagnostics", {}),
+        "verification_profile": plan_output.get("verification_profile", {}),
+        "known_risks": plan_output.get("known_risks", []),
+        "active_initiatives": plan_output.get("active_initiatives", []),
         "artifacts": artifacts,
         "approval": approval,
     }

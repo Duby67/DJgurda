@@ -8,7 +8,24 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
-from scripts.agents.lifecycle.execute import build_output as build_execute_output
+import pytest
+
+from scripts.agents.knowledge import load_verification_profiles, parse_markdown_risks
+from scripts.agents.lifecycle.execute import (
+    build_output as build_execute_output,
+    detect_loaded_policy_conflicts,
+)
+from scripts.agents.lifecycle.verify import (
+    build_output as build_verify_output,
+    validate_against_profile,
+)
+from scripts.agents.routing.plan import build_plan_output
+from scripts.agents.routing.route import (
+    CLASSIFIER_PATH,
+    ROUTING_PATH,
+    build_output as build_route_output,
+    load_json as load_route_json,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,12 +43,25 @@ def run_module(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def create_run_bundle(*, context_pack: dict[str, object], routing_diagnostics: dict[str, object] | None = None) -> Path:
+def create_run_bundle(
+    *,
+    context_pack: dict[str, object],
+    routing_diagnostics: dict[str, object] | None = None,
+    task_type_id: str = "docs_only_change",
+    task_type_label: str = "Docs-Only Change",
+    changed_paths: list[str] | None = None,
+    plan_steps: list[dict[str, object]] | None = None,
+    status: str = "planned",
+    next_action: str = "load_context_and_implement",
+    approval: dict[str, object] | None = None,
+    artifacts: dict[str, str] | None = None,
+    write_execution_state: bool = False,
+) -> Path:
     run_dir = ROOT / "runs" / f"test-context-{uuid4().hex}"
     run_dir.mkdir(parents=True, exist_ok=False)
 
     plan_payload = {
-        "plan": [
+        "plan": plan_steps or [
             {"id": "classify_task", "status": "completed"},
             {"id": "load_context", "status": "pending"},
             {"id": "implement_change", "status": "pending"},
@@ -39,13 +69,13 @@ def create_run_bundle(*, context_pack: dict[str, object], routing_diagnostics: d
     }
     run_summary = {
         "run_id": run_dir.name,
-        "status": "planned",
-        "next_action": "load_context_and_implement",
-        "task_type": {"id": "docs_only_change", "label": "Docs-Only Change"},
-        "changed_paths": ["docs/swarm-usage.md"],
+        "status": status,
+        "next_action": next_action,
+        "task_type": {"id": task_type_id, "label": task_type_label},
+        "changed_paths": changed_paths or ["docs/swarm-usage.md"],
         "routing_diagnostics": routing_diagnostics or {},
-        "artifacts": {},
-        "approval": {
+        "artifacts": artifacts or {},
+        "approval": approval or {
             "needs_manual_review": False,
             "escalation_reasons": [],
             "checkpoints": [
@@ -74,6 +104,15 @@ def create_run_bundle(*, context_pack: dict[str, object], routing_diagnostics: d
     (run_dir / "plan.json").write_text(json.dumps(plan_payload), encoding="utf-8")
     (run_dir / "context-pack.json").write_text(json.dumps(context_pack), encoding="utf-8")
     (run_dir / "run-summary.json").write_text(json.dumps(run_summary), encoding="utf-8")
+    if write_execution_state:
+        execution_state = {
+            "version": 1,
+            "run_id": run_dir.name,
+            "phase": "changes_applied",
+            "status": status,
+            "next_action": next_action,
+        }
+        (run_dir / "execution-state.json").write_text(json.dumps(execution_state), encoding="utf-8")
     return run_dir
 
 
@@ -177,3 +216,117 @@ def test_execute_context_loading_blocks_on_missing_concrete_context() -> None:
         assert loaded_context["summary"]["advisory_unresolved_items"] == 0
     finally:
         shutil.rmtree(run_dir, ignore_errors=True)
+
+
+def test_plan_output_injects_profiles_and_tracked_risks_for_docs_changes() -> None:
+    route_result = {
+        "task_type": {"id": "docs_only_change", "label": "Docs-Only Change"},
+        "changed_paths": ["docs/swarm-usage.md"],
+        "matched_task_types": [{"id": "docs_only_change", "score": 3, "evidence": ["path_prefix:docs/"]}],
+        "context_pack": {
+            "agents": ["AGENTS.md"],
+            "docs": ["ARCHITECTURE.md"],
+            "code": [],
+            "tests": [],
+            "notes": [],
+        },
+        "escalation": {"needed": False, "reasons": []},
+    }
+
+    payload = build_plan_output(route_result)
+
+    assert "tester" in payload["recommended_agents"]
+    assert payload["verification_profile"]["profile_id"] == "docs_only_change"
+    assert any(item["title"] == "Docs Cleanup After Typed-Runtime Transition" for item in payload["known_risks"])
+    assert any(
+        item["path"] == "docs/exec-plans/active/agent-first-docs-migration.md"
+        for item in payload["active_initiatives"]
+    )
+
+
+def test_detect_loaded_policy_conflicts_ignores_prohibitions_and_flags_permissive_rules() -> None:
+    safe_conflicts = detect_loaded_policy_conflicts(
+        [
+            {
+                "path": "docs/policy-safe.md",
+                "text": (
+                    "- tests не равны source of truth.\n"
+                    "- local/ не использовать как source of truth.\n"
+                    "- Never push without approval.\n"
+                ),
+            }
+        ]
+    )
+    assert safe_conflicts == []
+
+    risky_conflicts = detect_loaded_policy_conflicts(
+        [
+            {
+                "path": "docs/policy-risky.md",
+                "text": (
+                    "- tests are source of truth.\n"
+                    "- local/ is source of truth.\n"
+                    "- push without approval is allowed.\n"
+                ),
+            }
+        ]
+    )
+    assert {item["reason"] for item in risky_conflicts} == {
+        "tests_marked_as_source_of_truth",
+        "local_marked_as_source_of_truth",
+        "push_without_approval_rule_detected",
+    }
+
+
+def test_verify_output_accepts_normalized_command_variants_and_writes_alias_artifact() -> None:
+    run_dir = create_run_bundle(
+        context_pack={
+            "agents": ["AGENTS.md"],
+            "docs": ["ARCHITECTURE.md"],
+            "code": [],
+            "tests": [],
+            "notes": [],
+        },
+        plan_steps=[
+            {"id": "classify_task", "status": "completed"},
+            {"id": "load_context", "status": "completed"},
+            {"id": "implement_change", "status": "completed"},
+            {"id": "verify_change", "status": "pending"},
+            {"id": "review_result", "status": "pending"},
+        ],
+        status="changes_applied_pending_verification",
+        next_action="verify_change",
+        write_execution_state=True,
+    )
+
+    try:
+        payload = build_verify_output(
+            run_dir,
+            conclusion="passed",
+            summary_text="profile-compatible verification",
+            verified_by="tester",
+            checks=[{"id": "docs_code_alignment_review", "status": "passed", "note": ""}],
+            commands=[r".\venv\Scripts\python.exe   -m pytest test\scripts\test_swarm_cli_smoke.py -q"],
+            log_paths=[],
+        )
+
+        assert payload["status"] == "verification_recorded_pending_review"
+        assert payload["artifacts"]["test_report"].endswith("test-report.json")
+
+        test_report = json.loads((run_dir / "test-report.json").read_text(encoding="utf-8"))
+        assert test_report["verification_profile"]["profile_id"] == "docs_only_change"
+
+        run_summary = json.loads((run_dir / "run-summary.json").read_text(encoding="utf-8"))
+        assert run_summary["verification"]["profile_id"] == "docs_only_change"
+    finally:
+        shutil.rmtree(run_dir, ignore_errors=True)
+
+
+def test_validate_against_profile_returns_structured_error_for_unknown_task_type() -> None:
+    with pytest.raises(ValueError, match="Verification profile not found"):
+        validate_against_profile(
+            task_type_id="missing_task_type",
+            conclusion="passed",
+            checks=[{"id": "some_check", "status": "passed", "note": ""}],
+            commands=[],
+        )

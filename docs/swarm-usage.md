@@ -114,3 +114,4 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 - `docs/testing-policy.md`
 - `docs/commit-policy.md`
 - `docs/sandbox-execution.md`
+- `docs/verification-profiles.json`
