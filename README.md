@@ -36,7 +36,8 @@ DJgurda Bot - асинхронный Telegram-бот для обработки �
 На верхнем уровне:
 
 - `src/` - основной код бота;
-- `deploy/` - файлы деплоя и контейнеризации;
+- `deploy/` - только live deploy assets для `dev` и `main`;
+- `test/docker/` - test-only Docker images для sandbox, smoke и verification;
 - `docs/` - поддерживаемая проектная документация;
 - `test/` - локальные smoke-проверки и тестовые материалы;
 - `local/` - локальные и архивные рабочие заметки, не являющиеся канонической документацией проекта.
@@ -100,6 +101,11 @@ python -m src.main
 - `local/cookies` - локальные оригиналы для ручных проверок и smoke-сценариев;
 - `src/data/cookies` - runtime-копии, с которыми работает приложение;
 - `deploy/cookies` - deploy-источник, который материализуется из секретов или локальных файлов.
+
+Контейнерная boundary тоже разделена:
+
+- `deploy/Dockerfile` - реальный deploy image для сервера;
+- `test/docker/swarm-test/Dockerfile` - test-only image для swarm verification и smoke.
 
 Если нужны детали по путям, контейнеру и deploy-потоку, смотри профильную документацию, а не этот обзорный файл.
 

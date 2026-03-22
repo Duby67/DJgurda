@@ -31,16 +31,18 @@ Sandbox обязателен или предпочтителен, если:
 - `docker`
   - выполняет verification-команды в isolated container;
 - `github_actions`
-  - зарезервирован как будущий adapter и пока возвращает `blocked`.
+  - remote adapter через `workflow_dispatch + poll`, не используемый по умолчанию.
 
 ## Current Operational Rules
 
 - `docker` сейчас является единственным реальным execution backend внутри swarm-контура;
+- для `docker` sandbox и container-based test flows Docker на хосте обязателен;
 - `local_dry_run` полезен для preview, smoke orchestration и fallback-сценариев, но не заменяет реальную verification execution;
 - при недоступности Docker sandbox-run должен завершаться явным blocked-state, а не молча деградировать;
 - sandbox работает поверх isolated workspace, а не поверх основного корня репозитория;
 - сетевой доступ в Docker sandbox выключен по умолчанию;
 - env/secrets должны передаваться только через явный allowlist.
+- sandbox image для тестов должен жить в тестовом слое, а не в `deploy/`; текущий image build context описан в `test/docker/swarm-test/`.
 
 ## Expected Sandbox Result
 
@@ -67,3 +69,4 @@ Sandbox обязателен или предпочтителен, если:
 - `docs/RELIABILITY.md`
 - `docs/testing-policy.md`
 - `docs/swarm-usage.md`
+- `test/docker/swarm-test/README.md`

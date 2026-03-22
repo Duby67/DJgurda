@@ -180,6 +180,9 @@ Workspace metadata хранится в `workspace.json`.
 - `github_actions`
   - explicit remote backend через `dispatch + poll`, не используемый по умолчанию.
 
+Build context для sandbox test image хранится в `test/docker/swarm-test/`.
+Он не должен смешиваться с live deploy assets из `deploy/`.
+
 Sandbox всегда работает поверх isolated workspace, а не поверх корня репозитория.
 Выбор adapter теперь делается в executor core:
 

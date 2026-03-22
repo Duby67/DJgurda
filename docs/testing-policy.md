@@ -34,6 +34,8 @@
   - `optional_checks`;
   - `allowed_commands`.
 - `local_dry_run` не считается реальным execution backend: он подходит для preview orchestration и artifact planning, но не заменяет фактический запуск проверок.
+- Для container-based tests, Docker smoke и реального `docker` sandbox execution Docker на хосте обязателен.
+- Если Docker недоступен, такие проверки должны честно переходить в `blocked` или `skip`, а не считаться выполненными.
 
 ## Verification Artifact
 

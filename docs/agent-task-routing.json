@@ -200,7 +200,9 @@
       "id": "deploy_or_infra_change",
       "label": "Deploy Or Infra Change",
       "read_agents": [
-        "AGENTS.md"
+        "AGENTS.md",
+        "deploy/AGENTS.md",
+        "test/docker/AGENTS.md"
       ],
       "read_docs": [
         "docs/SECURITY.md",
@@ -210,6 +212,7 @@
       ],
       "read_code": [
         "deploy/",
+        "test/docker/",
         ".github/workflows/",
         "src/config.py",
         "src/utils/runtime_storage.py"
@@ -275,6 +278,7 @@
       "read_agents": [
         "AGENTS.md",
         "test/AGENTS.md",
+        "test/docker/AGENTS.md",
         "test/handlers/AGENTS.md"
       ],
       "read_docs": [

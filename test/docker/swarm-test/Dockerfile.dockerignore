@@ -1,0 +1,27 @@
+# VCS and local runtime artifacts are not needed for sandbox image builds.
+.git
+.github/
+runs/
+local/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.idea/
+.vscode/
+.venv/
+venv/
+env/
+
+# Local environment files should not enter the sandbox image.
+.env
+.env.*
+
+# Runtime data is mounted or materialized separately.
+src/data/
+
+# Deploy-only files stay outside sandbox test image builds.
+deploy/

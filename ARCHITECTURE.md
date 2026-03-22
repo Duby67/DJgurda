@@ -42,7 +42,9 @@ DJgurda Bot - асинхронный Telegram-бот для обработки �
 - `src/utils/`
   - URL helpers, message formatting, cookies, runtime storage и другие общие утилиты.
 - `deploy/`
-  - container packaging, deploy scripts и sync tooling.
+  - live deploy assets: production/dev bot image, deploy scripts и cookie sync tooling.
+- `test/docker/`
+  - test-only container assets для sandbox, smoke и verification.
 
 ## Key Entrypoints
 

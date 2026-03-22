@@ -27,6 +27,7 @@
     "code_paths": [
       "src/",
       "deploy/",
+      "test/docker/",
       ".github/workflows/",
       "scripts/",
       "test/"

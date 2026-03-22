@@ -10,6 +10,7 @@
 
 - bot-level tests в `test/bot/`;
 - handler tests и local smoke scripts в `test/handlers/`.
+- test-only container assets в `test/docker/`.
 
 ## Read First
 
@@ -22,6 +23,7 @@
 ## Local Invariants
 
 - Тесты не являются общим source of truth для архитектуры, но являются источником проверяемого поведения.
+- `README.md` в тестовом слое считать human-only документом, а не агентным источником истины.
 - Один source smoke-flow должен оставаться локализованным в своей папке `test/handlers/<Source>/`.
 - Ссылки и ожидаемые типы для local smoke должны жить в `*_urls.py`, а не хардкодиться в теле smoke-скрипта.
 - Cleanup временных файлов после handler smoke checks обязателен.
@@ -50,3 +52,4 @@
 - `src/bot/AGENTS.md`
 - `src/handlers/AGENTS.md`
 - `src/middlewares/AGENTS.md`
+- `test/docker/AGENTS.md`

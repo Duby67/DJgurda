@@ -176,6 +176,8 @@
 
 - Read AGENTS:
   - `AGENTS.md`
+  - `deploy/AGENTS.md`
+  - при test-only container scope `test/docker/AGENTS.md`
 - Read Docs:
   - `docs/SECURITY.md`
   - `docs/RELIABILITY.md`
@@ -183,6 +185,7 @@
   - `docs/release_notes.md` при релевантном историческом контексте
 - Read Code:
   - `deploy/`
+  - `test/docker/`
   - `.github/workflows/`
   - `src/config.py`
   - `src/utils/runtime_storage.py`
@@ -230,6 +233,7 @@
 - Read AGENTS:
   - `AGENTS.md`
   - `test/AGENTS.md`
+  - при container-based tests `test/docker/AGENTS.md`
   - `test/handlers/AGENTS.md`
   - при необходимости модульный `AGENTS.md` из `src/`
 - Read Docs:
