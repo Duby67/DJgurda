@@ -156,6 +156,20 @@
       "problemMatcher": []
     },
     {
+      "label": "Approve run checks and continue",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "approve_run_checks_and_continue",
+        "--run-id",
+        "${input:swarmRunId}",
+        "--pretty"
+      ],
+      "problemMatcher": []
+    },
+    {
       "label": "Approve commit",
       "type": "process",
       "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",

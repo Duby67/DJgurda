@@ -872,6 +872,38 @@ def test_checkpoint_action_wrappers_delegate_to_lifecycle_approve() -> None:
     finally:
         cleanup_run_dir(run_dir)
 
+    resume_run_id = f"mcp-runchecks-continue-{uuid4().hex}"
+    run_module(
+        "-m",
+        "scripts.agents.mcp",
+        "start_swarm_run",
+        "--prompt",
+        "Обновить swarm usage docs",
+        "--run-id",
+        resume_run_id,
+    )
+    resume_run_dir = ROOT / "runs" / resume_run_id
+    try:
+        resume = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "approve_run_checks_and_continue",
+            "--run-id",
+            resume_run_id,
+            "--sandbox-adapter",
+            "local_dry_run",
+            "--pretty",
+        )
+        assert resume.returncode == 0, resume.stderr or resume.stdout
+        resume_payload = json.loads(resume.stdout)
+        assert resume_payload["tool"] == "approve_run_checks_and_continue"
+        assert resume_payload["approval"]["updated_checkpoint"]["id"] == "run_checks"
+        assert resume_payload["approval"]["updated_checkpoint"]["new_status"] == "approved"
+        assert resume_payload["cycle"]["cycle_status"] == "dispatched_external_job"
+        assert resume_payload["cycle"]["loop"]["job"]["job_id"] == "coder"
+    finally:
+        cleanup_run_dir(resume_run_dir)
+
     commit_run_id = f"mcp-commit-approve-{uuid4().hex}"
     commit_run_dir = create_approval_ready_run(commit_run_id)
     try:
@@ -931,6 +963,7 @@ def test_tasks_json_calls_front_door_commands() -> None:
         "Show job queue",
         "Show diff preview",
         "Approve run checks",
+        "Approve run checks and continue",
         "Approve commit",
         "Reject checkpoint",
         "Request commit approval",

@@ -377,6 +377,31 @@ def build_checkpoint_action(
     }
 
 
+def build_approve_run_checks_and_continue(args: argparse.Namespace) -> dict[str, Any]:
+    """Approves run_checks and immediately resumes the autonomous cycle."""
+    run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
+    approval = build_approval_action_output(
+        run_dir,
+        checkpoint_id="run_checks",
+        action="approve",
+        note=getattr(args, "note", ""),
+    )
+    cycle = None
+    if approval.get("status") == "approved_for_implementation":
+        cycle = run_autonomous_cycle(
+            run_dir,
+            runtime_target=args.runtime_target,
+            claimed_by=args.claimed_by,
+            sandbox_adapter=args.sandbox_adapter or "",
+            max_cycles=args.max_cycles,
+        )
+    return {
+        "tool": "approve_run_checks_and_continue",
+        "approval": approval,
+        "cycle": cycle,
+    }
+
+
 def build_run_dispatcher(args: argparse.Namespace) -> dict[str, Any]:
     """Claims or surfaces the next external job as a Codex-oriented work item."""
     run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
@@ -518,6 +543,8 @@ def handle_tool(command: str, args: argparse.Namespace) -> dict[str, Any]:
         return build_preview_sandbox_plan(args)
     if command == "approve_run_checks":
         return build_checkpoint_action(args, checkpoint="run_checks", action="approve", tool_name="approve_run_checks")
+    if command == "approve_run_checks_and_continue":
+        return build_approve_run_checks_and_continue(args)
     if command == "approve_commit":
         return build_checkpoint_action(args, checkpoint="commit", action="approve", tool_name="approve_commit")
     if command == "reject_checkpoint":
@@ -695,6 +722,29 @@ def parse_args() -> argparse.Namespace:
         help="Base directory for runs (default: runs).",
     )
     approve_run_checks_parser.add_argument("--note", default="", help="Optional approval note.")
+
+    approve_run_checks_and_continue_parser = subparsers.add_parser(
+        "approve_run_checks_and_continue",
+        help="Approve run_checks and immediately resume the autonomous cycle.",
+    )
+    add_pretty_flag(approve_run_checks_and_continue_parser)
+    approve_run_checks_and_continue_parser.add_argument("--run-dir", help="Path to a run bundle.")
+    approve_run_checks_and_continue_parser.add_argument("--run-id", help="Run id inside runs-dir.")
+    approve_run_checks_and_continue_parser.add_argument(
+        "--runs-dir",
+        default=str(normalize_runs_dir("runs")),
+        help="Base directory for runs (default: runs).",
+    )
+    approve_run_checks_and_continue_parser.add_argument("--note", default="", help="Optional approval note.")
+    approve_run_checks_and_continue_parser.add_argument("--claimed-by", default="ux_dispatcher", help="Identity used for claim operations.")
+    approve_run_checks_and_continue_parser.add_argument("--runtime-target", default="codex", help="External runtime target label.")
+    approve_run_checks_and_continue_parser.add_argument(
+        "--sandbox-adapter",
+        default=None,
+        choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER, GITHUB_ACTIONS_ADAPTER],
+        help="Optional sandbox adapter override when autonomous cycle resumes local orchestration.",
+    )
+    approve_run_checks_and_continue_parser.add_argument("--max-cycles", type=int, default=8, help="Maximum autonomous iterations per invocation.")
 
     approve_commit_parser = subparsers.add_parser("approve_commit", help="Approve commit checkpoint.")
     add_pretty_flag(approve_commit_parser)

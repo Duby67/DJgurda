@@ -30,6 +30,7 @@
 - `run_dispatcher`
 - `run_dispatcher_loop`
 - `run_autonomous_cycle`
+- `approve_run_checks_and_continue`
 - `submit_role_result`
 - `approve_run_checks`
 - `approve_commit`
@@ -249,10 +250,17 @@ Swarm runtime не отменяет human approval.
 UX wrappers для approval:
 
 - `approve_run_checks`
+- `approve_run_checks_and_continue`
 - `approve_commit`
 - `reject_checkpoint`
 
 Они используют тот же lifecycle approval contract, что и низкоуровневая команда approve-stage.
+
+`approve_run_checks_and_continue` идет на шаг дальше:
+
+- сначала записывает approval для `run_checks`;
+- если run действительно перешел в `approved_for_implementation`, сразу запускает `run_autonomous_cycle`;
+- тем самым убирает еще один ручной шов между human approval и следующим external handoff.
 
 ## CLI-First UX Surface
 

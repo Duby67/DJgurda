@@ -88,6 +88,7 @@
   - `python -m scripts.agents.mcp show_diff_preview --run-id <run-id> --human`
   - `python -m scripts.agents.mcp preview_sandbox_plan --run-id <run-id> --human`
   - `python -m scripts.agents.mcp run_dispatcher --run-id <run-id> --pretty`
+  - `python -m scripts.agents.mcp approve_run_checks_and_continue --run-id <run-id> --pretty`
 - классификация задачи:
   - `python -m scripts.agents.routing.route --prompt "..." --path path/to/file --pretty`
 - сбор run bundle:
