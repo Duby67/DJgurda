@@ -36,6 +36,7 @@ Sandbox обязателен или предпочтителен, если:
   - опирается на correlation id и artifact download, а не только на branch-based polling.
   - требует существующий workflow entrypoint `swarm-sandbox.yml`, настроенный `gh` и доступ к workflow artifacts.
   - если run уже материализовал `workspace-diff.patch`, adapter пытается передать его в workflow и воспроизвести exact run state перед remote verification.
+  - после первого точного match по correlation id adapter закрепляется на одном `workflow_run_id` и перестает каждый раз выбирать run заново из списка ветки.
 
 ## Current Operational Rules
 

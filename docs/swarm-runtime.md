@@ -181,6 +181,7 @@ Workspace metadata хранится в `workspace.json`.
   - explicit remote backend через `dispatch + poll`, не используемый по умолчанию.
   - использует correlation id, workflow artifact download и `swarm-sandbox.yml` как live entrypoint.
   - если в run есть `workspace-diff.patch`, remote workflow пытается воспроизвести exact workspace state через inline git patch перед запуском verification.
+  - после первичного correlation match runtime закрепляется на конкретном `workflow_run_id` и дальше поллит уже его detail endpoint.
 
 Build context для sandbox test image хранится в `test/docker/swarm-test/`.
 Он не должен смешиваться с live deploy assets из `deploy/`.

@@ -331,6 +331,39 @@ def parse_gh_json(output: str) -> dict[str, Any]:
     return data
 
 
+def list_github_actions_runs(
+    *,
+    repository: str,
+    workflow_name: str,
+    ref: str,
+) -> subprocess.CompletedProcess[str]:
+    """Fetches the recent workflow_dispatch runs for a workflow."""
+    return run_gh_api(
+        [
+            "api",
+            "-H",
+            "Accept: application/vnd.github+json",
+            f"repos/{repository}/actions/workflows/{workflow_name}/runs?event=workflow_dispatch&branch={ref}&per_page=10",
+        ],
+    )
+
+
+def get_github_actions_run(
+    *,
+    repository: str,
+    workflow_run_id: str,
+) -> subprocess.CompletedProcess[str]:
+    """Fetches a single workflow run by id."""
+    return run_gh_api(
+        [
+            "api",
+            "-H",
+            "Accept: application/vnd.github+json",
+            f"repos/{repository}/actions/runs/{workflow_run_id}",
+        ],
+    )
+
+
 def build_github_actions_dispatch_artifact(
     request: dict[str, Any],
     config: dict[str, Any],
@@ -1083,23 +1116,28 @@ def execute_github_actions(request: dict[str, Any]) -> dict[str, Any]:
     poll_attempts = 0
     latest_payload: dict[str, Any] = {}
     workflow_run: dict[str, Any] | None = None
+    resolved_workflow_run_id = ""
     timed_out = False
 
     while True:
         poll_attempts += 1
-        poll_result = run_gh_api(
-            [
-                "api",
-                "-H",
-                "Accept: application/vnd.github+json",
-                f"repos/{config['repository']}/actions/workflows/{config['workflow_name']}/runs?event=workflow_dispatch&branch={config['ref']}&per_page=10",
-            ],
-        )
+        if resolved_workflow_run_id:
+            poll_result = get_github_actions_run(
+                repository=config["repository"],
+                workflow_run_id=resolved_workflow_run_id,
+            )
+        else:
+            poll_result = list_github_actions_runs(
+                repository=config["repository"],
+                workflow_name=config["workflow_name"],
+                ref=config["ref"],
+            )
         if poll_result.returncode != 0:
             poll_log_path.write_text(
                 "\n".join(
                     [
                         f"attempt: {poll_attempts}",
+                        f"workflow_run_id: {resolved_workflow_run_id}",
                         f"returncode: {poll_result.returncode}",
                         f"stdout: {poll_result.stdout.strip()}",
                         f"stderr: {poll_result.stderr.strip()}",
@@ -1127,15 +1165,22 @@ def execute_github_actions(request: dict[str, Any]) -> dict[str, Any]:
 
         latest_payload = parse_gh_json(poll_result.stdout)
         write_json(poll_artifact_path, latest_payload)
-        workflow_run = select_github_actions_run(
-            latest_payload,
-            repository=config["repository"],
-            workflow_name=config["workflow_name"],
-            ref=config["ref"],
-            correlation_id=config["correlation_id"],
-            expected_run_name=config["expected_run_name"],
-            dispatched_after_utc=config["dispatch_requested_at_utc"],
-        )
+        if resolved_workflow_run_id:
+            workflow_run = dict(latest_payload)
+            workflow_run["repository"] = config["repository"]
+            workflow_run["workflow_name"] = config["workflow_name"]
+        else:
+            workflow_run = select_github_actions_run(
+                latest_payload,
+                repository=config["repository"],
+                workflow_name=config["workflow_name"],
+                ref=config["ref"],
+                correlation_id=config["correlation_id"],
+                expected_run_name=config["expected_run_name"],
+                dispatched_after_utc=config["dispatch_requested_at_utc"],
+            )
+            if workflow_run is not None:
+                resolved_workflow_run_id = str(workflow_run.get("id", "")).strip()
         if workflow_run is not None and str(workflow_run.get("status", "")).strip().casefold() == "completed":
             break
         if time.monotonic() >= deadline:
@@ -1251,6 +1296,7 @@ def execute_github_actions(request: dict[str, Any]) -> dict[str, Any]:
         "workflow_dispatch": dispatch_artifact,
         "workflow_run": workflow_run or {},
         "workflow_poll": latest_payload,
+        "resolved_workflow_run_id": resolved_workflow_run_id,
         "poll_attempts": poll_attempts,
         "preflight": environment,
         "workspace_transfer": {

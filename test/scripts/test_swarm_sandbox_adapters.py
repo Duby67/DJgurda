@@ -495,6 +495,150 @@ def test_execute_github_actions_dispatches_and_polls_to_completion(
     assert result["downloaded_result"]["metadata"]["correlation_id"] == "expected-correlation"
 
 
+def test_execute_github_actions_pins_polling_to_resolved_run_id(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.shutil.which", lambda _name: "gh")
+    seen_api_calls: list[str] = []
+
+    def fake_run_gh_command(args: list[str]) -> subprocess.CompletedProcess[str]:
+        if args[:2] == ["auth", "status"]:
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="ok", stderr="")
+        if args[:3] == ["run", "download", "123"]:
+            target_dir = Path(args[args.index("--dir") + 1])
+            target_dir.mkdir(parents=True, exist_ok=True)
+            (target_dir / "sandbox-metadata.json").write_text(
+                json.dumps(
+                    {
+                        "run_id": "sandbox-smoke",
+                        "correlation_id": "expected-correlation",
+                        "adapter_id": GITHUB_ACTIONS_ADAPTER,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (target_dir / "workspace-transfer.json").write_text(
+                json.dumps(
+                    {
+                        "mode": "inline_git_patch",
+                        "applied": True,
+                        "sha256": "abc123",
+                        "path": "workspace-diff.patch",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (target_dir / "sandbox-result.json").write_text(
+                json.dumps(
+                    {
+                        "conclusion": "passed",
+                        "summary": "Remote sandbox completed.",
+                        "workspace_transfer": {
+                            "mode": "inline_git_patch",
+                            "applied": True,
+                            "sha256": "abc123",
+                            "path": "workspace-diff.patch",
+                        },
+                        "command_results": [],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="downloaded", stderr="")
+        raise AssertionError(f"Unexpected gh command: {args}")
+
+    def fake_transfer(_request: dict[str, object]) -> dict[str, object]:
+        return {
+            "mode": "inline_git_patch",
+            "present": True,
+            "path": "runs/sandbox-smoke/workspace-diff.patch",
+            "sha256": "abc123",
+            "gzip_base64": "ZmFrZQ==",
+            "encoded_length": 8,
+            "blocked_reason": "",
+        }
+
+    def fake_run_gh_api(args: list[str]) -> subprocess.CompletedProcess[str]:
+        joined = " ".join(args)
+        seen_api_calls.append(joined)
+        if args[-1] == "repos/djgurda/example/actions/workflows/swarm-sandbox.yml":
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout=json.dumps({"id": 1}), stderr="")
+        if "dispatches" in joined:
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+        if "runs?event=workflow_dispatch" in joined:
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "workflow_runs": [
+                            {
+                                "id": 123,
+                                "status": "in_progress",
+                                "conclusion": "",
+                                "html_url": "https://github.test/runs/123",
+                                "head_branch": "main",
+                                "path": ".github/workflows/swarm-sandbox.yml",
+                                "display_title": "Swarm Sandbox / sandbox-smoke / expected-correlation",
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                stderr="",
+            )
+        if args[-1] == "repos/djgurda/example/actions/runs/123":
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "id": 123,
+                        "status": "completed",
+                        "conclusion": "success",
+                        "html_url": "https://github.test/runs/123",
+                        "head_branch": "main",
+                        "path": ".github/workflows/swarm-sandbox.yml",
+                        "display_title": "Swarm Sandbox / sandbox-smoke / expected-correlation",
+                    },
+                    ensure_ascii=False,
+                ),
+                stderr="",
+            )
+        raise AssertionError(f"Unexpected gh api command: {args}")
+
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.run_gh_command", fake_run_gh_command)
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.run_gh_api", fake_run_gh_api)
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.build_workspace_transfer_payload", fake_transfer)
+
+    result = execute_github_actions(
+        build_request(
+            tmp_path,
+            adapter_id=GITHUB_ACTIONS_ADAPTER,
+            repository="djgurda/example",
+            workflow_name="swarm-sandbox.yml",
+            ref="main",
+            poll_interval_seconds=0,
+            timeout_seconds=5,
+            artifact_download_path="runs/sandbox-smoke/artifacts",
+            correlation_id="expected-correlation",
+            workspace_diff_path="runs/sandbox-smoke/workspace-diff.patch",
+        ),
+    )
+
+    assert result["conclusion"] == "passed"
+    assert result["resolved_workflow_run_id"] == "123"
+    assert any("runs?event=workflow_dispatch" in call for call in seen_api_calls)
+    assert any(call.endswith("repos/djgurda/example/actions/runs/123") for call in seen_api_calls)
+
+
 def test_execute_github_actions_blocks_when_downloaded_metadata_is_missing(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
