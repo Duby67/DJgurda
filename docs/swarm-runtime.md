@@ -28,6 +28,7 @@
 - `preview_sandbox_plan`
 - `run_dispatcher`
 - `run_dispatcher_loop`
+- `run_autonomous_cycle`
 - `submit_role_result`
 - `approve_run_checks`
 - `approve_commit`
@@ -165,6 +166,13 @@ External AI job нельзя завершать напрямую из `queued`:
 - внешний runtime может не вызывать напрямую `complete_role_job`;
 - он пишет structured result в repo-local completion inbox;
 - dispatcher loop может сразу же подобрать этот artifact и продолжить orchestration.
+
+`run_autonomous_cycle` собирает это в один более цельный шаг:
+
+- сначала прогоняет local orchestration через `start_or_continue_run`;
+- затем запускает dispatcher loop;
+- сам доходит до следующего external handoff или human boundary;
+- возвращает компактную сводку по run status, next action и событиям цикла.
 
 ## Isolated Workspace
 

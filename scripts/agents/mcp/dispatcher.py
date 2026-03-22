@@ -19,6 +19,7 @@ from scripts.agents.executor import (
     load_jobs,
     mark_job_dispatched,
     next_claimable_external_job,
+    start_or_continue_run,
 )
 from scripts.agents.workspace import resolve_workspace_root
 from scripts.config import ROOT
@@ -29,6 +30,20 @@ DIFF_PREVIEW_MARKDOWN_NAME = "diff-preview.md"
 DISPATCHER_STATE_NAME = "dispatcher-state.json"
 TERMINAL_DISPATCH_STATUSES = {"completed", "failed", "blocked"}
 DEFAULT_LOOP_MAX_CYCLES = 8
+AUTONOMOUS_TERMINAL_RUN_STATUSES = {
+    "instruction_conflict",
+    "context_insufficient",
+    "context_loaded_pending_run_checks_approval",
+    "context_loaded_awaiting_manual_review",
+    "sandbox_failed",
+    "sandbox_blocked",
+    "review_failed",
+    "review_blocked",
+    "awaiting_commit_approval",
+    "awaiting_push_approval",
+    "approval_rejected",
+    "closed",
+}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -791,4 +806,115 @@ def run_dispatcher_loop(
         "events": events,
         "current_job": queue.get("current_external_job"),
         "queue": queue,
+    }
+
+
+def run_autonomous_cycle(
+    run_dir: Path,
+    *,
+    runtime_target: str,
+    claimed_by: str = "",
+    sandbox_adapter: str = "",
+    max_cycles: int = DEFAULT_LOOP_MAX_CYCLES,
+) -> dict[str, Any]:
+    """Runs local orchestration and dispatcher loop until the next stable boundary."""
+    cycles = 0
+    events: list[dict[str, Any]] = []
+
+    while cycles < max_cycles:
+        cycles += 1
+        before_summary = load_run_summary(run_dir)
+        orchestration = start_or_continue_run(
+            run_dir,
+            sandbox_adapter=sandbox_adapter or None,
+        )
+        after_summary = load_run_summary(run_dir)
+        events.append(
+            {
+                "type": "orchestration",
+                "status": after_summary.get("status", ""),
+                "next_action": after_summary.get("next_action", ""),
+            }
+        )
+
+        if after_summary.get("status") in AUTONOMOUS_TERMINAL_RUN_STATUSES:
+            queue = show_job_queue(run_dir)
+            return {
+                "run_id": run_dir.name,
+                "cycle_status": "human_or_terminal_boundary",
+                "cycles": cycles,
+                "events": events,
+                "orchestration": orchestration,
+                "queue": queue,
+                "run_status": after_summary.get("status", ""),
+                "next_action": after_summary.get("next_action", ""),
+            }
+
+        loop = run_dispatcher_loop(
+            run_dir,
+            runtime_target=runtime_target,
+            claimed_by=claimed_by,
+            sandbox_adapter=sandbox_adapter,
+            max_cycles=max_cycles,
+        )
+        events.append(
+            {
+                "type": "dispatcher_loop",
+                "loop_status": loop.get("loop_status", ""),
+                "job_id": (loop.get("job") or {}).get("job_id", "") or (loop.get("current_job") or {}).get("job_id", ""),
+            }
+        )
+
+        current_summary = load_run_summary(run_dir)
+        if loop.get("loop_status") in {"dispatched_external_job", "awaiting_external_result"}:
+            return {
+                "run_id": run_dir.name,
+                "cycle_status": loop.get("loop_status", ""),
+                "cycles": cycles,
+                "events": events,
+                "orchestration": orchestration,
+                "loop": loop,
+                "run_status": current_summary.get("status", ""),
+                "next_action": current_summary.get("next_action", ""),
+            }
+
+        if current_summary.get("status") in AUTONOMOUS_TERMINAL_RUN_STATUSES:
+            return {
+                "run_id": run_dir.name,
+                "cycle_status": "human_or_terminal_boundary",
+                "cycles": cycles,
+                "events": events,
+                "orchestration": orchestration,
+                "loop": loop,
+                "run_status": current_summary.get("status", ""),
+                "next_action": current_summary.get("next_action", ""),
+            }
+
+        no_progress = (
+            before_summary.get("status") == current_summary.get("status")
+            and before_summary.get("next_action") == current_summary.get("next_action")
+            and loop.get("loop_status") == "idle"
+        )
+        if no_progress:
+            return {
+                "run_id": run_dir.name,
+                "cycle_status": "idle",
+                "cycles": cycles,
+                "events": events,
+                "orchestration": orchestration,
+                "loop": loop,
+                "run_status": current_summary.get("status", ""),
+                "next_action": current_summary.get("next_action", ""),
+            }
+
+    queue = show_job_queue(run_dir)
+    summary = load_run_summary(run_dir)
+    return {
+        "run_id": run_dir.name,
+        "cycle_status": "max_cycles_reached",
+        "cycles": cycles,
+        "events": events,
+        "queue": queue,
+        "run_status": summary.get("status", ""),
+        "next_action": summary.get("next_action", ""),
     }

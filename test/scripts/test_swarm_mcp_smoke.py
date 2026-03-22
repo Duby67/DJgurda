@@ -336,6 +336,113 @@ def test_submit_role_result_writes_completion_inbox_and_advances_pipeline() -> N
         cleanup_run_dir(run_dir)
 
 
+def test_run_autonomous_cycle_drives_run_to_external_and_human_boundaries() -> None:
+    run_id = f"mcp-auto-{uuid4().hex}"
+    run_module(
+        "-m",
+        "scripts.agents.mcp",
+        "start_swarm_run",
+        "--prompt",
+        "Обновить swarm usage docs",
+        "--run-id",
+        run_id,
+    )
+
+    run_dir = ROOT / "runs" / run_id
+    try:
+        approve_run_checks(run_id)
+
+        first_cycle = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "run_autonomous_cycle",
+            "--run-id",
+            run_id,
+            "--sandbox-adapter",
+            "local_dry_run",
+            "--pretty",
+        )
+        assert first_cycle.returncode == 0, first_cycle.stderr or first_cycle.stdout
+        first_payload = json.loads(first_cycle.stdout)
+        assert first_payload["tool"] == "run_autonomous_cycle"
+        assert first_payload["cycle_status"] == "dispatched_external_job"
+        assert first_payload["loop"]["job"]["job_id"] == "coder"
+
+        workspace_root = Path(read_json(run_dir / "workspace.json")["workspace"]["root_path"])
+        target_file = workspace_root / "docs" / "swarm-usage.md"
+        target_file.write_text(
+            target_file.read_text(encoding="utf-8") + "\nAutonomous cycle coder change.\n",
+            encoding="utf-8",
+        )
+        (run_dir / "jobs" / "coder-completion.json").write_text(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "summary": "Coder completion for autonomous cycle.",
+                    "sandbox_adapter": "local_dry_run",
+                    "result": {
+                        "summary": "Coder completion for autonomous cycle.",
+                        "applied_by": "codex-runtime",
+                        "applied_files": ["docs/swarm-usage.md"],
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        second_cycle = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "run_autonomous_cycle",
+            "--run-id",
+            run_id,
+            "--sandbox-adapter",
+            "local_dry_run",
+            "--pretty",
+        )
+        assert second_cycle.returncode == 0, second_cycle.stderr or second_cycle.stdout
+        second_payload = json.loads(second_cycle.stdout)
+        assert second_payload["cycle_status"] == "dispatched_external_job"
+        assert second_payload["loop"]["job"]["job_id"] == "reviewer"
+
+        (run_dir / "jobs" / "reviewer-completion.json").write_text(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "summary": "Reviewer completion for autonomous cycle.",
+                    "result": {
+                        "summary": "Reviewer completion for autonomous cycle.",
+                        "reviewed_by": "review-runtime",
+                        "conclusion": "passed",
+                        "findings": [],
+                        "risks": ["Dry-run sandbox only"],
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        third_cycle = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "run_autonomous_cycle",
+            "--run-id",
+            run_id,
+            "--sandbox-adapter",
+            "local_dry_run",
+            "--pretty",
+        )
+        assert third_cycle.returncode == 0, third_cycle.stderr or third_cycle.stdout
+        third_payload = json.loads(third_cycle.stdout)
+        assert third_payload["cycle_status"] == "human_or_terminal_boundary"
+        assert third_payload["run_status"] == "awaiting_commit_approval"
+        assert third_payload["next_action"] == "await_commit_approval"
+    finally:
+        cleanup_run_dir(run_dir)
+
+
 def test_run_dispatcher_loop_consumes_completion_inbox_and_advances_pipeline() -> None:
     run_id = f"mcp-loop-{uuid4().hex}"
     run_module(
