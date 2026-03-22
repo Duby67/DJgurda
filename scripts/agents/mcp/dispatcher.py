@@ -204,6 +204,7 @@ def completion_contract_for(job: dict[str, Any], *, sandbox_adapter: str) -> dic
     if job.get("role") == "coder":
         return {
             "command": "complete_role_job",
+            "preferred_command": "submit_role_result",
             "required_fields": ["summary", "applied_files"],
             "optional_fields": ["applied_by", "allow_empty_diff"],
             "resume_sandbox_adapter": sandbox_adapter,
@@ -211,12 +212,14 @@ def completion_contract_for(job: dict[str, Any], *, sandbox_adapter: str) -> dic
     if job.get("role") == "reviewer":
         return {
             "command": "complete_role_job",
+            "preferred_command": "submit_role_result",
             "required_fields": ["summary", "conclusion", "findings", "risks"],
             "optional_fields": ["reviewed_by"],
             "resume_sandbox_adapter": sandbox_adapter,
         }
     return {
         "command": "complete_role_job",
+        "preferred_command": "submit_role_result",
         "required_fields": ["summary"],
         "optional_fields": [],
         "resume_sandbox_adapter": sandbox_adapter,
@@ -241,6 +244,7 @@ def ensure_dispatch_record(run_dir: Path, *, job_id: str, runtime_target: str) -
     work_item["runtime_ref"] = runtime_ref
     work_item["workspace_root"] = work_item.get("workspace_ref", {}).get("root_path", "")
     work_item["completion_contract"] = completion_contract_for(dispatched_job, sandbox_adapter=str(load_jobs(run_dir).get("sandbox_adapter", "")).strip())
+    work_item["completion_inbox"] = rel_to_root(job_completion_path(run_dir, job_id))
     write_json(dispatch_artifact, work_item)
     jobs_payload = load_jobs(run_dir)
     job = find_job(jobs_payload, job_id)
@@ -364,6 +368,51 @@ def consume_completion_artifact(
         }
 
     raise ValueError(f"Unsupported completion artifact status: {status}")
+
+
+def submit_role_result(
+    run_dir: Path,
+    *,
+    job_id: str,
+    payload: dict[str, Any],
+    runtime_target: str = "",
+    sandbox_adapter: str = "",
+    auto_consume: bool = True,
+) -> dict[str, Any]:
+    """Writes a completion inbox artifact for an external role job."""
+    jobs_payload = load_jobs(run_dir)
+    job = find_job(jobs_payload, job_id)
+    if job.get("backend") != "external_ai":
+        raise ValueError(f"Job '{job_id}' is not an external AI role")
+    if job.get("status") != "running":
+        raise ValueError(f"Job '{job_id}' must be running before submitting a role result")
+
+    completion_path = job_completion_path(run_dir, job_id)
+    submission = dict(payload)
+    submission.setdefault("status", "completed")
+    if runtime_target and not submission.get("submitted_by"):
+        submission["submitted_by"] = runtime_target
+    if sandbox_adapter and not submission.get("sandbox_adapter"):
+        submission["sandbox_adapter"] = sandbox_adapter
+    submission["job_id"] = job_id
+    submission["recorded_at_utc"] = now_utc()
+    write_json(completion_path, submission)
+    update_run_summary_artifacts(run_dir, f"{job_id}_completion_pending", completion_path)
+
+    result: dict[str, Any] = {
+        "run_id": run_dir.name,
+        "job_id": job_id,
+        "completion_artifact": rel_to_root(completion_path),
+        "submitted_payload": submission,
+    }
+    if auto_consume:
+        result["loop"] = run_dispatcher_loop(
+            run_dir,
+            runtime_target=runtime_target or str(job.get("runtime_target", "")).strip() or "codex",
+            sandbox_adapter=sandbox_adapter or str(load_jobs(run_dir).get("sandbox_adapter", "")).strip(),
+            max_cycles=DEFAULT_LOOP_MAX_CYCLES,
+        )
+    return result
 
 
 def build_job_queue_payload(run_dir: Path, *, jobs_payload: dict[str, Any] | None = None) -> dict[str, Any]:

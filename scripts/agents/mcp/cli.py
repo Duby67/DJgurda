@@ -26,6 +26,7 @@ from scripts.agents.mcp.dispatcher import (
     ensure_dispatch_record,
     mark_dispatch_terminal,
     run_dispatcher_loop,
+    submit_role_result,
     show_job_queue as build_dispatcher_job_queue,
 )
 from scripts.agents.routing.plan import build_plan_output, write_artifacts as write_plan_artifacts
@@ -424,6 +425,28 @@ def build_fail_role_job(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def build_submit_role_result(args: argparse.Namespace) -> dict[str, Any]:
+    """Writes a completion inbox artifact for an external role job and optionally consumes it."""
+    run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
+    payload = parse_result_payload(args) or {}
+    if args.summary and not payload.get("summary"):
+        payload["summary"] = args.summary
+    if args.status and not payload.get("status"):
+        payload["status"] = args.status
+    result = submit_role_result(
+        run_dir,
+        job_id=args.job_id,
+        payload=payload,
+        runtime_target=args.runtime_target,
+        sandbox_adapter=args.sandbox_adapter or "",
+        auto_consume=not args.no_consume,
+    )
+    return {
+        "tool": "submit_role_result",
+        **result,
+    }
+
+
 def handle_tool(command: str, args: argparse.Namespace) -> dict[str, Any]:
     """Dispatches a tool name to the corresponding handler."""
     if command == "plan_task":
@@ -460,6 +483,8 @@ def handle_tool(command: str, args: argparse.Namespace) -> dict[str, Any]:
         return build_complete_role_job(args)
     if command == "fail_role_job":
         return build_fail_role_job(args)
+    if command == "submit_role_result":
+        return build_submit_role_result(args)
     raise ValueError(f"Unsupported command: {command}")
 
 
@@ -692,7 +717,14 @@ def parse_args() -> argparse.Namespace:
         )
         job_parser.add_argument("--job-id", required=True, help="Role job id.")
         job_parser.add_argument("--claimed-by", default="external_runtime", help="Job owner for claim operations.")
+        job_parser.add_argument("--runtime-target", default="codex", help="External runtime target label.")
         job_parser.add_argument("--summary", default="", help="Job summary or result note.")
+        job_parser.add_argument(
+            "--status",
+            default="completed",
+            choices=["completed", "failed", "blocked"],
+            help="Submission status for submit_role_result.",
+        )
         job_parser.add_argument("--reason", default="", help="Failure reason.")
         job_parser.add_argument("--result-json", help="Inline JSON payload for complete_role_job.")
         job_parser.add_argument("--result-file", help="Path to a JSON payload for complete_role_job.")
@@ -702,6 +734,38 @@ def parse_args() -> argparse.Namespace:
             choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER, GITHUB_ACTIONS_ADAPTER],
             help="Optional sandbox adapter override for resumed local orchestration after external completion.",
         )
+
+    submit_parser = subparsers.add_parser("submit_role_result", help="Submit an external role result to the completion inbox.")
+    add_pretty_flag(submit_parser)
+    submit_parser.add_argument("--run-dir", help="Path to a run bundle.")
+    submit_parser.add_argument("--run-id", help="Run id inside runs-dir.")
+    submit_parser.add_argument(
+        "--runs-dir",
+        default=str(normalize_runs_dir("runs")),
+        help="Base directory for runs (default: runs).",
+    )
+    submit_parser.add_argument("--job-id", required=True, help="Role job id.")
+    submit_parser.add_argument("--runtime-target", default="codex", help="External runtime target label.")
+    submit_parser.add_argument("--summary", default="", help="Job summary or result note.")
+    submit_parser.add_argument(
+        "--status",
+        default="completed",
+        choices=["completed", "failed", "blocked"],
+        help="Submission status for submit_role_result.",
+    )
+    submit_parser.add_argument("--result-json", help="Inline JSON payload for submit_role_result.")
+    submit_parser.add_argument("--result-file", help="Path to a JSON payload for submit_role_result.")
+    submit_parser.add_argument(
+        "--sandbox-adapter",
+        default=None,
+        choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER, GITHUB_ACTIONS_ADAPTER],
+        help="Optional sandbox adapter override for resumed local orchestration after external completion.",
+    )
+    submit_parser.add_argument(
+        "--no-consume",
+        action="store_true",
+        help="Write completion artifact without immediately running dispatcher loop.",
+    )
 
     stdio_parser = subparsers.add_parser("serve_stdio", help="Serve newline-delimited JSON requests over stdio.")
     add_pretty_flag(stdio_parser)

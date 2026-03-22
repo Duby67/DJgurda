@@ -253,6 +253,8 @@ def test_run_dispatcher_builds_work_item_and_dispatcher_artifacts() -> None:
         assert payload["job"]["dispatch_status"] == "dispatched"
         assert payload["work_item"]["role"] == "coder"
         assert payload["work_item"]["completion_contract"]["command"] == "complete_role_job"
+        assert payload["work_item"]["completion_contract"]["preferred_command"] == "submit_role_result"
+        assert payload["work_item"]["completion_inbox"].endswith("jobs/coder-completion.json")
         assert (run_dir / "jobs" / "coder-dispatch.json").is_file()
         assert (run_dir / "dispatcher-state.json").is_file()
         runtime_trace = (run_dir / "runtime-context-trace.jsonl").read_text(encoding="utf-8").splitlines()
@@ -261,6 +263,75 @@ def test_run_dispatcher_builds_work_item_and_dispatcher_artifacts() -> None:
 
         dispatcher_state = read_json(run_dir / "dispatcher-state.json")
         assert dispatcher_state["current_job"]["job_id"] == "coder"
+    finally:
+        cleanup_run_dir(run_dir)
+
+
+def test_submit_role_result_writes_completion_inbox_and_advances_pipeline() -> None:
+    run_id = f"mcp-submit-{uuid4().hex}"
+    run_module(
+        "-m",
+        "scripts.agents.mcp",
+        "start_swarm_run",
+        "--prompt",
+        "Обновить swarm usage docs",
+        "--run-id",
+        run_id,
+    )
+
+    run_dir = ROOT / "runs" / run_id
+    try:
+        approve_run_checks(run_id)
+        dispatch = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "run_dispatcher",
+            "--run-id",
+            run_id,
+            "--runtime-target",
+            "codex-runtime",
+        )
+        assert dispatch.returncode == 0, dispatch.stderr or dispatch.stdout
+
+        workspace_root = Path(read_json(run_dir / "workspace.json")["workspace"]["root_path"])
+        target_file = workspace_root / "docs" / "swarm-usage.md"
+        target_file.write_text(
+            target_file.read_text(encoding="utf-8") + "\nSubmit role result smoke change.\n",
+            encoding="utf-8",
+        )
+
+        submit = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "submit_role_result",
+            "--run-id",
+            run_id,
+            "--job-id",
+            "coder",
+            "--runtime-target",
+            "codex-runtime",
+            "--sandbox-adapter",
+            "local_dry_run",
+            "--result-json",
+            json.dumps(
+                {
+                    "summary": "Submitted via completion inbox.",
+                    "applied_by": "codex-runtime",
+                    "applied_files": ["docs/swarm-usage.md"],
+                },
+                ensure_ascii=False,
+            ),
+            "--pretty",
+        )
+        assert submit.returncode == 0, submit.stderr or submit.stdout
+        payload = json.loads(submit.stdout)
+        assert payload["tool"] == "submit_role_result"
+        assert payload["submitted_payload"]["job_id"] == "coder"
+        assert payload["submitted_payload"]["status"] == "completed"
+        assert payload["loop"]["events"][0]["type"] == "completion_consumed"
+        assert payload["loop"]["loop_status"] == "dispatched_external_job"
+        assert payload["loop"]["job"]["job_id"] == "reviewer"
+        assert (run_dir / "jobs" / "coder-completion-processed.json").is_file()
     finally:
         cleanup_run_dir(run_dir)
 
