@@ -73,12 +73,20 @@ def unresolved_item_payload(entry: dict[str, Any]) -> dict[str, Any]:
         "item": entry.get("item"),
         "kind": entry.get("kind"),
         "status": entry.get("status"),
+        "blocking": entry.get("blocking", False),
     }
     if entry.get("reason"):
         payload["reason"] = entry["reason"]
     if entry.get("path"):
         payload["path"] = entry["path"]
     return payload
+
+
+def is_blocking_unresolved(entry: dict[str, Any]) -> bool:
+    """Определяет, должен ли unresolved context item блокировать run."""
+    if entry.get("kind") != "missing":
+        return False
+    return entry.get("category") in {"agents", "docs", "code"}
 
 
 def resolve_context_item(category: str, item: str) -> dict[str, Any]:
@@ -91,6 +99,7 @@ def resolve_context_item(category: str, item: str) -> dict[str, Any]:
             "kind": "abstract",
             "status": "unresolved",
             "reason": "placeholder_or_abstract_requirement",
+            "blocking": False,
         }
 
     absolute = ROOT / normalized
@@ -124,6 +133,7 @@ def resolve_context_item(category: str, item: str) -> dict[str, Any]:
         "kind": "missing",
         "status": "missing",
         "path": normalized,
+        "blocking": category in {"agents", "docs", "code"},
     }
 
 
@@ -136,6 +146,8 @@ def build_loaded_context(context_pack: dict[str, Any]) -> dict[str, Any]:
         "resolved_directories": 0,
         "abstract_items": 0,
         "missing_items": 0,
+        "blocking_unresolved_items": 0,
+        "advisory_unresolved_items": 0,
         "notes_count": len(context_pack.get("notes", [])),
     }
     unresolved_items: list[dict[str, Any]] = []
@@ -152,9 +164,14 @@ def build_loaded_context(context_pack: dict[str, Any]) -> dict[str, Any]:
                 summary["resolved_directories"] += 1
             elif kind == "abstract":
                 summary["abstract_items"] += 1
+                summary["advisory_unresolved_items"] += 1
                 unresolved_items.append(unresolved_item_payload(entry))
             elif kind == "missing":
                 summary["missing_items"] += 1
+                if is_blocking_unresolved(entry):
+                    summary["blocking_unresolved_items"] += 1
+                else:
+                    summary["advisory_unresolved_items"] += 1
                 unresolved_items.append(unresolved_item_payload(entry))
 
     resolved["notes"] = [
@@ -184,6 +201,7 @@ def render_context_summary_markdown(
     unresolved_block = "\n".join(
         f"- `{item.get('category', 'unknown')}` -> `{item.get('item', '')}`"
         f" ({item.get('kind', 'unknown')})"
+        f"{' [blocking]' if item.get('blocking') else ' [advisory]'}"
         f"{': ' + item['reason'] if item.get('reason') else ''}"
         for item in unresolved_items
     ) or "- none"
@@ -199,6 +217,8 @@ def render_context_summary_markdown(
         f"- Resolved Directories: {summary['resolved_directories']}\n"
         f"- Abstract Items: {summary['abstract_items']}\n"
         f"- Missing Items: {summary['missing_items']}\n"
+        f"- Blocking Unresolved: {summary['blocking_unresolved_items']}\n"
+        f"- Advisory Unresolved: {summary['advisory_unresolved_items']}\n"
         f"- Notes: {summary['notes_count']}\n\n"
         "## Changed Paths\n\n"
         f"{changed_paths_block}\n\n"
@@ -227,9 +247,7 @@ def build_execution_state(
     needs_manual_review = approval_payload["needs_manual_review"]
     run_checks_status = checkpoint_status_map(approval_payload).get("run_checks", "awaiting_approval")
     routing_diagnostics = run_summary.get("routing_diagnostics", {})
-    unresolved_context = bool(
-        loaded_context["summary"]["missing_items"] or loaded_context["summary"]["abstract_items"]
-    )
+    unresolved_context = loaded_context["summary"]["blocking_unresolved_items"] > 0
 
     if routing_diagnostics.get("instruction_conflict", False):
         next_action = "resolve_instruction_conflict"

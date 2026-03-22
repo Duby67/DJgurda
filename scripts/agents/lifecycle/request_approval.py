@@ -289,6 +289,8 @@ def render_markdown_packet(packet: dict[str, Any]) -> str:
         f"- Resolved Directories: {context_summary.get('resolved_directories', 0)}\n"
         f"- Abstract Items: {context_summary.get('abstract_items', 0)}\n"
         f"- Missing Items: {context_summary.get('missing_items', 0)}\n"
+        f"- Blocking Unresolved: {context_summary.get('blocking_unresolved_items', 0)}\n"
+        f"- Advisory Unresolved: {context_summary.get('advisory_unresolved_items', 0)}\n"
         f"{unresolved_block}\n\n"
         "## Changed Files\n\n"
         f"{changed_files_block}\n\n"
