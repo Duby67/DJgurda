@@ -11,7 +11,7 @@
 ## Source Of Truth
 
 - `runs/` не является source of truth для product behavior или policy.
-- `README.md` в этой папке human-only и нужен только для человека.
+- `README.md` human-only.
 - Для агента source of truth по swarm runtime находится в:
   - корневом `AGENTS.md`
   - `scripts/AGENTS.md`

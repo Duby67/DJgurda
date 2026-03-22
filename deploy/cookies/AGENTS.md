@@ -10,7 +10,7 @@
 
 ## Source Of Truth
 
-- `README.md` здесь human-only.
+- `README.md` human-only.
 - Поведение deploy cookie flow задается:
   - `.github/workflows/deploy-dev.yml`
   - `.github/workflows/deploy-prod.yml`
