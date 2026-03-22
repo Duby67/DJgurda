@@ -56,3 +56,7 @@ src/data/runtime/*
 !src/data/runtime/.gitkeep
 src/data/cookies/*
 !src/data/cookies/.gitkeep
+
+runs/*
+!runs/.gitkeep
+!runs/README.md

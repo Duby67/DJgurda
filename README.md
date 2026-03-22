@@ -83,7 +83,7 @@ python -m pip install -r requirements-dev.txt
 - `BOT_TOKEN`
 - `YANDEX_MUSIC_TOKEN`
 
-Эталонный пример переменных лежит в `env.example`.
+Эталонный пример переменных лежит в `.env.example`.
 
 ### Запуск
 

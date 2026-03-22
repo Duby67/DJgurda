@@ -269,7 +269,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--runs-dir",
         default=str(DEFAULT_RUNS_DIR.relative_to(ROOT)).replace("\\", "/"),
-        help="Базовая директория запусков (по умолчанию: local/runs).",
+        help="Базовая директория запусков (по умолчанию: runs).",
     )
     parser.add_argument("--remote", default="origin", help="Remote для push (по умолчанию: origin).")
     parser.add_argument("--branch", help="Целевая ветка для push. По умолчанию будет взята текущая.")

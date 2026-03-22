@@ -14,7 +14,7 @@ from typing import Any
 from scripts.config import ROOT
 
 
-DEFAULT_RUNS_DIR = ROOT / "local" / "runs"
+DEFAULT_RUNS_DIR = ROOT / "runs"
 PLACEHOLDER_MARKERS = ("<", ">")
 ABSTRACT_PREFIXES = (
     "tracked-docs-",
@@ -266,7 +266,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--runs-dir",
         default=str(DEFAULT_RUNS_DIR.relative_to(ROOT)).replace("\\", "/"),
-        help="Базовая директория запусков (по умолчанию: local/runs).",
+        help="Базовая директория запусков (по умолчанию: runs).",
     )
     parser.add_argument(
         "--pretty",

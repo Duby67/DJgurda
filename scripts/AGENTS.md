@@ -17,6 +17,12 @@
 - `scripts/release/rules/`
   - правила versioning и parsing release tags
 
+## Run Artifacts
+
+- Все swarm run artifacts живут в корневой папке `runs/`.
+- `runs/` считается рабочим artifact-layer, а не source of truth для policy или runtime behavior.
+- Содержимое `runs/` должно оставаться вне git, кроме служебных файлов самой папки.
+
 ## Routing Scripts
 
 Если задача связана с определением task type и сбором context:

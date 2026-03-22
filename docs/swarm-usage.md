@@ -12,6 +12,8 @@
 - установленные dev-зависимости из `requirements-dev.txt`
 - работа из корня репозитория
 
+Swarm run bundles и lifecycle artifacts сохраняются в корневую папку `runs/`.
+
 ## Main Entry Points
 
 Основные module-path команды:

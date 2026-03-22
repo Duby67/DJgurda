@@ -24,7 +24,7 @@ from .route import (
 )
 
 
-DEFAULT_RUNS_DIR = ROOT / "local" / "runs"
+DEFAULT_RUNS_DIR = ROOT / "runs"
 
 
 def sanitize_run_id(value: str) -> str:
@@ -186,7 +186,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--runs-dir",
         default=str(DEFAULT_RUNS_DIR.relative_to(ROOT)).replace("\\", "/"),
-        help="Базовая директория для run bundles (по умолчанию: local/runs).",
+        help="Базовая директория для run bundles (по умолчанию: runs).",
     )
     parser.add_argument("--run-id", help="Явный run_id. Если не указан, будет сгенерирован автоматически.")
     parser.add_argument(
