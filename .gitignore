@@ -51,12 +51,11 @@ Desktop.ini
 
 # Локальные runtime-артефакты проекта
 src/data/db/*
-!src/data/db/.gitkeep
+!src/data/db/README.md
 src/data/runtime/*
-!src/data/runtime/.gitkeep
+!src/data/runtime/README.md
 src/data/cookies/*
-!src/data/cookies/.gitkeep
+!src/data/cookies/README.md
 
 runs/*
-!runs/.gitkeep
 !runs/README.md
