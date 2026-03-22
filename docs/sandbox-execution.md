@@ -32,17 +32,25 @@ Sandbox обязателен или предпочтителен, если:
   - выполняет verification-команды в isolated container;
 - `github_actions`
   - remote adapter через `workflow_dispatch + poll`, не используемый по умолчанию.
+  - использует `.github/workflows/swarm-sandbox.yml` как live workflow entrypoint;
+  - опирается на correlation id и artifact download, а не только на branch-based polling.
+  - требует существующий workflow entrypoint `swarm-sandbox.yml`, настроенный `gh` и доступ к workflow artifacts.
 
 ## Current Operational Rules
 
 - `docker` сейчас является единственным реальным execution backend внутри swarm-контура;
 - для `docker` sandbox и container-based test flows Docker на хосте обязателен;
+- для `github_actions` adapter на хосте должны быть доступны `gh`, действующая auth-сессия и доступ к Actions API целевого репозитория;
+- `github_actions` adapter должен уметь скачать workflow artifacts обратно в локальный run bundle;
 - `local_dry_run` полезен для preview, smoke orchestration и fallback-сценариев, но не заменяет реальную verification execution;
 - при недоступности Docker sandbox-run должен завершаться явным blocked-state, а не молча деградировать;
+- при недоступности `gh`, auth или workflow entrypoint `github_actions` adapter должен завершаться явным blocked-state;
 - sandbox работает поверх isolated workspace, а не поверх основного корня репозитория;
 - сетевой доступ в Docker sandbox выключен по умолчанию;
 - env/secrets должны передаваться только через явный allowlist.
 - sandbox image для тестов должен жить в тестовом слое, а не в `deploy/`; текущий image build context описан в `test/docker/swarm-test/`.
+- `github_actions` live-path должен материализовать downloadable workflow artifacts, а не ограничиваться только status polling.
+- при отсутствии workflow artifact download или при mismatch correlation id remote run должен считаться `blocked`, а не успешным.
 
 ## Expected Sandbox Result
 

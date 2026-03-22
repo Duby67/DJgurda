@@ -38,7 +38,7 @@ docker build -f test/docker/swarm-test/Dockerfile -t djgurda-swarm-test:latest .
 - Docker на локальном хосте обязателен для этого test flow;
 - без Docker образ не собирается, а container-based verification не выполняется.
 
-Если образ не собран заранее, Docker smoke coverage должна либо сначала собрать его явной командой, либо честно перейти в `skip`, а не притворяться успешной.
+Если образ не собран заранее, честный Docker smoke path должен сначала попытаться собрать его, а уже потом выполнять live adapter path.
 
 ## Boundary Rule
 

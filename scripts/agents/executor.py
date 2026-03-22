@@ -23,6 +23,7 @@ from scripts.agents.runtime_trace import (
     runtime_trace_path,
 )
 from scripts.agents.sandbox_adapters import (
+    DEFAULT_GITHUB_ACTIONS_WORKFLOW,
     DEFAULT_SANDBOX_IMAGE,
     DOCKER_ADAPTER,
     GITHUB_ACTIONS_ADAPTER,
@@ -600,7 +601,10 @@ def execute_sandbox_for_run(
         "image": DEFAULT_SANDBOX_IMAGE,
         "env_allowlist": {},
         "timeout_seconds": 900,
+        "artifact_download_path": str((run_dir / "github-actions-download").relative_to(ROOT)).replace("\\", "/"),
     }
+    if adapter_id == GITHUB_ACTIONS_ADAPTER:
+        sandbox_plan["workflow_name"] = DEFAULT_GITHUB_ACTIONS_WORKFLOW
     write_json(sandbox_plan_path(run_dir), sandbox_plan)
     persist_artifact_ref(run_dir, "sandbox_plan", sandbox_plan_path(run_dir))
 
@@ -615,7 +619,10 @@ def execute_sandbox_for_run(
         "env_allowlist": {},
         "image": DEFAULT_SANDBOX_IMAGE,
         "timeout_seconds": 900,
+        "artifact_download_path": str((run_dir / "github-actions-download").relative_to(ROOT)).replace("\\", "/"),
     }
+    if adapter_id == GITHUB_ACTIONS_ADAPTER:
+        adapter_request["workflow_name"] = DEFAULT_GITHUB_ACTIONS_WORKFLOW
     adapter_result = execute_sandbox_request(adapter_request)
     adapter_result_path = run_dir / "sandbox-adapter-result.json"
     write_adapter_json(adapter_result_path, adapter_result)

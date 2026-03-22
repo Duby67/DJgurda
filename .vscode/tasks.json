@@ -58,6 +58,20 @@
       "problemMatcher": []
     },
     {
+      "label": "Build swarm test image",
+      "type": "process",
+      "command": "docker",
+      "args": [
+        "build",
+        "-f",
+        "test/docker/swarm-test/Dockerfile",
+        "-t",
+        "djgurda-swarm-test:latest",
+        "."
+      ],
+      "problemMatcher": []
+    },
+    {
       "label": "Run dispatcher",
       "type": "process",
       "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",

@@ -179,6 +179,7 @@ Workspace metadata хранится в `workspace.json`.
   - default execution backend, если verification profile требует реальный sandbox;
 - `github_actions`
   - explicit remote backend через `dispatch + poll`, не используемый по умолчанию.
+  - использует correlation id, workflow artifact download и `swarm-sandbox.yml` как live entrypoint.
 
 Build context для sandbox test image хранится в `test/docker/swarm-test/`.
 Он не должен смешиваться с live deploy assets из `deploy/`.
@@ -192,6 +193,13 @@ Sandbox всегда работает поверх isolated workspace, а не �
 
 `preview_sandbox_plan` не запускает sandbox.
 Команда только показывает уже собранный sandbox/verification plan в удобном UX-формате.
+
+Для `github_actions` adapter runtime ожидает:
+
+- доступный `gh` CLI на хосте orchestration;
+- настроенную auth-сессию с доступом к workflow dispatch и artifact download;
+- workflow `.github/workflows/swarm-sandbox.yml` в целевом репозитории;
+- workflow artifacts, которые возвращают machine-readable `sandbox-result.json`.
 
 ## Approval Boundaries
 

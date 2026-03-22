@@ -13,11 +13,15 @@ from scripts.agents.sandbox_adapters import (
     GITHUB_ACTIONS_ADAPTER,
     LOCAL_DRY_RUN_ADAPTER,
     build_docker_run_command,
+    build_github_actions_config,
+    build_sandbox_image_build_command,
     execute_github_actions,
     detect_docker,
     execute_docker,
     execute_local_dry_run,
+    parse_github_repository,
     resolve_sandbox_adapter,
+    select_github_actions_run,
 )
 
 
@@ -63,6 +67,17 @@ def test_build_docker_run_command_includes_isolation_and_env(tmp_path: Path) -> 
     assert command[-3:] == ["sandbox:test", "sh", "-lc", "python -V"][-3:]
 
 
+def test_build_sandbox_image_build_command_points_to_test_dockerfile() -> None:
+    command = build_sandbox_image_build_command(docker_binary="docker")
+
+    assert command[:3] == ["docker", "build", "-f"]
+    assert "test" in command[3]
+    assert "swarm-test" in command[3]
+    assert "-t" in command
+    assert DEFAULT_SANDBOX_IMAGE in command
+    assert command[-1]
+
+
 def test_local_dry_run_generates_preview_logs_and_artifacts(tmp_path: Path) -> None:
     request = build_request(tmp_path)
 
@@ -105,6 +120,31 @@ def test_execute_docker_returns_blocked_when_unavailable(monkeypatch: pytest.Mon
     assert result["command_results"] == []
 
 
+def test_execute_docker_blocks_when_image_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        "scripts.agents.sandbox_adapters.detect_docker",
+        lambda: {"available": True, "binary": "docker", "version": "27.0.0"},
+    )
+    monkeypatch.setattr(
+        "scripts.agents.sandbox_adapters.detect_docker_image",
+        lambda **_kwargs: {
+            "available": False,
+            "reason": "docker_image_not_found",
+            "build_command": ["docker", "build", "-f", "test/docker/swarm-test/Dockerfile", "-t", DEFAULT_SANDBOX_IMAGE, "."],
+        },
+    )
+
+    result = execute_docker(build_request(tmp_path, adapter_id=DOCKER_ADAPTER))
+
+    assert result["conclusion"] == "blocked"
+    assert result["blocked_reason"] == "docker_image_not_found"
+    assert result["image_build_command"][0:2] == ["docker", "build"]
+    assert any(item["type"] == "docker_image_build_hint" for item in result["artifacts"])
+
+
 def test_execute_docker_captures_stdout_stderr_and_exit_code(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -112,6 +152,10 @@ def test_execute_docker_captures_stdout_stderr_and_exit_code(
     monkeypatch.setattr(
         "scripts.agents.sandbox_adapters.detect_docker",
         lambda: {"available": True, "binary": "docker", "version": "27.0.0"},
+    )
+    monkeypatch.setattr(
+        "scripts.agents.sandbox_adapters.detect_docker_image",
+        lambda **_kwargs: {"available": True, "image": DEFAULT_SANDBOX_IMAGE},
     )
 
     def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -141,6 +185,10 @@ def test_execute_docker_timeout_returns_blocked_command(
     monkeypatch.setattr(
         "scripts.agents.sandbox_adapters.detect_docker",
         lambda: {"available": True, "binary": "docker", "version": "27.0.0"},
+    )
+    monkeypatch.setattr(
+        "scripts.agents.sandbox_adapters.detect_docker_image",
+        lambda **_kwargs: {"available": True, "image": DEFAULT_SANDBOX_IMAGE},
     )
 
     def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -174,7 +222,121 @@ def test_execute_github_actions_blocks_when_gh_cli_is_missing(monkeypatch: pytes
 
     assert result["adapter_id"] == GITHUB_ACTIONS_ADAPTER
     assert result["conclusion"] == "blocked"
-    assert "gh binary not found" in result["blocked_reason"]
+    assert result["blocked_reason"] == "gh_binary_not_found"
+
+
+def test_parse_github_repository_supports_https_and_ssh() -> None:
+    assert parse_github_repository("https://github.com/example/repo.git") == "example/repo"
+    assert parse_github_repository("git@github.com:example/repo.git") == "example/repo"
+    assert parse_github_repository("ssh://git@github.com/example/repo.git") == "example/repo"
+    assert parse_github_repository("https://gitlab.com/example/repo.git") == ""
+
+
+def test_build_github_actions_config_infers_repository_and_defaults_artifact_download_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.infer_github_repository", lambda: "djgurda/example")
+
+    config = build_github_actions_config(
+        build_request(
+            tmp_path,
+            adapter_id=GITHUB_ACTIONS_ADAPTER,
+            workflow_name="swarm-sandbox.yml",
+        ),
+    )
+
+    assert config["repository"] == "djgurda/example"
+    assert config["workflow_name"] == "swarm-sandbox.yml"
+    assert config["correlation_id"].startswith("sandbox-smoke-")
+    assert config["artifact_name"].startswith("swarm-sandbox-")
+    assert config["artifact_download_path"].endswith("github-actions-download")
+
+
+def test_select_github_actions_run_uses_correlation_id() -> None:
+    payload = {
+        "workflow_runs": [
+            {
+                "id": 10,
+                "status": "completed",
+                "conclusion": "success",
+                "head_branch": "main",
+                "path": ".github/workflows/swarm-sandbox.yml",
+                "display_title": "Swarm Sandbox / run-1 / wrong-correlation",
+            },
+            {
+                "id": 11,
+                "status": "completed",
+                "conclusion": "success",
+                "head_branch": "main",
+                "path": ".github/workflows/swarm-sandbox.yml",
+                "display_title": "Swarm Sandbox / run-1 / expected-correlation",
+            },
+        ],
+    }
+
+    selected = select_github_actions_run(
+        payload,
+        repository="djgurda/example",
+        workflow_name="swarm-sandbox.yml",
+        ref="main",
+        correlation_id="expected-correlation",
+    )
+
+    assert selected is not None
+    assert selected["id"] == 11
+
+
+def test_execute_github_actions_blocks_when_auth_is_not_configured(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.shutil.which", lambda _name: "gh")
+    monkeypatch.setattr(
+        "scripts.agents.sandbox_adapters.run_gh_command",
+        lambda _args: subprocess.CompletedProcess(args=["gh"], returncode=1, stdout="", stderr="not logged in"),
+    )
+
+    result = execute_github_actions(
+        build_request(
+            tmp_path,
+            adapter_id=GITHUB_ACTIONS_ADAPTER,
+            repository="djgurda/example",
+        ),
+    )
+
+    assert result["conclusion"] == "blocked"
+    assert result["blocked_reason"] == "gh_auth_not_configured"
+
+
+def test_execute_github_actions_blocks_when_workflow_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.shutil.which", lambda _name: "gh")
+
+    def fake_run_gh_command(args: list[str]) -> subprocess.CompletedProcess[str]:
+        if args[:2] == ["auth", "status"]:
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="ok", stderr="")
+        raise AssertionError(f"Unexpected gh command: {args}")
+
+    def fake_run_gh_api(args: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="404 Not Found")
+
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.run_gh_command", fake_run_gh_command)
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.run_gh_api", fake_run_gh_api)
+
+    result = execute_github_actions(
+        build_request(
+            tmp_path,
+            adapter_id=GITHUB_ACTIONS_ADAPTER,
+            repository="djgurda/example",
+            workflow_name="swarm-sandbox.yml",
+        ),
+    )
+
+    assert result["conclusion"] == "blocked"
+    assert result["blocked_reason"] == "github_actions_workflow_not_found"
 
 
 def test_execute_github_actions_dispatches_and_polls_to_completion(
@@ -183,8 +345,151 @@ def test_execute_github_actions_dispatches_and_polls_to_completion(
 ) -> None:
     monkeypatch.setattr("scripts.agents.sandbox_adapters.shutil.which", lambda _name: "gh")
 
-    def fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+    def fake_run_gh_command(args: list[str]) -> subprocess.CompletedProcess[str]:
+        if args[:2] == ["auth", "status"]:
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="ok", stderr="")
+        if args[:3] == ["run", "download", "123"]:
+            target_dir = Path(args[args.index("--dir") + 1])
+            target_dir.mkdir(parents=True, exist_ok=True)
+            (target_dir / "logs").mkdir(exist_ok=True)
+            (target_dir / "logs" / "command_1.log").write_text("pytest ok\n", encoding="utf-8")
+            (target_dir / "sandbox-metadata.json").write_text(
+                json.dumps(
+                    {
+                        "run_id": "sandbox-smoke",
+                        "correlation_id": "expected-correlation",
+                        "adapter_id": GITHUB_ACTIONS_ADAPTER,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (target_dir / "sandbox-result.json").write_text(
+                json.dumps(
+                    {
+                        "conclusion": "passed",
+                        "summary": "Remote sandbox completed.",
+                        "command_results": [
+                            {
+                                "id": "command_1",
+                                "command": "python -V",
+                                "status": "passed",
+                                "exit_code": 0,
+                                "stdout": "pytest ok\n",
+                                "stderr": "",
+                                "log_path": "logs/command_1.log",
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="downloaded", stderr="")
+        raise AssertionError(f"Unexpected gh command: {args}")
+
+    def fake_run_gh_api(args: list[str]) -> subprocess.CompletedProcess[str]:
         joined = " ".join(args)
+        if args[-1] == "repos/djgurda/example/actions/workflows/swarm-sandbox.yml":
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout=json.dumps({"id": 1}), stderr="")
+        if "dispatches" in joined:
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+        if "runs?event=workflow_dispatch" in joined:
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "workflow_runs": [
+                            {
+                                "id": 122,
+                                "status": "completed",
+                                "conclusion": "success",
+                                "html_url": "https://github.test/runs/122",
+                                "head_branch": "main",
+                                "path": ".github/workflows/swarm-sandbox.yml",
+                                "display_title": "Swarm Sandbox / sandbox-smoke / wrong-correlation",
+                            },
+                            {
+                                "id": 123,
+                                "status": "completed",
+                                "conclusion": "success",
+                                "html_url": "https://github.test/runs/123",
+                                "head_branch": "main",
+                                "path": ".github/workflows/swarm-sandbox.yml",
+                                "display_title": "Swarm Sandbox / sandbox-smoke / expected-correlation",
+                            },
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                stderr="",
+            )
+        raise AssertionError(f"Unexpected gh api command: {args}")
+
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.run_gh_command", fake_run_gh_command)
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.run_gh_api", fake_run_gh_api)
+
+    result = execute_github_actions(
+        build_request(
+            tmp_path,
+            adapter_id=GITHUB_ACTIONS_ADAPTER,
+            repository="djgurda/example",
+            workflow_name="swarm-sandbox.yml",
+            ref="main",
+            poll_interval_seconds=0,
+            timeout_seconds=5,
+            artifact_download_path="runs/sandbox-smoke/artifacts",
+            correlation_id="expected-correlation",
+        ),
+    )
+
+    assert result["adapter_id"] == GITHUB_ACTIONS_ADAPTER
+    assert result["conclusion"] == "passed"
+    assert result["blocked_reason"] == ""
+    assert result["command_summary"]["by_status"] == {"passed": 1}
+    assert result["workflow_run"]["id"] == 123
+    assert result["summary"] == "Remote sandbox completed."
+    assert result["command_results"][0]["log_path"] == "runs/sandbox-smoke/artifacts/logs/command_1.log"
+    assert any(item["type"] == "github_actions_dispatch" for item in result["artifacts"])
+    assert any(item["type"] == "github_actions_download_dir" for item in result["artifacts"])
+    assert result["artifact_downloaded"] is True
+    assert result["downloaded_result"]["metadata"]["correlation_id"] == "expected-correlation"
+
+
+def test_execute_github_actions_blocks_when_downloaded_metadata_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.shutil.which", lambda _name: "gh")
+
+    def fake_run_gh_command(args: list[str]) -> subprocess.CompletedProcess[str]:
+        if args[:2] == ["auth", "status"]:
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="ok", stderr="")
+        if args[:3] == ["run", "download", "123"]:
+            target_dir = Path(args[args.index("--dir") + 1])
+            target_dir.mkdir(parents=True, exist_ok=True)
+            (target_dir / "sandbox-result.json").write_text(
+                json.dumps(
+                    {
+                        "conclusion": "passed",
+                        "summary": "Remote sandbox completed.",
+                        "command_results": [],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="downloaded", stderr="")
+        raise AssertionError(f"Unexpected gh command: {args}")
+
+    def fake_run_gh_api(args: list[str]) -> subprocess.CompletedProcess[str]:
+        joined = " ".join(args)
+        if args[-1] == "repos/djgurda/example/actions/workflows/swarm-sandbox.yml":
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout=json.dumps({"id": 1}), stderr="")
         if "dispatches" in joined:
             return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
         if "runs?event=workflow_dispatch" in joined:
@@ -201,6 +506,7 @@ def test_execute_github_actions_dispatches_and_polls_to_completion(
                                 "html_url": "https://github.test/runs/123",
                                 "head_branch": "main",
                                 "path": ".github/workflows/swarm-sandbox.yml",
+                                "display_title": "Swarm Sandbox / sandbox-smoke / expected-correlation",
                             }
                         ]
                     },
@@ -208,9 +514,10 @@ def test_execute_github_actions_dispatches_and_polls_to_completion(
                 ),
                 stderr="",
             )
-        raise AssertionError(f"Unexpected command: {joined}")
+        raise AssertionError(f"Unexpected gh api command: {args}")
 
-    monkeypatch.setattr("scripts.agents.sandbox_adapters.subprocess.run", fake_run)
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.run_gh_command", fake_run_gh_command)
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.run_gh_api", fake_run_gh_api)
 
     result = execute_github_actions(
         build_request(
@@ -222,15 +529,12 @@ def test_execute_github_actions_dispatches_and_polls_to_completion(
             poll_interval_seconds=0,
             timeout_seconds=5,
             artifact_download_path="runs/sandbox-smoke/artifacts",
+            correlation_id="expected-correlation",
         ),
     )
 
-    assert result["adapter_id"] == GITHUB_ACTIONS_ADAPTER
-    assert result["conclusion"] == "passed"
-    assert result["blocked_reason"] == ""
-    assert result["command_summary"]["by_status"] == {"passed": 1}
-    assert result["workflow_run"]["id"] == 123
-    assert any(item["type"] == "github_actions_dispatch" for item in result["artifacts"])
+    assert result["conclusion"] == "blocked"
+    assert result["blocked_reason"] == "github_actions_metadata_missing"
 
 
 def test_execute_github_actions_blocks_on_poll_timeout(
@@ -239,8 +543,15 @@ def test_execute_github_actions_blocks_on_poll_timeout(
 ) -> None:
     monkeypatch.setattr("scripts.agents.sandbox_adapters.shutil.which", lambda _name: "gh")
 
-    def fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+    def fake_run_gh_command(args: list[str]) -> subprocess.CompletedProcess[str]:
+        if args[:2] == ["auth", "status"]:
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="ok", stderr="")
+        raise AssertionError(f"Unexpected gh command: {args}")
+
+    def fake_run_gh_api(args: list[str]) -> subprocess.CompletedProcess[str]:
         joined = " ".join(args)
+        if args[-1] == "repos/djgurda/example/actions/workflows/swarm-sandbox.yml":
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout=json.dumps({"id": 1}), stderr="")
         if "dispatches" in joined:
             return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
         if "runs?event=workflow_dispatch" in joined:
@@ -257,6 +568,7 @@ def test_execute_github_actions_blocks_on_poll_timeout(
                                 "html_url": "https://github.test/runs/124",
                                 "head_branch": "main",
                                 "path": ".github/workflows/swarm-sandbox.yml",
+                                "display_title": "Swarm Sandbox / sandbox-smoke / expected-correlation",
                             }
                         ]
                     },
@@ -264,9 +576,10 @@ def test_execute_github_actions_blocks_on_poll_timeout(
                 ),
                 stderr="",
             )
-        raise AssertionError(f"Unexpected command: {joined}")
+        raise AssertionError(f"Unexpected gh api command: {args}")
 
-    monkeypatch.setattr("scripts.agents.sandbox_adapters.subprocess.run", fake_run)
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.run_gh_command", fake_run_gh_command)
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.run_gh_api", fake_run_gh_api)
 
     result = execute_github_actions(
         build_request(
@@ -277,12 +590,87 @@ def test_execute_github_actions_blocks_on_poll_timeout(
             ref="main",
             poll_interval_seconds=0,
             timeout_seconds=0,
+            correlation_id="expected-correlation",
         ),
     )
 
     assert result["adapter_id"] == GITHUB_ACTIONS_ADAPTER
     assert result["conclusion"] == "blocked"
     assert result["blocked_reason"] == "github_actions_poll_timeout"
+
+
+def test_execute_github_actions_blocks_when_artifact_download_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.shutil.which", lambda _name: "gh")
+
+    def fake_run_gh_command(args: list[str]) -> subprocess.CompletedProcess[str]:
+        if args[:2] == ["auth", "status"]:
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="ok", stderr="")
+        if args[:3] == ["run", "download", "123"]:
+            return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="artifact missing")
+        raise AssertionError(f"Unexpected gh command: {args}")
+
+    def fake_run_gh_api(args: list[str]) -> subprocess.CompletedProcess[str]:
+        joined = " ".join(args)
+        if args[-1] == "repos/djgurda/example/actions/workflows/swarm-sandbox.yml":
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout=json.dumps({"id": 1}), stderr="")
+        if "dispatches" in joined:
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+        if "runs?event=workflow_dispatch" in joined:
+            return subprocess.CompletedProcess(
+                args=args,
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "workflow_runs": [
+                            {
+                                "id": 123,
+                                "status": "completed",
+                                "conclusion": "success",
+                                "html_url": "https://github.test/runs/123",
+                                "head_branch": "main",
+                                "path": ".github/workflows/swarm-sandbox.yml",
+                                "display_title": "Swarm Sandbox / sandbox-smoke / expected-correlation",
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                stderr="",
+            )
+        raise AssertionError(f"Unexpected gh api command: {args}")
+
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.run_gh_command", fake_run_gh_command)
+    monkeypatch.setattr("scripts.agents.sandbox_adapters.run_gh_api", fake_run_gh_api)
+
+    result = execute_github_actions(
+        build_request(
+            tmp_path,
+            adapter_id=GITHUB_ACTIONS_ADAPTER,
+            repository="djgurda/example",
+            workflow_name="swarm-sandbox.yml",
+            ref="main",
+            poll_interval_seconds=0,
+            timeout_seconds=5,
+            artifact_download_path="runs/sandbox-smoke/artifacts",
+            correlation_id="expected-correlation",
+        ),
+    )
+
+    assert result["conclusion"] == "blocked"
+    assert result["blocked_reason"] == "artifact missing"
+
+
+def test_swarm_sandbox_workflow_exists() -> None:
+    workflow_path = Path(".github/workflows/swarm-sandbox.yml")
+    assert workflow_path.is_file()
+    payload = workflow_path.read_text(encoding="utf-8")
+    assert "workflow_dispatch" in payload
+    assert "correlation_id" in payload
+    assert "artifact_name" in payload
+    assert "actions/upload-artifact@v4" in payload
 
 
 def test_real_docker_adapter_smoke_if_image_available(tmp_path: Path) -> None:
@@ -299,7 +687,19 @@ def test_real_docker_adapter_smoke_if_image_available(tmp_path: Path) -> None:
         check=False,
     )
     if inspect.returncode != 0:
-        pytest.skip(f"sandbox image not available locally: {DEFAULT_SANDBOX_IMAGE}")
+        build_command = build_sandbox_image_build_command(
+            docker_binary=docker_info["binary"],
+            image=DEFAULT_SANDBOX_IMAGE,
+        )
+        build = subprocess.run(
+            build_command,
+            text=True,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        assert build.returncode == 0, build.stderr
 
     request = build_request(tmp_path, adapter_id=DOCKER_ADAPTER)
     result = execute_docker(request)

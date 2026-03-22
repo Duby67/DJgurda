@@ -636,6 +636,7 @@ def test_tasks_json_calls_front_door_commands() -> None:
         "Start swarm run",
         "Continue swarm run",
         "Preview sandbox plan",
+        "Build swarm test image",
         "Run dispatcher",
         "Show run status",
         "Show job queue",
@@ -650,6 +651,10 @@ def test_tasks_json_calls_front_door_commands() -> None:
     for task in tasks["tasks"]:
         command = task["command"]
         args = task["args"]
+        if task["label"] == "Build swarm test image":
+            assert command == "docker"
+            assert args[:3] == ["build", "-f", "test/docker/swarm-test/Dockerfile"]
+            continue
         assert "scripts.agents.mcp" in args
         assert command.endswith(r"venv\Scripts\python.exe")
         if task["label"] in {"Start swarm run", "Continue swarm run"}:
