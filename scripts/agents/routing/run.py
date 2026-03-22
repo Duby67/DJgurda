@@ -101,8 +101,14 @@ def build_run_summary(
 ) -> dict[str, Any]:
     """Собирает итоговую summary run bundle."""
     approval = build_approval_checkpoints(route_result, plan_output)
-    status = "awaiting_manual_review" if approval["needs_manual_review"] else "planned"
-    next_action = "review_escalation" if approval["needs_manual_review"] else "load_context_and_implement"
+    instruction_conflict = route_result.get("routing_diagnostics", {}).get("instruction_conflict", False)
+
+    if instruction_conflict:
+        status = "instruction_conflict"
+        next_action = "resolve_instruction_conflict"
+    else:
+        status = "awaiting_manual_review" if approval["needs_manual_review"] else "planned"
+        next_action = "review_escalation" if approval["needs_manual_review"] else "load_context_and_implement"
 
     return {
         "run_id": run_id,
@@ -111,6 +117,7 @@ def build_run_summary(
         "task_type": route_result["task_type"],
         "recommended_agents": plan_output["recommended_agents"],
         "changed_paths": route_result["changed_paths"],
+        "routing_diagnostics": route_result.get("routing_diagnostics", {}),
         "artifacts": artifacts,
         "approval": approval,
     }

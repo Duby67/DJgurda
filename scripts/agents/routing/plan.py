@@ -206,11 +206,16 @@ def write_artifacts(output_dir: Path, route_result: dict[str, Any], plan_output:
     """Записывает plan/context artifacts на диск."""
     output_dir.mkdir(parents=True, exist_ok=True)
     context_pack_path = output_dir / "context-pack.json"
+    context_trace_path = output_dir / "context-trace.json"
     route_result_path = output_dir / "route-result.json"
     plan_path = output_dir / "plan.json"
 
     context_pack_path.write_text(
         json.dumps(route_result["context_pack"], ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    context_trace_path.write_text(
+        json.dumps(route_result.get("context_trace", []), ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     route_result_path.write_text(
@@ -224,6 +229,7 @@ def write_artifacts(output_dir: Path, route_result: dict[str, Any], plan_output:
 
     return {
         "context_pack": str(context_pack_path.relative_to(ROOT)).replace("\\", "/"),
+        "context_trace": str(context_trace_path.relative_to(ROOT)).replace("\\", "/"),
         "route_result": str(route_result_path.relative_to(ROOT)).replace("\\", "/"),
         "plan": str(plan_path.relative_to(ROOT)).replace("\\", "/"),
     }

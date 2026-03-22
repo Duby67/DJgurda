@@ -111,3 +111,6 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 - `scripts/AGENTS.md`
 - `docs/release-flow.md`
 - `docs/agent-context-map.md`
+- `docs/testing-policy.md`
+- `docs/commit-policy.md`
+- `docs/sandbox-execution.md`

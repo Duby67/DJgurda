@@ -66,6 +66,21 @@ def safe_line_count(path: Path) -> int | None:
         return None
 
 
+def unresolved_item_payload(entry: dict[str, Any]) -> dict[str, Any]:
+    """Оставляет компактную сводку по unresolved context item."""
+    payload = {
+        "category": entry.get("category"),
+        "item": entry.get("item"),
+        "kind": entry.get("kind"),
+        "status": entry.get("status"),
+    }
+    if entry.get("reason"):
+        payload["reason"] = entry["reason"]
+    if entry.get("path"):
+        payload["path"] = entry["path"]
+    return payload
+
+
 def resolve_context_item(category: str, item: str) -> dict[str, Any]:
     """Разрешает один элемент context pack до состояния file/dir/missing/abstract."""
     normalized = normalize_rel_path(item)
@@ -121,7 +136,9 @@ def build_loaded_context(context_pack: dict[str, Any]) -> dict[str, Any]:
         "resolved_directories": 0,
         "abstract_items": 0,
         "missing_items": 0,
+        "notes_count": len(context_pack.get("notes", [])),
     }
+    unresolved_items: list[dict[str, Any]] = []
 
     for category in categories:
         items = context_pack.get(category, [])
@@ -135,8 +152,10 @@ def build_loaded_context(context_pack: dict[str, Any]) -> dict[str, Any]:
                 summary["resolved_directories"] += 1
             elif kind == "abstract":
                 summary["abstract_items"] += 1
+                unresolved_items.append(unresolved_item_payload(entry))
             elif kind == "missing":
                 summary["missing_items"] += 1
+                unresolved_items.append(unresolved_item_payload(entry))
 
     resolved["notes"] = [
         {
@@ -150,8 +169,42 @@ def build_loaded_context(context_pack: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "summary": summary,
+        "unresolved_items": unresolved_items,
         "resolved": resolved,
     }
+
+
+def render_context_summary_markdown(
+    run_summary: dict[str, Any],
+    loaded_context: dict[str, Any],
+) -> str:
+    """Рендерит человекочитаемую сводку по загруженному контексту."""
+    summary = loaded_context["summary"]
+    unresolved_items = loaded_context.get("unresolved_items", [])
+    unresolved_block = "\n".join(
+        f"- `{item.get('category', 'unknown')}` -> `{item.get('item', '')}`"
+        f" ({item.get('kind', 'unknown')})"
+        f"{': ' + item['reason'] if item.get('reason') else ''}"
+        for item in unresolved_items
+    ) or "- none"
+
+    changed_paths = run_summary.get("changed_paths", [])
+    changed_paths_block = "\n".join(f"- `{item}`" for item in changed_paths) or "- none"
+
+    return (
+        "# Context Summary\n\n"
+        f"- Run ID: `{run_summary['run_id']}`\n"
+        f"- Task Type: `{run_summary.get('task_type', {}).get('id', 'unknown')}`\n"
+        f"- Resolved Files: {summary['resolved_files']}\n"
+        f"- Resolved Directories: {summary['resolved_directories']}\n"
+        f"- Abstract Items: {summary['abstract_items']}\n"
+        f"- Missing Items: {summary['missing_items']}\n"
+        f"- Notes: {summary['notes_count']}\n\n"
+        "## Changed Paths\n\n"
+        f"{changed_paths_block}\n\n"
+        "## Unresolved Context\n\n"
+        f"{unresolved_block}\n"
+    )
 
 
 def update_plan_for_context_loaded(plan_payload: dict[str, Any]) -> dict[str, Any]:
@@ -173,8 +226,18 @@ def build_execution_state(
     approval_payload = run_summary["approval"]
     needs_manual_review = approval_payload["needs_manual_review"]
     run_checks_status = checkpoint_status_map(approval_payload).get("run_checks", "awaiting_approval")
+    routing_diagnostics = run_summary.get("routing_diagnostics", {})
+    unresolved_context = bool(
+        loaded_context["summary"]["missing_items"] or loaded_context["summary"]["abstract_items"]
+    )
 
-    if run_checks_status in {"approved", "not_required"}:
+    if routing_diagnostics.get("instruction_conflict", False):
+        next_action = "resolve_instruction_conflict"
+        status = "instruction_conflict"
+    elif unresolved_context:
+        next_action = "resolve_context_gaps"
+        status = "context_insufficient"
+    elif run_checks_status in {"approved", "not_required"}:
         next_action = "implement_change"
         status = "approved_for_implementation" if needs_manual_review or run_checks_status == "approved" else "context_loaded"
     elif needs_manual_review:
@@ -192,6 +255,8 @@ def build_execution_state(
         "next_action": next_action,
         "loaded_at_utc": datetime.now(timezone.utc).isoformat(),
         "summary": loaded_context["summary"],
+        "unresolved_items": loaded_context.get("unresolved_items", []),
+        "routing_diagnostics": routing_diagnostics,
         "approval": {
             "needs_manual_review": needs_manual_review,
             "escalation_reasons": approval_payload["escalation_reasons"],
@@ -235,15 +300,25 @@ def build_output(run_dir: Path) -> dict[str, Any]:
 
     loaded_context_path = run_dir / "loaded-context.json"
     execution_state_path = run_dir / "execution-state.json"
+    context_summary_path = run_dir / "context-summary.md"
 
     write_json(loaded_context_path, loaded_context)
     write_json(execution_state_path, execution_state)
+    context_summary_path.write_text(
+        render_context_summary_markdown(run_summary, loaded_context),
+        encoding="utf-8",
+    )
     write_json(plan_path, updated_plan)
 
     run_summary["status"] = execution_state["status"]
     run_summary["next_action"] = execution_state["next_action"]
     run_summary["artifacts"]["loaded_context"] = str(loaded_context_path.relative_to(ROOT)).replace("\\", "/")
     run_summary["artifacts"]["execution_state"] = str(execution_state_path.relative_to(ROOT)).replace("\\", "/")
+    run_summary["artifacts"]["context_summary"] = str(context_summary_path.relative_to(ROOT)).replace("\\", "/")
+    run_summary["context"] = {
+        "summary": loaded_context["summary"],
+        "unresolved_items": loaded_context.get("unresolved_items", []),
+    }
     write_json(summary_path, run_summary)
 
     return {

@@ -118,6 +118,12 @@ def validate_action_transition(
 
     statuses = checkpoint_status_map(approval_payload)
     current_phase = (execution_state or {}).get("phase", "")
+    current_status = (execution_state or {}).get("status", "")
+
+    if checkpoint_id == RUN_CHECKS_ID and current_status in {"instruction_conflict", "context_insufficient"}:
+        raise ValueError(
+            "Нельзя approve checkpoint 'run_checks', пока run находится в состоянии instruction_conflict или context_insufficient",
+        )
 
     if checkpoint_id == PUSH_ID:
         if statuses.get(COMMIT_ID) != "approved":
@@ -141,6 +147,7 @@ def derive_status_and_next_action(
     commit_status = statuses.get(COMMIT_ID, "awaiting_approval")
     push_status = statuses.get(PUSH_ID, "awaiting_approval")
     current_phase = (execution_state or {}).get("phase")
+    current_status = (execution_state or {}).get("status", "")
     requested_checkpoints = ((execution_state or {}).get("approval_request") or {}).get("requested_checkpoints", [])
     needs_manual_review = approval_payload.get("needs_manual_review", False)
 
@@ -148,6 +155,8 @@ def derive_status_and_next_action(
         return "approval_rejected", "review_rejection_or_replan"
 
     if current_phase == "context_loaded":
+        if current_status in {"instruction_conflict", "context_insufficient"}:
+            return current_status, (execution_state or {}).get("next_action", "review_context_state")
         if run_checks_status in {"approved", "not_required"}:
             return "approved_for_implementation", "implement_change"
         if run_checks_status == "awaiting_approval":

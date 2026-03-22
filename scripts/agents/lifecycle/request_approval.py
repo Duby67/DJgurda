@@ -232,6 +232,8 @@ def build_approval_request_packet(
         "requested_checkpoints": requested_checkpoints,
         "checkpoint_details": summarize_checkpoints(approval_payload, requested_checkpoints),
         "changed_paths": run_summary.get("changed_paths", []),
+        "context": run_summary.get("context", {}),
+        "changed_files": run_summary.get("changed_files", {}),
         "implementation": implementation,
         "verification": verification,
         "sandbox": sandbox,
@@ -256,6 +258,14 @@ def render_markdown_packet(packet: dict[str, Any]) -> str:
     residual_risks = packet.get("review", {}).get("risk_count", 0)
     residual_risk_lines = packet.get("review", {}).get("residual_risks", [])
     risks_block = "\n".join(f"- {item}" for item in residual_risk_lines) or "- none"
+    context_summary = packet.get("context", {}).get("summary", {})
+    unresolved_items = packet.get("context", {}).get("unresolved_items", [])
+    unresolved_block = "\n".join(
+        f"- `{item.get('category', 'unknown')}` -> `{item.get('item', '')}`"
+        for item in unresolved_items
+    ) or "- none"
+    changed_files = packet.get("changed_files", {}).get("changed_files", [])
+    changed_files_block = "\n".join(f"- `{item}`" for item in changed_files) or "- none"
 
     artifact_lines = "\n".join(
         f"- `{key}`: `{value}`"
@@ -274,6 +284,14 @@ def render_markdown_packet(packet: dict[str, Any]) -> str:
         f"{changed_paths_block}\n\n"
         "## Requested Checkpoints\n\n"
         f"{checkpoints_block}\n\n"
+        "## Context\n\n"
+        f"- Resolved Files: {context_summary.get('resolved_files', 0)}\n"
+        f"- Resolved Directories: {context_summary.get('resolved_directories', 0)}\n"
+        f"- Abstract Items: {context_summary.get('abstract_items', 0)}\n"
+        f"- Missing Items: {context_summary.get('missing_items', 0)}\n"
+        f"{unresolved_block}\n\n"
+        "## Changed Files\n\n"
+        f"{changed_files_block}\n\n"
         "## Implementation\n\n"
         f"- Summary: {packet.get('implementation', {}).get('summary', '') or '-'}\n"
         f"- Applied Files: {packet.get('implementation', {}).get('applied_files', []) or '-'}\n\n"

@@ -369,6 +369,32 @@ def build_apply_result(
     }
 
 
+def build_changed_files_payload(
+    *,
+    run_summary: dict[str, Any],
+    applied_files: list[str],
+    applied_by: str,
+    git_snapshot: dict[str, Any],
+    file_presence: dict[str, list[str]],
+) -> dict[str, Any]:
+    """Строит changed-files.json."""
+    changed_paths = [entry["path"] for entry in git_snapshot["status_entries"]]
+    if not changed_paths:
+        changed_paths = applied_files
+
+    return {
+        "version": 1,
+        "run_id": run_summary["run_id"],
+        "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
+        "applied_by": applied_by,
+        "changed_files": changed_paths,
+        "applied_files": applied_files,
+        "file_presence": file_presence,
+        "diff_summary": git_snapshot["diff_summary"],
+        "warnings": git_snapshot["warnings"],
+    }
+
+
 def update_execution_state(
     execution_state: dict[str, Any] | None,
     *,
@@ -408,6 +434,7 @@ def build_output(
     plan_path = run_dir / "plan.json"
     execution_state_path = run_dir / "execution-state.json"
     apply_result_path = run_dir / "apply-result.json"
+    changed_files_path = run_dir / "changed-files.json"
     diff_artifact_path = run_dir / "workspace-diff.patch"
 
     if not summary_path.is_file():
@@ -439,6 +466,13 @@ def build_output(
         file_presence=file_presence,
         diff_artifact_written=diff_artifact_written,
     )
+    changed_files_payload = build_changed_files_payload(
+        run_summary=run_summary,
+        applied_files=applied_files,
+        applied_by=applied_by,
+        git_snapshot=git_snapshot,
+        file_presence=file_presence,
+    )
 
     updated_plan = update_plan_for_apply(plan_payload)
     status, next_action = select_next_stage(updated_plan)
@@ -451,6 +485,7 @@ def build_output(
 
     artifacts = run_summary.setdefault("artifacts", {})
     artifacts["apply_result"] = str(apply_result_path.relative_to(ROOT)).replace("\\", "/")
+    artifacts["changed_files"] = str(changed_files_path.relative_to(ROOT)).replace("\\", "/")
     if diff_artifact_written:
         artifacts["workspace_diff"] = str(diff_artifact_path.relative_to(ROOT)).replace("\\", "/")
     elif "workspace_diff" in artifacts:
@@ -466,8 +501,13 @@ def build_output(
         "git_diff_files": apply_result["git"]["diff_summary"]["file_count"],
         "git_warnings": apply_result["git"]["warnings"],
     }
+    run_summary["changed_files"] = {
+        "changed_files": changed_files_payload["changed_files"],
+        "diff_summary": changed_files_payload["diff_summary"],
+    }
 
     write_json(apply_result_path, apply_result)
+    write_json(changed_files_path, changed_files_payload)
     write_json(plan_path, updated_plan)
     if updated_execution_state is not None:
         write_json(execution_state_path, updated_execution_state)
@@ -483,6 +523,7 @@ def build_output(
         "warnings": apply_result["git"]["warnings"],
         "artifacts": {
             "apply_result": artifacts["apply_result"],
+            "changed_files": artifacts["changed_files"],
             "workspace_diff": artifacts.get("workspace_diff"),
         },
     }

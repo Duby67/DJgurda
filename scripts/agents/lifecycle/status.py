@@ -313,8 +313,13 @@ def auto_requested_checkpoints(approval_payload: dict[str, Any]) -> list[str]:
         return []
 
 
-def explain_run_checks_approval(approval_payload: dict[str, Any]) -> list[str]:
+def explain_run_checks_approval(run_summary: dict[str, Any], approval_payload: dict[str, Any]) -> list[str]:
     """Объясняет, почему run_checks approval доступен или недоступен."""
+    if run_summary.get("status") == "instruction_conflict":
+        return ["instruction_conflict"]
+    if run_summary.get("status") == "context_insufficient":
+        return ["context_insufficient"]
+
     checkpoints = {
         item["id"]: item
         for item in approval_payload.get("checkpoints", [])
@@ -493,7 +498,7 @@ def build_action_blockers(
     auto_checkpoints = auto_requested_checkpoints(approval_payload)
 
     return {
-        "approve_run_checks": explain_run_checks_approval(approval_payload),
+        "approve_run_checks": explain_run_checks_approval(run_summary, approval_payload),
         "implement": implement_blockers,
         "request_approval": explain_request_approval(
             run_summary=run_summary,
@@ -554,6 +559,10 @@ def build_blockers(
         blockers.append("missing_artifacts")
     if run_summary.get("status") == "closed":
         return blockers
+    if run_summary.get("status") == "instruction_conflict":
+        blockers.append("instruction_conflict")
+    if run_summary.get("status") == "context_insufficient":
+        blockers.append("context_insufficient")
     if approval_summary["rejected"]:
         blockers.append("approval_rejected")
     if approval_summary["needs_manual_review"] and "run_checks" in approval_summary["awaiting_approval"]:
@@ -609,7 +618,7 @@ def build_readiness(
     approval_summary: dict[str, Any],
 ) -> dict[str, Any]:
     """Показывает, какие действия уже можно выполнять по текущему статусу."""
-    if run_summary.get("status") == "closed":
+    if run_summary.get("status") in {"closed", "instruction_conflict", "context_insufficient"}:
         return {
             "can_approve_run_checks": False,
             "can_implement": False,
