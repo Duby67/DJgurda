@@ -32,6 +32,22 @@
       "problemMatcher": []
     },
     {
+      "label": "Continue swarm run",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "continue_swarm_run",
+        "--run-id",
+        "${input:swarmRunId}",
+        "--sandbox-adapter",
+        "local_dry_run",
+        "--pretty"
+      ],
+      "problemMatcher": []
+    },
+    {
       "label": "Show run status",
       "type": "process",
       "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",

@@ -179,6 +179,47 @@ def test_show_run_status_includes_workspace_and_jobs() -> None:
         cleanup_run_dir(run_dir)
 
 
+def test_continue_swarm_run_resumes_after_run_checks_approval() -> None:
+    run_id = f"mcp-continue-{uuid4().hex}"
+    run_module(
+        "-m",
+        "scripts.agents.mcp",
+        "start_swarm_run",
+        "--prompt",
+        "Обновить swarm usage docs",
+        "--run-id",
+        run_id,
+    )
+
+    run_dir = ROOT / "runs" / run_id
+    try:
+        approve_payload = approve_run_checks(run_id)
+        assert approve_payload["status"] == "approved_for_implementation"
+
+        result = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "continue_swarm_run",
+            "--run-id",
+            run_id,
+            "--sandbox-adapter",
+            "local_dry_run",
+            "--pretty",
+        )
+        assert result.returncode == 0, result.stderr or result.stdout
+        payload = json.loads(result.stdout)
+        assert payload["tool"] == "continue_swarm_run"
+        assert payload["status"]["status"] == "approved_for_implementation"
+        assert payload["status"]["next_action"] == "implement_change"
+
+        jobs = read_json(run_dir / "jobs" / "index.json")
+        status_by_job = {job["job_id"]: job["status"] for job in jobs["jobs"]}
+        assert status_by_job["coder"] == "queued"
+        assert status_by_job["tester"] == "queued"
+    finally:
+        cleanup_run_dir(run_dir)
+
+
 def test_external_role_jobs_resume_pipeline_until_commit_approval() -> None:
     run_id = f"mcp-external-{uuid4().hex}"
     run_module(
@@ -396,6 +437,7 @@ def test_tasks_json_calls_front_door_commands() -> None:
     assert labels == {
         "Plan task",
         "Start swarm run",
+        "Continue swarm run",
         "Show run status",
         "Request commit approval",
         "Request push approval",

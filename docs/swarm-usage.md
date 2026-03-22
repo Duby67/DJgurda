@@ -55,6 +55,16 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
   --pretty
 ```
 
+### Continue A Swarm Run
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  continue_swarm_run `
+  --run-id demo-media-router `
+  --sandbox-adapter local_dry_run `
+  --pretty
+```
+
 ### Check Run Status
 
 ```powershell
@@ -126,9 +136,10 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 
 1. Сначала спланировать задачу через `scripts.agents.mcp plan_task`.
 2. Запустить orchestration через `scripts.agents.mcp start_swarm_run`.
-3. Проверять progress и blockers через `scripts.agents.mcp show_run_status`.
-4. Для внешних AI-ролей использовать `claim_role_job` / `complete_role_job` / `fail_role_job`.
-5. Для продвижения preview и release использовать `scripts.release.automation.promote`.
+3. После approval или других ручных шагов возобновлять orchestration через `scripts.agents.mcp continue_swarm_run`.
+4. Проверять progress и blockers через `scripts.agents.mcp show_run_status`.
+5. Для внешних AI-ролей использовать `claim_role_job` / `complete_role_job` / `fail_role_job`.
+6. Для продвижения preview и release использовать `scripts.release.automation.promote`.
 
 ## Related Docs
 
@@ -138,4 +149,5 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 - `docs/testing-policy.md`
 - `docs/commit-policy.md`
 - `docs/sandbox-execution.md`
+- `docs/swarm-runtime.md`
 - `docs/verification-profiles.json`

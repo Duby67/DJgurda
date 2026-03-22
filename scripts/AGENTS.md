@@ -81,6 +81,7 @@
 - swarm front door:
   - `python -m scripts.agents.mcp plan_task --prompt "..." --path path/to/file --pretty`
   - `python -m scripts.agents.mcp start_swarm_run --prompt "..." --sandbox-adapter local_dry_run --pretty`
+  - `python -m scripts.agents.mcp continue_swarm_run --run-id <run-id> --sandbox-adapter local_dry_run --pretty`
   - `python -m scripts.agents.mcp show_run_status --run-id <run-id> --human`
 - классификация задачи:
   - `python -m scripts.agents.routing.route --prompt "..." --path path/to/file --pretty`
@@ -94,6 +95,8 @@
   - `python -m scripts.release.automation.promote --source-branch dev --target-branch main --target-kind stable --human`
 - release sync:
   - `python -m scripts.release.automation.sync --tag v1.2.4`
+- runtime contracts:
+  - `docs/swarm-runtime.md`
 
 ## Context Rules
 

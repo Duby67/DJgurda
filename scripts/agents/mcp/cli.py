@@ -106,6 +106,21 @@ def build_start_swarm_run(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def build_continue_swarm_run(args: argparse.Namespace) -> dict[str, Any]:
+    """Continues orchestration for an existing run bundle."""
+    run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
+    orchestration = start_or_continue_run(run_dir, sandbox_adapter=args.sandbox_adapter)
+    status_payload = build_run_status(run_dir)
+
+    return {
+        "tool": "continue_swarm_run",
+        "run_id": run_dir.name,
+        "run_dir": str(run_dir.relative_to(ROOT)).replace("\\", "/"),
+        "orchestration": orchestration,
+        "status": status_payload,
+    }
+
+
 def show_run_status(args: argparse.Namespace) -> dict[str, Any]:
     """Shows run status, optionally rendered as human-readable text."""
     run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
@@ -197,6 +212,8 @@ def handle_tool(command: str, args: argparse.Namespace) -> dict[str, Any]:
         return build_plan_task(args)
     if command == "start_swarm_run":
         return build_start_swarm_run(args)
+    if command == "continue_swarm_run":
+        return build_continue_swarm_run(args)
     if command == "show_run_status":
         return show_run_status(args)
     if command == "request_commit_approval":
@@ -268,6 +285,22 @@ def parse_args() -> argparse.Namespace:
         default=LOCAL_DRY_RUN_ADAPTER,
         choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER],
         help="Sandbox adapter for automated verification steps.",
+    )
+
+    continue_parser = subparsers.add_parser("continue_swarm_run", help="Continue orchestration for an existing run.")
+    add_pretty_flag(continue_parser)
+    continue_parser.add_argument("--run-dir", help="Path to a run bundle.")
+    continue_parser.add_argument("--run-id", help="Run id inside runs-dir.")
+    continue_parser.add_argument(
+        "--runs-dir",
+        default=str(normalize_runs_dir("runs")),
+        help="Base directory for runs (default: runs).",
+    )
+    continue_parser.add_argument(
+        "--sandbox-adapter",
+        default=LOCAL_DRY_RUN_ADAPTER,
+        choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER],
+        help="Sandbox adapter for resumed local orchestration steps.",
     )
 
     status_parser = subparsers.add_parser("show_run_status", help="Show a run status.")
