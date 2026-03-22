@@ -330,3 +330,135 @@ def test_validate_against_profile_returns_structured_error_for_unknown_task_type
             checks=[{"id": "some_check", "status": "passed", "note": ""}],
             commands=[],
         )
+
+
+def test_parse_markdown_risks_supports_inline_area_and_inline_impact(tmp_path: Path) -> None:
+    risk_file = tmp_path / "inline-risk.md"
+    risk_file.write_text(
+        "\n".join(
+            [
+                "# Risks",
+                "",
+                "## High Priority",
+                "",
+                "### Inline Policy Drift",
+                "- Main Area: `scripts/agents/`",
+                "- Impact: breaks planner output",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    parsed = parse_markdown_risks(risk_file, source="test")
+
+    assert parsed == [
+        {
+            "title": "Inline Policy Drift",
+            "priority": "high",
+            "source": "test",
+            "areas": ["scripts/agents/"],
+            "impact": "breaks planner output",
+        }
+    ]
+
+
+def test_every_task_type_has_verification_profile() -> None:
+    classifier = load_route_json(CLASSIFIER_PATH)
+    profile_ids = set(load_verification_profiles()["profiles"])
+    task_ids = {item["id"] for item in classifier["task_types"]}
+
+    assert task_ids <= profile_ids
+
+
+def test_plan_output_builds_profile_context_from_real_route() -> None:
+    classifier = load_route_json(CLASSIFIER_PATH)
+    routing = load_route_json(ROUTING_PATH)
+
+    route_result = build_route_output(
+        classifier=classifier,
+        routing=routing,
+        prompt="Обновить swarm usage docs и testing policy",
+        paths=["docs/swarm-usage.md", "docs/testing-policy.md"],
+    )
+    plan_output = build_plan_output(route_result)
+
+    assert "tester" in plan_output["recommended_agents"]
+    assert plan_output["verification_profile"]["profile_id"] == "docs_only_change"
+    assert any(risk["title"] == "Docs Cleanup After Typed-Runtime Transition" for risk in plan_output["known_risks"])
+    assert plan_output["active_initiatives"]
+    assert plan_output["active_initiatives"][0]["path"] == "docs/exec-plans/active/agent-first-docs-migration.md"
+
+
+def test_verify_rejects_missing_required_profile_checks() -> None:
+    run_dir = create_run_bundle(
+        context_pack={
+            "agents": ["AGENTS.md"],
+            "docs": ["ARCHITECTURE.md"],
+            "code": [],
+            "tests": [],
+            "notes": [],
+        },
+        task_type_id="release_or_versioning_change",
+        task_type_label="Release Or Versioning Change",
+        changed_paths=["docs/release-flow.md"],
+        plan_steps=[
+            {"id": "classify_task", "status": "completed"},
+            {"id": "load_context", "status": "completed"},
+            {"id": "implement_change", "status": "completed"},
+            {"id": "verify_change", "status": "pending"},
+            {"id": "review_result", "status": "pending"},
+        ],
+        status="changes_applied_pending_verification",
+        next_action="verify_change",
+        write_execution_state=True,
+    )
+
+    try:
+        with pytest.raises(ValueError, match="required checks"):
+            build_verify_output(
+                run_dir,
+                conclusion="passed",
+                summary_text="Only part of release verification recorded",
+                verified_by="tester",
+                checks=[{"id": "release_promote_dry_run", "status": "passed", "note": ""}],
+                commands=[r".\venv\Scripts\python.exe -m pytest test\scripts\test_swarm_cli_smoke.py"],
+                log_paths=[],
+            )
+    finally:
+        shutil.rmtree(run_dir, ignore_errors=True)
+
+
+def test_verify_rejects_passed_conclusion_with_failed_check() -> None:
+    run_dir = create_run_bundle(
+        context_pack={
+            "agents": ["AGENTS.md"],
+            "docs": ["ARCHITECTURE.md"],
+            "code": [],
+            "tests": [],
+            "notes": [],
+        },
+        plan_steps=[
+            {"id": "classify_task", "status": "completed"},
+            {"id": "load_context", "status": "completed"},
+            {"id": "implement_change", "status": "completed"},
+            {"id": "verify_change", "status": "pending"},
+            {"id": "review_result", "status": "pending"},
+        ],
+        status="changes_applied_pending_verification",
+        next_action="verify_change",
+        write_execution_state=True,
+    )
+
+    try:
+        with pytest.raises(ValueError, match="conclusion='passed'"):
+            build_verify_output(
+                run_dir,
+                conclusion="passed",
+                summary_text="Docs verification contradicts failed check",
+                verified_by="tester",
+                checks=[{"id": "docs_code_alignment_review", "status": "failed", "note": "drift found"}],
+                commands=[r".\venv\Scripts\python.exe -m pytest test\scripts\test_swarm_cli_smoke.py"],
+                log_paths=[],
+            )
+    finally:
+        shutil.rmtree(run_dir, ignore_errors=True)
