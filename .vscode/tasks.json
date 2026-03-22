@@ -198,6 +198,20 @@
       "problemMatcher": []
     },
     {
+      "label": "Approve push and continue",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "approve_push_and_continue",
+        "--run-id",
+        "${input:swarmRunId}",
+        "--pretty"
+      ],
+      "problemMatcher": []
+    },
+    {
       "label": "Reject checkpoint",
       "type": "process",
       "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",

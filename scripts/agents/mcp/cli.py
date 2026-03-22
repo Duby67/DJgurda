@@ -18,6 +18,7 @@ from scripts.agents.executor import (
     start_or_continue_run,
 )
 from scripts.agents.lifecycle import commit as commit_stage
+from scripts.agents.lifecycle import push as push_stage
 from scripts.agents.lifecycle.approve import build_output as build_approval_action_output
 from scripts.agents.lifecycle.request_approval import build_output as build_request_approval_output
 from scripts.agents.lifecycle.status import build_status as build_run_status, render_human_status
@@ -429,6 +430,35 @@ def build_approve_commit_and_continue(args: argparse.Namespace) -> dict[str, Any
     }
 
 
+def build_approve_push_and_continue(args: argparse.Namespace) -> dict[str, Any]:
+    """Approves push and optionally executes the push-stage inside the isolated workspace."""
+    run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
+    approval = build_approval_action_output(
+        run_dir,
+        checkpoint_id="push",
+        action="approve",
+        note=getattr(args, "note", ""),
+    )
+    push_result = None
+    if approval.get("status") == "push_approved_pending_execution":
+        if getattr(args, "branch", None):
+            branch = args.branch.strip()
+        else:
+            branch = push_stage.resolve_branch(args, repo_root=ROOT)
+        push_result = push_stage.build_output(
+            run_dir,
+            pushed_by=(getattr(args, "pushed_by", "") or "release_manager").strip() or "release_manager",
+            remote=(getattr(args, "remote", "") or "origin").strip() or "origin",
+            branch=branch,
+            execute=bool(getattr(args, "execute", False)),
+        )
+    return {
+        "tool": "approve_push_and_continue",
+        "approval": approval,
+        "push": push_result,
+    }
+
+
 def build_run_dispatcher(args: argparse.Namespace) -> dict[str, Any]:
     """Claims or surfaces the next external job as a Codex-oriented work item."""
     run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
@@ -574,6 +604,8 @@ def handle_tool(command: str, args: argparse.Namespace) -> dict[str, Any]:
         return build_approve_run_checks_and_continue(args)
     if command == "approve_commit_and_continue":
         return build_approve_commit_and_continue(args)
+    if command == "approve_push_and_continue":
+        return build_approve_push_and_continue(args)
     if command == "approve_commit":
         return build_checkpoint_action(args, checkpoint="commit", action="approve", tool_name="approve_commit")
     if command == "reject_checkpoint":
@@ -808,6 +840,28 @@ def parse_args() -> argparse.Namespace:
         "--dry-run",
         action="store_true",
         help="Record commit-stage without executing git add/git commit.",
+    )
+
+    approve_push_and_continue_parser = subparsers.add_parser(
+        "approve_push_and_continue",
+        help="Approve push and optionally execute the push-stage in the isolated workspace.",
+    )
+    add_pretty_flag(approve_push_and_continue_parser)
+    approve_push_and_continue_parser.add_argument("--run-dir", help="Path to a run bundle.")
+    approve_push_and_continue_parser.add_argument("--run-id", help="Run id inside runs-dir.")
+    approve_push_and_continue_parser.add_argument(
+        "--runs-dir",
+        default=str(normalize_runs_dir("runs")),
+        help="Base directory for runs (default: runs).",
+    )
+    approve_push_and_continue_parser.add_argument("--note", default="", help="Optional approval note.")
+    approve_push_and_continue_parser.add_argument("--remote", default="origin", help="Remote for push-stage.")
+    approve_push_and_continue_parser.add_argument("--branch", help="Target branch for push-stage.")
+    approve_push_and_continue_parser.add_argument("--pushed-by", default="release_manager", help="Who records the push-stage.")
+    approve_push_and_continue_parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="Actually execute git push. Without the flag the command records only a dry-run push artifact.",
     )
 
     reject_parser = subparsers.add_parser("reject_checkpoint", help="Reject a lifecycle checkpoint.")

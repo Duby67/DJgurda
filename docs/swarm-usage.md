@@ -153,6 +153,13 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
+  approve_push_and_continue `
+  --run-id demo-media-router `
+  --pretty
+```
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
   reject_checkpoint `
   --run-id demo-media-router `
   --checkpoint run_checks `
@@ -230,7 +237,7 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 4. Для sandbox intent использовать `preview_sandbox_plan`.
 5. После approval или других ручных шагов возобновлять orchestration через `scripts.agents.mcp continue_swarm_run`.
 6. Для внешних AI-ролей использовать `run_dispatcher` как UX helper или низкоуровневые `claim_role_job` / `complete_role_job` / `fail_role_job`.
-7. Для approval checkpoints использовать wrappers `approve_run_checks`, `approve_run_checks_and_continue`, `approve_commit`, `approve_commit_and_continue`, `reject_checkpoint` или request-команды, когда нужен полный approval packet.
+7. Для approval checkpoints использовать wrappers `approve_run_checks`, `approve_run_checks_and_continue`, `approve_commit`, `approve_commit_and_continue`, `approve_push_and_continue`, `reject_checkpoint` или request-команды, когда нужен полный approval packet.
 8. Для продвижения preview и release использовать `scripts.release.automation.promote`.
 
 ## Related Docs

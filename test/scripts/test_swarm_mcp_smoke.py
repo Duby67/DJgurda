@@ -1007,6 +1007,124 @@ def test_checkpoint_action_wrappers_delegate_to_lifecycle_approve() -> None:
     finally:
         cleanup_run_dir(commit_continue_run_dir)
 
+    push_continue_run_id = f"mcp-push-continue-{uuid4().hex}"
+    run_module(
+        "-m",
+        "scripts.agents.mcp",
+        "start_swarm_run",
+        "--prompt",
+        "Обновить swarm usage docs",
+        "--run-id",
+        push_continue_run_id,
+    )
+    push_continue_run_dir = ROOT / "runs" / push_continue_run_id
+    try:
+        approve_run_checks(push_continue_run_id)
+        run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "run_dispatcher",
+            "--run-id",
+            push_continue_run_id,
+            "--runtime-target",
+            "codex-runtime",
+        )
+
+        workspace_root = Path(read_json(push_continue_run_dir / "workspace.json")["workspace"]["root_path"])
+        target_file = workspace_root / "docs" / "swarm-usage.md"
+        target_file.write_text(
+            target_file.read_text(encoding="utf-8") + "\nApprove push and continue smoke change.\n",
+            encoding="utf-8",
+        )
+
+        run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "complete_role_job",
+            "--run-id",
+            push_continue_run_id,
+            "--job-id",
+            "coder",
+            "--sandbox-adapter",
+            "local_dry_run",
+            "--result-json",
+            json.dumps(
+                {
+                    "summary": "External coder updated docs in isolated workspace.",
+                    "applied_by": "codex-runtime",
+                    "applied_files": ["docs/swarm-usage.md"],
+                },
+                ensure_ascii=False,
+            ),
+        )
+        run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "run_dispatcher",
+            "--run-id",
+            push_continue_run_id,
+            "--runtime-target",
+            "review-runtime",
+        )
+        run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "complete_role_job",
+            "--run-id",
+            push_continue_run_id,
+            "--job-id",
+            "reviewer",
+            "--result-json",
+            json.dumps(
+                {
+                    "summary": "Structured review completed.",
+                    "reviewed_by": "review-runtime",
+                    "conclusion": "passed",
+                    "findings": [],
+                    "risks": ["Dry-run sandbox only"],
+                },
+                ensure_ascii=False,
+            ),
+        )
+        run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "approve_commit_and_continue",
+            "--run-id",
+            push_continue_run_id,
+        )
+
+        request_push = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "request_push_approval",
+            "--run-id",
+            push_continue_run_id,
+            "--pretty",
+        )
+        assert request_push.returncode == 0, request_push.stderr or request_push.stdout
+
+        resume_push = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "approve_push_and_continue",
+            "--run-id",
+            push_continue_run_id,
+            "--pretty",
+        )
+        assert resume_push.returncode == 0, resume_push.stderr or resume_push.stdout
+        resume_push_payload = json.loads(resume_push.stdout)
+        assert resume_push_payload["tool"] == "approve_push_and_continue"
+        assert resume_push_payload["approval"]["updated_checkpoint"]["id"] == "push"
+        assert resume_push_payload["approval"]["updated_checkpoint"]["new_status"] == "approved"
+        assert resume_push_payload["push"]["mode"] == "dry_run"
+        assert resume_push_payload["push"]["push_created"] is False
+        assert resume_push_payload["push"]["status"] == "push_approved_pending_execution"
+        assert resume_push_payload["push"]["next_action"] == "execute_push"
+        assert (push_continue_run_dir / "push-result.json").is_file()
+    finally:
+        cleanup_run_dir(push_continue_run_dir)
+
     commit_run_id = f"mcp-commit-approve-{uuid4().hex}"
     commit_run_dir = create_approval_ready_run(commit_run_id)
     try:
@@ -1069,6 +1187,7 @@ def test_tasks_json_calls_front_door_commands() -> None:
         "Approve run checks and continue",
         "Approve commit",
         "Approve commit and continue",
+        "Approve push and continue",
         "Reject checkpoint",
         "Request commit approval",
         "Request push approval",
