@@ -319,6 +319,7 @@
           "release_versioning.py",
           "release_sync.py",
           "release-promote.yml",
+          "release-flow.md",
           "release_notes.md"
         ]
       }

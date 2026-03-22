@@ -207,6 +207,7 @@
 - Read AGENTS:
   - `AGENTS.md`
 - Read Docs:
+  - `docs/release-flow.md`
   - `docs/release_notes.md`
   - `docs/PLANS.md`
   - `docs/exec-plans/tech-debt-tracker.md`

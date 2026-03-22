@@ -3,16 +3,26 @@ name: Promote Release Between Branches
 on:
   workflow_dispatch:
     inputs:
+      promotion_mode:
+        description: "Типовой сценарий promotion"
+        required: true
+        default: feature_to_dev_preview
+        type: choice
+        options:
+          - feature_to_dev_preview
+          - dev_to_main_release
+          - direct_to_main_release
+          - custom
       source_branch:
         description: "Ветка-источник для promotion"
         required: true
         type: string
       target_branch:
-        description: "Целевая ветка promotion"
-        required: true
+        description: "Целевая ветка promotion; для типовых сценариев можно оставить пустой"
+        required: false
         type: string
       target_kind:
-        description: "Тип целевой ветки: auto для dev/main, preview/stable для нестандартной ветки"
+        description: "Тип целевой ветки: auto для типовых сценариев, preview/stable для custom"
         required: true
         default: auto
         type: choice
@@ -21,7 +31,7 @@ on:
           - preview
           - stable
       release_env:
-        description: "Опциональный env для release_sync.py; по умолчанию вычисляется автоматически"
+        description: "Опциональный env для release_sync.py; для типовых сценариев обычно не нужен"
         required: false
         type: string
       execute:
@@ -59,18 +69,102 @@ jobs:
           python-version: "3.11"
 
       - name: Validate promotion inputs
+        id: resolve
         shell: bash
+        env:
+          PROMOTION_MODE: ${{ inputs.promotion_mode }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          TARGET_KIND: ${{ inputs.target_kind }}
+          RELEASE_ENV: ${{ inputs.release_env }}
+          EXECUTE: ${{ inputs.execute }}
+          PUSH: ${{ inputs.push }}
         run: |
-          if [ "${{ inputs.push }}" = "true" ] && [ "${{ inputs.execute }}" != "true" ]; then
+          if [ "${PUSH}" = "true" ] && [ "${EXECUTE}" != "true" ]; then
             echo "push=true requires execute=true" >&2
             exit 1
           fi
 
+          RESOLVED_SOURCE_BRANCH="${SOURCE_BRANCH}"
+          RESOLVED_TARGET_BRANCH="${TARGET_BRANCH}"
+          RESOLVED_TARGET_KIND="${TARGET_KIND}"
+          RESOLVED_RELEASE_ENV="${RELEASE_ENV}"
+
+          case "${PROMOTION_MODE}" in
+            feature_to_dev_preview)
+              RESOLVED_TARGET_BRANCH="${TARGET_BRANCH:-dev}"
+              if [ "${RESOLVED_TARGET_BRANCH}" != "dev" ]; then
+                echo "feature_to_dev_preview expects target_branch=dev" >&2
+                exit 1
+              fi
+              if [ "${TARGET_KIND}" = "auto" ]; then
+                RESOLVED_TARGET_KIND="preview"
+              elif [ "${TARGET_KIND}" != "preview" ]; then
+                echo "feature_to_dev_preview expects target_kind=preview or auto" >&2
+                exit 1
+              fi
+              if [ -z "${RESOLVED_RELEASE_ENV}" ]; then
+                RESOLVED_RELEASE_ENV="dev"
+              fi
+              ;;
+            dev_to_main_release)
+              if [ "${SOURCE_BRANCH}" != "dev" ]; then
+                echo "dev_to_main_release expects source_branch=dev" >&2
+                exit 1
+              fi
+              RESOLVED_TARGET_BRANCH="${TARGET_BRANCH:-main}"
+              if [ "${RESOLVED_TARGET_BRANCH}" != "main" ]; then
+                echo "dev_to_main_release expects target_branch=main" >&2
+                exit 1
+              fi
+              if [ "${TARGET_KIND}" = "auto" ]; then
+                RESOLVED_TARGET_KIND="stable"
+              elif [ "${TARGET_KIND}" != "stable" ]; then
+                echo "dev_to_main_release expects target_kind=stable or auto" >&2
+                exit 1
+              fi
+              if [ -z "${RESOLVED_RELEASE_ENV}" ]; then
+                RESOLVED_RELEASE_ENV="prod"
+              fi
+              ;;
+            direct_to_main_release)
+              RESOLVED_TARGET_BRANCH="${TARGET_BRANCH:-main}"
+              if [ "${RESOLVED_TARGET_BRANCH}" != "main" ]; then
+                echo "direct_to_main_release expects target_branch=main" >&2
+                exit 1
+              fi
+              if [ "${TARGET_KIND}" = "auto" ]; then
+                RESOLVED_TARGET_KIND="stable"
+              elif [ "${TARGET_KIND}" != "stable" ]; then
+                echo "direct_to_main_release expects target_kind=stable or auto" >&2
+                exit 1
+              fi
+              if [ -z "${RESOLVED_RELEASE_ENV}" ]; then
+                RESOLVED_RELEASE_ENV="prod"
+              fi
+              ;;
+            custom)
+              if [ -z "${RESOLVED_TARGET_BRANCH}" ]; then
+                echo "custom mode requires target_branch" >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "Unsupported promotion_mode: ${PROMOTION_MODE}" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "resolved_source_branch=${RESOLVED_SOURCE_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "resolved_target_branch=${RESOLVED_TARGET_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "resolved_target_kind=${RESOLVED_TARGET_KIND}" >> "$GITHUB_OUTPUT"
+          echo "resolved_release_env=${RESOLVED_RELEASE_ENV}" >> "$GITHUB_OUTPUT"
+
       - name: Prepare local branches and tags
         shell: bash
         env:
-          SOURCE_BRANCH: ${{ inputs.source_branch }}
-          TARGET_BRANCH: ${{ inputs.target_branch }}
+          SOURCE_BRANCH: ${{ steps.resolve.outputs.resolved_source_branch }}
+          TARGET_BRANCH: ${{ steps.resolve.outputs.resolved_target_branch }}
         run: |
           git fetch origin +refs/heads/*:refs/remotes/origin/* --tags --prune
 
@@ -96,10 +190,11 @@ jobs:
       - name: Build dry-run promotion plan
         shell: bash
         env:
-          SOURCE_BRANCH: ${{ inputs.source_branch }}
-          TARGET_BRANCH: ${{ inputs.target_branch }}
-          TARGET_KIND: ${{ inputs.target_kind }}
-          RELEASE_ENV: ${{ inputs.release_env }}
+          PROMOTION_MODE: ${{ inputs.promotion_mode }}
+          SOURCE_BRANCH: ${{ steps.resolve.outputs.resolved_source_branch }}
+          TARGET_BRANCH: ${{ steps.resolve.outputs.resolved_target_branch }}
+          TARGET_KIND: ${{ steps.resolve.outputs.resolved_target_kind }}
+          RELEASE_ENV: ${{ steps.resolve.outputs.resolved_release_env }}
         run: |
           mkdir -p release-artifacts
 
@@ -119,8 +214,22 @@ jobs:
           python scripts/release_promote.py "${ARGS[@]}" --pretty > release-artifacts/plan.json
           python scripts/release_promote.py "${ARGS[@]}" --human > release-artifacts/plan.txt
 
+          printf "promotion_mode=%s\n" "${PROMOTION_MODE}" > release-artifacts/request.txt
+          printf "source_branch=%s\n" "${SOURCE_BRANCH}" >> release-artifacts/request.txt
+          printf "target_branch=%s\n" "${TARGET_BRANCH}" >> release-artifacts/request.txt
+          printf "target_kind=%s\n" "${TARGET_KIND}" >> release-artifacts/request.txt
+          printf "release_env=%s\n" "${RELEASE_ENV}" >> release-artifacts/request.txt
+
           {
             echo "## Release Promotion Plan"
+            echo
+            echo "- Mode: ${PROMOTION_MODE}"
+            echo "- Source: ${SOURCE_BRANCH}"
+            echo "- Target: ${TARGET_BRANCH}"
+            echo "- Target kind: ${TARGET_KIND}"
+            if [ -n "${RELEASE_ENV}" ]; then
+              echo "- Release env: ${RELEASE_ENV}"
+            fi
             echo
             echo '```text'
             cat release-artifacts/plan.txt
@@ -131,16 +240,19 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-promotion-plan
-          path: release-artifacts/plan.*
+          path: |
+            release-artifacts/plan.*
+            release-artifacts/request.txt
 
       - name: Execute promotion
         if: ${{ inputs.execute }}
         shell: bash
         env:
-          SOURCE_BRANCH: ${{ inputs.source_branch }}
-          TARGET_BRANCH: ${{ inputs.target_branch }}
-          TARGET_KIND: ${{ inputs.target_kind }}
-          RELEASE_ENV: ${{ inputs.release_env }}
+          PROMOTION_MODE: ${{ inputs.promotion_mode }}
+          SOURCE_BRANCH: ${{ steps.resolve.outputs.resolved_source_branch }}
+          TARGET_BRANCH: ${{ steps.resolve.outputs.resolved_target_branch }}
+          TARGET_KIND: ${{ steps.resolve.outputs.resolved_target_kind }}
+          RELEASE_ENV: ${{ steps.resolve.outputs.resolved_release_env }}
           PUSH: ${{ inputs.push }}
         run: |
           ARGS=(
@@ -166,6 +278,14 @@ jobs:
 
           {
             echo "## Release Promotion Execution"
+            echo
+            echo "- Mode: ${PROMOTION_MODE}"
+            echo "- Source: ${SOURCE_BRANCH}"
+            echo "- Target: ${TARGET_BRANCH}"
+            echo "- Target kind: ${TARGET_KIND}"
+            if [ -n "${RELEASE_ENV}" ]; then
+              echo "- Release env: ${RELEASE_ENV}"
+            fi
             echo
             echo '```text'
             cat release-artifacts/execution.txt
