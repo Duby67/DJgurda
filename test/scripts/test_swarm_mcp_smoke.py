@@ -265,6 +265,88 @@ def test_run_dispatcher_builds_work_item_and_dispatcher_artifacts() -> None:
         cleanup_run_dir(run_dir)
 
 
+def test_run_dispatcher_loop_consumes_completion_inbox_and_advances_pipeline() -> None:
+    run_id = f"mcp-loop-{uuid4().hex}"
+    run_module(
+        "-m",
+        "scripts.agents.mcp",
+        "start_swarm_run",
+        "--prompt",
+        "Обновить swarm usage docs",
+        "--run-id",
+        run_id,
+    )
+
+    run_dir = ROOT / "runs" / run_id
+    try:
+        approve_run_checks(run_id)
+        first_loop = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "run_dispatcher_loop",
+            "--run-id",
+            run_id,
+            "--sandbox-adapter",
+            "local_dry_run",
+            "--pretty",
+        )
+        assert first_loop.returncode == 0, first_loop.stderr or first_loop.stdout
+        first_payload = json.loads(first_loop.stdout)
+        assert first_payload["tool"] == "run_dispatcher_loop"
+        assert first_payload["loop_status"] == "dispatched_external_job"
+        assert first_payload["job"]["job_id"] == "coder"
+
+        workspace_root = Path(read_json(run_dir / "workspace.json")["workspace"]["root_path"])
+        target_file = workspace_root / "docs" / "swarm-usage.md"
+        target_file.write_text(
+            target_file.read_text(encoding="utf-8") + "\nDispatcher loop smoke change.\n",
+            encoding="utf-8",
+        )
+
+        coder_completion = {
+            "status": "completed",
+            "summary": "Coder completion inbox artifact processed.",
+            "sandbox_adapter": "local_dry_run",
+            "result": {
+                "summary": "Coder completion inbox artifact processed.",
+                "applied_by": "codex-runtime",
+                "applied_files": ["docs/swarm-usage.md"],
+            },
+        }
+        (run_dir / "jobs" / "coder-completion.json").write_text(
+            json.dumps(coder_completion, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        second_loop = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "run_dispatcher_loop",
+            "--run-id",
+            run_id,
+            "--sandbox-adapter",
+            "local_dry_run",
+            "--pretty",
+        )
+        assert second_loop.returncode == 0, second_loop.stderr or second_loop.stdout
+        second_payload = json.loads(second_loop.stdout)
+        assert second_payload["tool"] == "run_dispatcher_loop"
+        assert second_payload["events"][0]["type"] == "completion_consumed"
+        assert second_payload["events"][0]["job_id"] == "coder"
+        assert second_payload["loop_status"] == "dispatched_external_job"
+        assert second_payload["job"]["job_id"] == "reviewer"
+        assert (run_dir / "jobs" / "coder-completion-processed.json").is_file()
+
+        jobs_payload = read_json(run_dir / "jobs" / "index.json")
+        status_by_job = {job["job_id"]: job["status"] for job in jobs_payload["jobs"]}
+        assert status_by_job["coder"] == "completed"
+        assert status_by_job["tester"] == "completed"
+        assert status_by_job["sandbox_runner"] == "completed"
+        assert status_by_job["reviewer"] == "running"
+    finally:
+        cleanup_run_dir(run_dir)
+
+
 def test_show_job_queue_and_diff_preview_generate_views() -> None:
     run_id = f"mcp-views-{uuid4().hex}"
     run_module(

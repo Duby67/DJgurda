@@ -25,6 +25,7 @@ from scripts.agents.mcp.dispatcher import (
     dispatch_next_job,
     ensure_dispatch_record,
     mark_dispatch_terminal,
+    run_dispatcher_loop,
     show_job_queue as build_dispatcher_job_queue,
 )
 from scripts.agents.routing.plan import build_plan_output, write_artifacts as write_plan_artifacts
@@ -358,6 +359,24 @@ def build_run_dispatcher(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def build_run_dispatcher_loop(args: argparse.Namespace) -> dict[str, Any]:
+    """Runs the dispatcher loop over completion inbox artifacts and next dispatch."""
+    run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
+    result = run_dispatcher_loop(
+        run_dir,
+        runtime_target=args.runtime_target,
+        claimed_by=args.claimed_by,
+        sandbox_adapter=args.sandbox_adapter or "",
+        max_cycles=args.max_cycles,
+    )
+    return {
+        "tool": "run_dispatcher_loop",
+        "run_id": run_dir.name,
+        "run_dir": str(run_dir.relative_to(ROOT)).replace("\\", "/"),
+        **result,
+    }
+
+
 def build_claim_role_job(args: argparse.Namespace) -> dict[str, Any]:
     """Claims an external role job."""
     run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
@@ -433,6 +452,8 @@ def handle_tool(command: str, args: argparse.Namespace) -> dict[str, Any]:
         return build_commit_or_push_request(args, checkpoint="push")
     if command == "run_dispatcher":
         return build_run_dispatcher(args)
+    if command == "run_dispatcher_loop":
+        return build_run_dispatcher_loop(args)
     if command == "claim_role_job":
         return build_claim_role_job(args)
     if command == "complete_role_job":
@@ -636,6 +657,28 @@ def parse_args() -> argparse.Namespace:
     )
     dispatcher_parser.add_argument("--claimed-by", default="ux_dispatcher", help="Identity used for claim operations.")
     dispatcher_parser.add_argument("--runtime-target", default="codex", help="External runtime target label.")
+
+    dispatcher_loop_parser = subparsers.add_parser(
+        "run_dispatcher_loop",
+        help="Consume external completion inbox artifacts and dispatch the next job.",
+    )
+    add_pretty_flag(dispatcher_loop_parser)
+    dispatcher_loop_parser.add_argument("--run-dir", help="Path to a run bundle.")
+    dispatcher_loop_parser.add_argument("--run-id", help="Run id inside runs-dir.")
+    dispatcher_loop_parser.add_argument(
+        "--runs-dir",
+        default=str(normalize_runs_dir("runs")),
+        help="Base directory for runs (default: runs).",
+    )
+    dispatcher_loop_parser.add_argument("--claimed-by", default="ux_dispatcher", help="Identity used for claim operations.")
+    dispatcher_loop_parser.add_argument("--runtime-target", default="codex", help="External runtime target label.")
+    dispatcher_loop_parser.add_argument(
+        "--sandbox-adapter",
+        default=None,
+        choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER, GITHUB_ACTIONS_ADAPTER],
+        help="Optional sandbox adapter override when consuming coder completion artifacts.",
+    )
+    dispatcher_loop_parser.add_argument("--max-cycles", type=int, default=8, help="Maximum loop iterations per invocation.")
 
     for command_name in ("claim_role_job", "complete_role_job", "fail_role_job"):
         job_parser = subparsers.add_parser(command_name, help=f"{command_name.replace('_', ' ').title()}.")

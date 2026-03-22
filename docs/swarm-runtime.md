@@ -27,6 +27,7 @@
 - `show_diff_preview`
 - `preview_sandbox_plan`
 - `run_dispatcher`
+- `run_dispatcher_loop`
 - `approve_run_checks`
 - `approve_commit`
 - `reject_checkpoint`
@@ -150,6 +151,13 @@ External AI job нельзя завершать напрямую из `queued`:
 - при необходимости делает `claim_role_job`;
 - пишет dispatch metadata и runtime trace;
 - возвращает machine-readable work item для Codex-style runtime handoff.
+
+`run_dispatcher_loop` идет на шаг дальше:
+
+- проверяет completion inbox для уже running external job;
+- если находит `jobs/<job-id>-completion.json`, сам завершает job и продолжает orchestration;
+- если completion artifact нет, оставляет run в состоянии ожидания внешнего результата;
+- если внешних jobs нет, возвращает idle-состояние queue.
 
 ## Isolated Workspace
 

@@ -14,6 +14,8 @@ from typing import Any
 from scripts.agents.executor import (
     build_external_work_item,
     claim_job,
+    complete_external_job,
+    fail_external_job,
     load_jobs,
     mark_job_dispatched,
     next_claimable_external_job,
@@ -26,6 +28,7 @@ JOB_QUEUE_MARKDOWN_NAME = "job-queue.md"
 DIFF_PREVIEW_MARKDOWN_NAME = "diff-preview.md"
 DISPATCHER_STATE_NAME = "dispatcher-state.json"
 TERMINAL_DISPATCH_STATUSES = {"completed", "failed", "blocked"}
+DEFAULT_LOOP_MAX_CYCLES = 8
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -96,6 +99,16 @@ def diff_preview_path(run_dir: Path) -> Path:
 def job_dispatch_path(run_dir: Path, job_id: str) -> Path:
     """Returns a dispatch artifact path for a job."""
     return run_dir / "jobs" / f"{job_id}-dispatch.json"
+
+
+def job_completion_path(run_dir: Path, job_id: str) -> Path:
+    """Returns a completion inbox artifact path for an external job."""
+    return run_dir / "jobs" / f"{job_id}-completion.json"
+
+
+def job_completion_processed_path(run_dir: Path, job_id: str) -> Path:
+    """Returns the processed completion artifact path for an external job."""
+    return run_dir / "jobs" / f"{job_id}-completion-processed.json"
 
 
 def find_job(jobs_payload: dict[str, Any], job_id: str) -> dict[str, Any]:
@@ -277,6 +290,80 @@ def mark_dispatch_terminal(
         "job": job,
         "dispatcher": dispatcher_state,
     }
+
+
+def active_external_job(jobs_payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Returns the currently active external job if one exists."""
+    for job in jobs_payload.get("jobs", []):
+        if job.get("backend") == "external_ai" and job.get("status") == "running":
+            return job
+    return None
+
+
+def consume_completion_artifact(
+    run_dir: Path,
+    *,
+    job_id: str,
+    default_sandbox_adapter: str = "",
+) -> dict[str, Any] | None:
+    """Consumes a completion inbox artifact and advances orchestration."""
+    completion_path = job_completion_path(run_dir, job_id)
+    if not completion_path.is_file():
+        return None
+
+    payload = load_json(completion_path)
+    processed_path = job_completion_processed_path(run_dir, job_id)
+    if processed_path.exists():
+        processed_path.unlink()
+    completion_path.replace(processed_path)
+    update_run_summary_artifacts(run_dir, f"{job_id}_completion", processed_path)
+
+    status = str(payload.get("status") or payload.get("action") or "completed").strip().casefold()
+    summary = str(payload.get("summary", "")).strip()
+    sandbox_adapter = str(payload.get("sandbox_adapter", "")).strip() or default_sandbox_adapter
+
+    if status == "completed":
+        result_payload = payload.get("result")
+        if not isinstance(result_payload, dict):
+            result_payload = {
+                key: value
+                for key, value in payload.items()
+                if key not in {"status", "action", "summary", "sandbox_adapter"}
+            }
+        result = complete_external_job(
+            run_dir,
+            job_id=job_id,
+            summary=summary,
+            result_payload=result_payload,
+            sandbox_adapter=sandbox_adapter or None,
+        )
+        dispatch = mark_dispatch_terminal(run_dir, job_id=job_id, dispatch_status="completed")
+        return {
+            "job_id": job_id,
+            "consumed_artifact": rel_to_root(processed_path),
+            "status": "completed",
+            "result": result,
+            "dispatch": dispatch,
+        }
+
+    if status in {"failed", "blocked"}:
+        reason = str(payload.get("reason", "")).strip() or status
+        result = fail_external_job(
+            run_dir,
+            job_id=job_id,
+            summary=summary or f"External job {job_id} {status}.",
+            reason=reason,
+        )
+        dispatch = mark_dispatch_terminal(run_dir, job_id=job_id, dispatch_status=status)
+        return {
+            "job_id": job_id,
+            "consumed_artifact": rel_to_root(processed_path),
+            "status": status,
+            "result": result,
+            "dispatch": dispatch,
+        }
+
+    raise ValueError(f"Unsupported completion artifact status: {status}")
 
 
 def build_job_queue_payload(run_dir: Path, *, jobs_payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -574,5 +661,85 @@ def dispatch_next_job(
         "run_id": run_dir.name,
         "dispatch_status": queue.get("dispatcher_status", "completed"),
         "job": queue.get("current_external_job"),
+        "queue": queue,
+    }
+
+
+def run_dispatcher_loop(
+    run_dir: Path,
+    *,
+    runtime_target: str,
+    claimed_by: str = "",
+    sandbox_adapter: str = "",
+    max_cycles: int = DEFAULT_LOOP_MAX_CYCLES,
+) -> dict[str, Any]:
+    """Runs a small autonomous dispatcher loop over completion inbox + next dispatch."""
+    cycles = 0
+    events: list[dict[str, Any]] = []
+
+    while cycles < max_cycles:
+        cycles += 1
+        jobs_payload = load_jobs(run_dir)
+        current_job = active_external_job(jobs_payload)
+
+        if current_job is not None:
+            consumed = consume_completion_artifact(
+                run_dir,
+                job_id=str(current_job.get("job_id", "")),
+                default_sandbox_adapter=sandbox_adapter or str(jobs_payload.get("sandbox_adapter", "")).strip(),
+            )
+            if consumed is not None:
+                events.append({"type": "completion_consumed", **consumed})
+                continue
+
+            queue = show_job_queue(run_dir)
+            return {
+                "run_id": run_dir.name,
+                "loop_status": "awaiting_external_result",
+                "cycles": cycles,
+                "events": events,
+                "current_job": queue.get("current_external_job"),
+                "queue": queue,
+            }
+
+        dispatch = dispatch_next_job(
+            run_dir,
+            runtime_target=runtime_target,
+            claimed_by=claimed_by,
+        )
+        events.append(
+            {
+                "type": "dispatch_attempt",
+                "dispatch_status": dispatch.get("dispatch_status", ""),
+                "job_id": (dispatch.get("job") or {}).get("job_id", ""),
+            }
+        )
+
+        if dispatch.get("dispatch_status") == "dispatched":
+            return {
+                "run_id": run_dir.name,
+                "loop_status": "dispatched_external_job",
+                "cycles": cycles,
+                "events": events,
+                **dispatch,
+            }
+
+        queue = dispatch.get("queue") or show_job_queue(run_dir)
+        return {
+            "run_id": run_dir.name,
+            "loop_status": "idle",
+            "cycles": cycles,
+            "events": events,
+            "current_job": queue.get("current_external_job"),
+            "queue": queue,
+        }
+
+    queue = show_job_queue(run_dir)
+    return {
+        "run_id": run_dir.name,
+        "loop_status": "max_cycles_reached",
+        "cycles": cycles,
+        "events": events,
+        "current_job": queue.get("current_external_job"),
         "queue": queue,
     }
