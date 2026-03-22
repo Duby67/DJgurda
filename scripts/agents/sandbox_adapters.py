@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+import base64
+import gzip
+import hashlib
 import json
 import re
 import shutil
@@ -24,6 +27,7 @@ DEFAULT_GITHUB_ACTIONS_WORKFLOW = "swarm-sandbox.yml"
 DEFAULT_GITHUB_ACTIONS_ARTIFACT_PREFIX = "swarm-sandbox"
 DEFAULT_GITHUB_ACTIONS_POLL_INTERVAL_SECONDS = 10.0
 DEFAULT_GITHUB_ACTIONS_TIMEOUT_SECONDS = 900.0
+MAX_GITHUB_ACTIONS_INLINE_WORKSPACE_DIFF_CHARS = 50000
 
 SUPPORTED_SANDBOX_ADAPTERS = {
     LOCAL_DRY_RUN_ADAPTER,
@@ -216,11 +220,66 @@ def build_github_actions_config(request: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def resolve_artifact_path(path_value: str) -> Path:
+    """Resolves an artifact path relative to the repository root when needed."""
+    candidate = Path(str(path_value or "").strip())
+    if candidate.is_absolute():
+        return candidate
+    return ROOT / normalize_rel_path(str(candidate))
+
+
+def build_workspace_transfer_payload(request: dict[str, Any]) -> dict[str, Any]:
+    """Builds an inline workspace transfer payload for remote sandbox replay."""
+    workspace_diff_path = str(request.get("workspace_diff_path", "")).strip()
+    if not workspace_diff_path:
+        return {
+            "mode": "ref_checkout",
+            "present": False,
+            "path": "",
+            "sha256": "",
+            "gzip_base64": "",
+            "encoded_length": 0,
+            "blocked_reason": "",
+        }
+
+    diff_path = resolve_artifact_path(workspace_diff_path)
+    if not diff_path.is_file():
+        return {
+            "mode": "inline_git_patch",
+            "present": False,
+            "path": display_path(diff_path),
+            "sha256": "",
+            "gzip_base64": "",
+            "encoded_length": 0,
+            "blocked_reason": "workspace_diff_artifact_missing",
+        }
+
+    raw = diff_path.read_bytes()
+    sha256 = hashlib.sha256(raw).hexdigest()
+    gzip_base64 = base64.b64encode(gzip.compress(raw)).decode("ascii")
+    encoded_length = len(gzip_base64)
+    blocked_reason = ""
+    if encoded_length > MAX_GITHUB_ACTIONS_INLINE_WORKSPACE_DIFF_CHARS:
+        blocked_reason = "github_actions_workspace_diff_too_large"
+
+    return {
+        "mode": "inline_git_patch",
+        "present": True,
+        "path": display_path(diff_path),
+        "sha256": sha256,
+        "gzip_base64": gzip_base64,
+        "encoded_length": encoded_length,
+        "blocked_reason": blocked_reason,
+    }
+
+
 def build_github_actions_dispatch_inputs(
     request: dict[str, Any],
     config: dict[str, Any],
+    workspace_transfer: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     """Builds workflow dispatch inputs for the GitHub Actions adapter."""
+    transfer = workspace_transfer or {}
     return {
         "run_id": str(request.get("run_id", "")),
         "correlation_id": config["correlation_id"],
@@ -234,6 +293,9 @@ def build_github_actions_dispatch_inputs(
         "requested_timeout_seconds": str(request.get("timeout_seconds", "")),
         "poll_interval_seconds": str(config["poll_interval_seconds"]),
         "artifact_download_path": config["artifact_download_path"],
+        "workspace_transfer_mode": str(transfer.get("mode", "ref_checkout")),
+        "workspace_diff_sha256": str(transfer.get("sha256", "")),
+        "workspace_diff_gzip_base64": str(transfer.get("gzip_base64", "")),
     }
 
 
@@ -273,8 +335,10 @@ def build_github_actions_dispatch_artifact(
     request: dict[str, Any],
     config: dict[str, Any],
     dispatch_inputs: dict[str, str],
+    workspace_transfer: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Builds a dispatch artifact for the GitHub Actions adapter."""
+    transfer = workspace_transfer or {}
     return {
         "version": 1,
         "adapter_id": GITHUB_ACTIONS_ADAPTER,
@@ -287,6 +351,13 @@ def build_github_actions_dispatch_artifact(
         "correlation_id": config["correlation_id"],
         "artifact_name": config["artifact_name"],
         "expected_run_name": config["expected_run_name"],
+        "workspace_transfer": {
+            "mode": transfer.get("mode", "ref_checkout"),
+            "present": bool(transfer.get("present", False)),
+            "path": transfer.get("path", ""),
+            "sha256": transfer.get("sha256", ""),
+            "encoded_length": transfer.get("encoded_length", 0),
+        },
         "request": {
             "run_id": request.get("run_id", ""),
             "sandbox_plan_path": request.get("sandbox_plan_path", ""),
@@ -469,6 +540,10 @@ def download_github_actions_artifact(
     remote_metadata = load_downloaded_json(download_root, "sandbox-metadata.json")
     if remote_metadata:
         remote_result["metadata"] = remote_metadata
+
+    workspace_transfer = load_downloaded_json(download_root, "workspace-transfer.json")
+    if workspace_transfer:
+        remote_result["workspace_transfer"] = workspace_transfer
 
     remote_result["command_results"] = remap_downloaded_command_results(
         list(remote_result.get("command_results", [])),
@@ -931,8 +1006,29 @@ def execute_github_actions(request: dict[str, Any]) -> dict[str, Any]:
             "preflight": environment,
         }
 
-    dispatch_inputs = build_github_actions_dispatch_inputs(request, config)
-    dispatch_artifact = build_github_actions_dispatch_artifact(request, config, dispatch_inputs)
+    workspace_transfer = build_workspace_transfer_payload(request)
+    if workspace_transfer.get("blocked_reason"):
+        return {
+            "adapter_id": GITHUB_ACTIONS_ADAPTER,
+            "environment": GITHUB_ACTIONS_ADAPTER,
+            "sandbox_ref": "",
+            "conclusion": "blocked",
+            "summary": "GitHub Actions workspace transfer payload is unavailable.",
+            "blocked_reason": str(workspace_transfer.get("blocked_reason", "github_actions_workspace_transfer_blocked")),
+            "command_results": [],
+            "command_summary": summarize_command_results([]),
+            "artifacts": [],
+            "workspace_transfer": {
+                "mode": workspace_transfer.get("mode", "ref_checkout"),
+                "path": workspace_transfer.get("path", ""),
+                "sha256": workspace_transfer.get("sha256", ""),
+                "encoded_length": workspace_transfer.get("encoded_length", 0),
+            },
+            "preflight": environment,
+        }
+
+    dispatch_inputs = build_github_actions_dispatch_inputs(request, config, workspace_transfer)
+    dispatch_artifact = build_github_actions_dispatch_artifact(request, config, dispatch_inputs, workspace_transfer)
     dispatch_artifact_path = logs_dir / "github-actions-dispatch.json"
     write_json(dispatch_artifact_path, dispatch_artifact)
 
@@ -1086,6 +1182,20 @@ def execute_github_actions(request: dict[str, Any]) -> dict[str, Any]:
                 status = "blocked"
                 blocked_reason = "github_actions_metadata_missing"
                 artifact_download_error = blocked_reason
+            if workspace_transfer.get("present"):
+                remote_transfer = remote_result.get("workspace_transfer", {})
+                if not remote_transfer:
+                    status = "blocked"
+                    blocked_reason = "github_actions_workspace_transfer_missing"
+                    artifact_download_error = blocked_reason
+                elif not bool(remote_transfer.get("applied", False)):
+                    status = "blocked"
+                    blocked_reason = "github_actions_workspace_transfer_not_applied"
+                    artifact_download_error = blocked_reason
+                elif str(remote_transfer.get("sha256", "")).strip() != str(workspace_transfer.get("sha256", "")).strip():
+                    status = "blocked"
+                    blocked_reason = "github_actions_workspace_transfer_mismatch"
+                    artifact_download_error = blocked_reason
 
     command_results = build_github_actions_command_results(
         request,
@@ -1143,6 +1253,13 @@ def execute_github_actions(request: dict[str, Any]) -> dict[str, Any]:
         "workflow_poll": latest_payload,
         "poll_attempts": poll_attempts,
         "preflight": environment,
+        "workspace_transfer": {
+            "mode": workspace_transfer.get("mode", "ref_checkout"),
+            "present": bool(workspace_transfer.get("present", False)),
+            "path": workspace_transfer.get("path", ""),
+            "sha256": workspace_transfer.get("sha256", ""),
+            "encoded_length": workspace_transfer.get("encoded_length", 0),
+        },
         "downloaded_result": remote_result,
         "artifact_downloaded": bool(remote_result),
         "artifact_download_path": display_path(resolve_download_root(config["artifact_download_path"])),

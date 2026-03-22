@@ -180,6 +180,7 @@ Workspace metadata хранится в `workspace.json`.
 - `github_actions`
   - explicit remote backend через `dispatch + poll`, не используемый по умолчанию.
   - использует correlation id, workflow artifact download и `swarm-sandbox.yml` как live entrypoint.
+  - если в run есть `workspace-diff.patch`, remote workflow пытается воспроизвести exact workspace state через inline git patch перед запуском verification.
 
 Build context для sandbox test image хранится в `test/docker/swarm-test/`.
 Он не должен смешиваться с live deploy assets из `deploy/`.
@@ -200,6 +201,7 @@ Sandbox всегда работает поверх isolated workspace, а не �
 - настроенную auth-сессию с доступом к workflow dispatch и artifact download;
 - workflow `.github/workflows/swarm-sandbox.yml` в целевом репозитории;
 - workflow artifacts, которые возвращают machine-readable `sandbox-result.json`.
+- при наличии `workspace-diff.patch` runtime передает inline patch payload и ждет подтверждение его применения через `workspace-transfer.json`.
 
 ## Approval Boundaries
 

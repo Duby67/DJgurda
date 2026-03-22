@@ -35,6 +35,7 @@ Sandbox обязателен или предпочтителен, если:
   - использует `.github/workflows/swarm-sandbox.yml` как live workflow entrypoint;
   - опирается на correlation id и artifact download, а не только на branch-based polling.
   - требует существующий workflow entrypoint `swarm-sandbox.yml`, настроенный `gh` и доступ к workflow artifacts.
+  - если run уже материализовал `workspace-diff.patch`, adapter пытается передать его в workflow и воспроизвести exact run state перед remote verification.
 
 ## Current Operational Rules
 
@@ -51,6 +52,7 @@ Sandbox обязателен или предпочтителен, если:
 - sandbox image для тестов должен жить в тестовом слое, а не в `deploy/`; текущий image build context описан в `test/docker/swarm-test/`.
 - `github_actions` live-path должен материализовать downloadable workflow artifacts, а не ограничиваться только status polling.
 - при отсутствии workflow artifact download или при mismatch correlation id remote run должен считаться `blocked`, а не успешным.
+- при передаче `workspace-diff.patch` remote workflow должен либо подтвердить его применение через `workspace-transfer.json`, либо завершиться как `blocked`.
 
 ## Expected Sandbox Result
 

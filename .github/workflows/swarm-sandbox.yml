@@ -53,6 +53,18 @@ on:
         description: Caller-local artifact download target for diagnostics
         required: false
         type: string
+      workspace_transfer_mode:
+        description: Workspace handoff mode for remote sandbox replay
+        required: false
+        type: string
+      workspace_diff_sha256:
+        description: Expected SHA256 for inline workspace diff patch
+        required: false
+        type: string
+      workspace_diff_gzip_base64:
+        description: Gzip+base64 encoded git patch for exact workspace replay
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -71,11 +83,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install test dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements-dev.txt
-
       - name: Prepare sandbox metadata and environment
         shell: bash
         env:
@@ -90,6 +97,8 @@ jobs:
           SWARM_TIMEOUT_SECONDS: ${{ inputs.requested_timeout_seconds }}
           SWARM_POLL_INTERVAL_SECONDS: ${{ inputs.poll_interval_seconds }}
           SWARM_ARTIFACT_DOWNLOAD_PATH: ${{ inputs.artifact_download_path }}
+          SWARM_WORKSPACE_TRANSFER_MODE: ${{ inputs.workspace_transfer_mode }}
+          SWARM_WORKSPACE_DIFF_SHA256: ${{ inputs.workspace_diff_sha256 }}
         run: |
           python - <<'PY'
           import json
@@ -111,6 +120,8 @@ jobs:
               "requested_timeout_seconds": os.environ.get("SWARM_TIMEOUT_SECONDS", ""),
               "poll_interval_seconds": os.environ.get("SWARM_POLL_INTERVAL_SECONDS", ""),
               "artifact_download_path": os.environ.get("SWARM_ARTIFACT_DOWNLOAD_PATH", ""),
+              "workspace_transfer_mode": os.environ.get("SWARM_WORKSPACE_TRANSFER_MODE", ""),
+              "workspace_diff_sha256": os.environ.get("SWARM_WORKSPACE_DIFF_SHA256", ""),
               "command_count": len(json.loads(os.environ.get("SWARM_COMMANDS_JSON") or "[]")),
           }
           (root / "sandbox-metadata.json").write_text(
@@ -121,6 +132,62 @@ jobs:
               for key, value in env_allowlist.items():
                   env_file.write(f"{key}={value}\n")
           PY
+
+      - name: Apply workspace diff
+        if: ${{ inputs.workspace_diff_gzip_base64 != '' }}
+        shell: bash
+        env:
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64: ${{ inputs.workspace_diff_gzip_base64 }}
+          SWARM_WORKSPACE_DIFF_SHA256: ${{ inputs.workspace_diff_sha256 }}
+        run: |
+          python - <<'PY'
+          import base64
+          import gzip
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(".swarm-sandbox")
+          root.mkdir(parents=True, exist_ok=True)
+          patch_payload = gzip.decompress(base64.b64decode(os.environ["SWARM_WORKSPACE_DIFF_GZIP_BASE64"]))
+          actual_sha256 = hashlib.sha256(patch_payload).hexdigest()
+          expected_sha256 = os.environ.get("SWARM_WORKSPACE_DIFF_SHA256", "")
+          if expected_sha256 and actual_sha256 != expected_sha256:
+              raise SystemExit(f"workspace diff sha256 mismatch: {actual_sha256} != {expected_sha256}")
+
+          patch_path = root / "workspace-diff.patch"
+          patch_path.write_bytes(patch_payload)
+          (root / "workspace-transfer.json").write_text(
+              json.dumps(
+                  {
+                      "mode": "inline_git_patch",
+                      "applied": False,
+                      "sha256": actual_sha256,
+                      "path": "workspace-diff.patch",
+                  },
+                  ensure_ascii=False,
+                  indent=2,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+          PY
+          git apply --binary --allow-empty .swarm-sandbox/workspace-diff.patch
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path(".swarm-sandbox/workspace-transfer.json")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          payload["applied"] = True
+          path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
 
       - name: Execute sandbox commands
         shell: bash
@@ -227,6 +294,14 @@ jobs:
                   }
               ],
           }
+          transfer_path = root / "workspace-transfer.json"
+          if transfer_path.is_file():
+              payload["artifacts"].append(
+                  {
+                      "type": "workspace_transfer",
+                      "path": "workspace-transfer.json",
+                  }
+              )
           (root / "sandbox-result.json").write_text(
               json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
               encoding="utf-8",

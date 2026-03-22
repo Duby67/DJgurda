@@ -14,7 +14,9 @@ from scripts.agents.sandbox_adapters import (
     LOCAL_DRY_RUN_ADAPTER,
     build_docker_run_command,
     build_github_actions_config,
+    build_github_actions_dispatch_inputs,
     build_sandbox_image_build_command,
+    build_workspace_transfer_payload,
     execute_github_actions,
     detect_docker,
     execute_docker,
@@ -251,6 +253,40 @@ def test_build_github_actions_config_infers_repository_and_defaults_artifact_dow
     assert config["correlation_id"].startswith("sandbox-smoke-")
     assert config["artifact_name"].startswith("swarm-sandbox-")
     assert config["artifact_download_path"].endswith("github-actions-download")
+
+
+def test_build_workspace_transfer_payload_inlines_existing_diff(tmp_path: Path) -> None:
+    diff_path = tmp_path / "workspace-diff.patch"
+    diff_path.write_text("diff --git a/file.txt b/file.txt\n", encoding="utf-8")
+
+    payload = build_workspace_transfer_payload({"workspace_diff_path": str(diff_path)})
+
+    assert payload["mode"] == "inline_git_patch"
+    assert payload["present"] is True
+    assert payload["path"].endswith("workspace-diff.patch")
+    assert payload["sha256"]
+    assert payload["gzip_base64"]
+    assert payload["blocked_reason"] == ""
+
+
+def test_build_github_actions_dispatch_inputs_include_workspace_transfer_fields(tmp_path: Path) -> None:
+    diff_path = tmp_path / "workspace-diff.patch"
+    diff_path.write_text("diff --git a/file.txt b/file.txt\n", encoding="utf-8")
+    request = build_request(
+        tmp_path,
+        adapter_id=GITHUB_ACTIONS_ADAPTER,
+        repository="djgurda/example",
+        workflow_name="swarm-sandbox.yml",
+        workspace_diff_path=str(diff_path),
+    )
+    config = build_github_actions_config(request)
+    transfer = build_workspace_transfer_payload(request)
+
+    inputs = build_github_actions_dispatch_inputs(request, config, transfer)
+
+    assert inputs["workspace_transfer_mode"] == "inline_git_patch"
+    assert inputs["workspace_diff_sha256"] == transfer["sha256"]
+    assert inputs["workspace_diff_gzip_base64"] == transfer["gzip_base64"]
 
 
 def test_select_github_actions_run_uses_correlation_id() -> None:
@@ -670,6 +706,9 @@ def test_swarm_sandbox_workflow_exists() -> None:
     assert "workflow_dispatch" in payload
     assert "correlation_id" in payload
     assert "artifact_name" in payload
+    assert "workspace_diff_gzip_base64" in payload
+    assert "workspace-transfer.json" in payload
+    assert "git apply --binary --allow-empty" in payload
     assert "actions/upload-artifact@v4" in payload
 
 

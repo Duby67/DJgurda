@@ -603,6 +603,9 @@ def execute_sandbox_for_run(
         "timeout_seconds": 900,
         "artifact_download_path": str((run_dir / "github-actions-download").relative_to(ROOT)).replace("\\", "/"),
     }
+    workspace_diff_path = str(run_summary.get("artifacts", {}).get("workspace_diff", "")).strip()
+    if workspace_diff_path:
+        sandbox_plan["workspace_diff_path"] = workspace_diff_path
     if adapter_id == GITHUB_ACTIONS_ADAPTER:
         sandbox_plan["workflow_name"] = DEFAULT_GITHUB_ACTIONS_WORKFLOW
     write_json(sandbox_plan_path(run_dir), sandbox_plan)
@@ -621,6 +624,8 @@ def execute_sandbox_for_run(
         "timeout_seconds": 900,
         "artifact_download_path": str((run_dir / "github-actions-download").relative_to(ROOT)).replace("\\", "/"),
     }
+    if workspace_diff_path:
+        adapter_request["workspace_diff_path"] = workspace_diff_path
     if adapter_id == GITHUB_ACTIONS_ADAPTER:
         adapter_request["workflow_name"] = DEFAULT_GITHUB_ACTIONS_WORKFLOW
     adapter_result = execute_sandbox_request(adapter_request)
