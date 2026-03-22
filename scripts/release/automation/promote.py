@@ -9,18 +9,12 @@ import re
 import subprocess
 import sys
 
-from pathlib import Path
 from typing import Any
 
-try:
-    from release_versioning import ReleaseVersion, parse_release_version
-except ImportError:  # pragma: no cover - fallback for module execution
-    from scripts.release_versioning import ReleaseVersion, parse_release_version
+from scripts.config import ROOT
+from ..rules.versioning import ReleaseVersion, parse_release_version
 
-
-ROOT = Path(__file__).resolve().parent.parent
 SRC_INIT = ROOT / "src" / "__init__.py"
-RELEASE_SYNC = ROOT / "scripts" / "release_sync.py"
 VERSION_PATTERN = re.compile(r'(__version__\s*=\s*")([^"]+)(")')
 
 
@@ -129,7 +123,7 @@ def update_src_version_file(version: str) -> None:
 def run_release_sync(tag: str, env: str) -> None:
     """Синхронизирует release docs после обновления версии."""
     result = subprocess.run(
-        [sys.executable, str(RELEASE_SYNC), "--tag", tag, "--env", env, "--write"],
+        [sys.executable, "-m", "scripts.release.automation.sync", "--tag", tag, "--env", env, "--write"],
         text=True,
         capture_output=True,
         encoding="utf-8",
@@ -337,7 +331,7 @@ def build_release_plan(
         f"fast-forward {target_branch} to {remote}/{target_branch}",
         f"merge --no-ff {source_branch} into {target_branch}",
         f"update src/__init__.py to {next_version.normalized()}",
-        f"run scripts/release_sync.py --tag {next_tag} --env {profile['release_env']} --write",
+        f"run python -m scripts.release.automation.sync --tag {next_tag} --env {profile['release_env']} --write",
         f"commit release bump as 'release({target_branch}): set version to {next_version.normalized()}'",
         f"create annotated tag {next_tag}",
         f"optional push: git push {remote} {target_branch} && git push {remote} {next_tag}",
@@ -482,7 +476,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--release-env",
-        help="env для scripts/release_sync.py. По умолчанию подбирается по target-ветке.",
+        help="env для scripts.release.automation.sync. По умолчанию подбирается по target-ветке.",
     )
     parser.add_argument(
         "--main-branch",

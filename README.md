@@ -133,6 +133,7 @@ python -m src.main
 - надежность и ограничения - `docs/RELIABILITY.md`
 - безопасность и границы доступа - `docs/SECURITY.md`
 - планы и техдолг - `docs/PLANS.md`
+- release flow - `docs/release-flow.md`
 - история релизов - `docs/release_notes.md`
 
 ## Замечание для разработчиков

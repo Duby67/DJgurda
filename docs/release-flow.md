@@ -6,10 +6,16 @@
 
 Использовать его стоит как human-facing памятку для разработчика. Каноническая логика automation живет в:
 
-- `scripts/release_promote.py`
-- `scripts/release_dev.py`
-- `scripts/release_main.py`
+- `scripts/release/automation/promote.py`
+- `scripts/release/automation/sync.py`
+- `scripts/release/rules/versioning.py`
 - `.github/workflows/release-promote.yml`
+- `scripts/AGENTS.md`
+
+Канонический локальный запуск теперь делается через module-path:
+
+- `python -m scripts.release.automation.promote`
+- `python -m scripts.release.automation.sync`
 
 ## Branch Roles
 

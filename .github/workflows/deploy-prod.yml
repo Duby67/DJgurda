@@ -41,7 +41,7 @@ jobs:
             echo "No tag on HEAD. Skip strict release sync check."
           else
             echo "Release tag on HEAD: $HEAD_TAG"
-            python scripts/release_sync.py --tag "$HEAD_TAG"
+            python -m scripts.release.automation.sync --tag "$HEAD_TAG"
           fi
 
       - name: Generate version

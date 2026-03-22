@@ -243,7 +243,8 @@
       "id": "release_or_versioning_change",
       "label": "Release Or Versioning Change",
       "read_agents": [
-        "AGENTS.md"
+        "AGENTS.md",
+        "scripts/AGENTS.md"
       ],
       "read_docs": [
         "docs/release-flow.md",
@@ -253,17 +254,16 @@
       ],
       "read_code": [
         "src/__init__.py",
-        "scripts/release_versioning.py",
-        "scripts/release_promote.py",
-        "scripts/release_dev.py",
-        "scripts/release_main.py",
-        "scripts/release_sync.py",
+        "scripts/config.py",
+        "scripts/release/rules/versioning.py",
+        "scripts/release/automation/promote.py",
+        "scripts/release/automation/sync.py",
         ".github/workflows/release-promote.yml"
       ],
       "check_tests": [
-        "dry-run release_promote.py/release_dev.py/release_main.py for the target branch",
+        "dry-run python -m scripts.release.automation.promote for the target branch",
         "verify workflow_dispatch flow in .github/workflows/release-promote.yml when promotion automation changes",
-        "scripts/release_sync.py"
+        "python -m scripts.release.automation.sync"
       ],
       "notes": [
         "Other checks depend on release scope and require explicit approval."

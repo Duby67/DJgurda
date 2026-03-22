@@ -11,8 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from scripts.config import ROOT
 
-ROOT = Path(__file__).resolve().parent.parent
 CLASSIFIER_PATH = ROOT / "docs" / "agent-task-classifier.json"
 ROUTING_PATH = ROOT / "docs" / "agent-task-routing.json"
 

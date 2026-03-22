@@ -56,6 +56,7 @@
 ## Read Next
 
 - `ARCHITECTURE.md` для карты системы.
+- `scripts/AGENTS.md` если задача затрагивает automation, swarm lifecycle или release scripts.
 - `docs/PRODUCT_SENSE.md` для пользовательских ожиданий.
 - `docs/RELIABILITY.md` для runtime и testing posture.
 - `docs/SECURITY.md` для секретов, deploy-boundaries и approval-политики.

@@ -206,6 +206,7 @@
 
 - Read AGENTS:
   - `AGENTS.md`
+  - `scripts/AGENTS.md`
 - Read Docs:
   - `docs/release-flow.md`
   - `docs/release_notes.md`
@@ -213,16 +214,15 @@
   - `docs/exec-plans/tech-debt-tracker.md`
 - Read Code:
   - `src/__init__.py`
-  - `scripts/release_versioning.py`
-  - `scripts/release_promote.py`
-  - `scripts/release_dev.py`
-  - `scripts/release_main.py`
-  - `scripts/release_sync.py`
+  - `scripts/config.py`
+  - `scripts/release/rules/versioning.py`
+  - `scripts/release/automation/promote.py`
+  - `scripts/release/automation/sync.py`
   - `.github/workflows/release-promote.yml`
 - Check Tests:
-  - dry-run `scripts/release_promote.py` / `scripts/release_dev.py` / `scripts/release_main.py` по целевой ветке;
+  - dry-run `python -m scripts.release.automation.promote` по целевой ветке;
   - при изменении manual promotion flow сверять `.github/workflows/release-promote.yml`;
-  - прогон `scripts/release_sync.py` при необходимости;
+  - прогон `python -m scripts.release.automation.sync` при необходимости;
   - другие проверки только по scope релиза и после approval пользователя
 
 ### Test Harness Or Smoke Setup Change

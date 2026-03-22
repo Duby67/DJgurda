@@ -12,9 +12,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from agent_approve import PUSH_ID
-from agent_execute import DEFAULT_RUNS_DIR
-from agent_route import ROOT
+from .approve import PUSH_ID
+from .execute import DEFAULT_RUNS_DIR
+from scripts.config import ROOT
 
 
 def load_json(path: Path) -> dict[str, Any]:

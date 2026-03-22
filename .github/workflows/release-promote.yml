@@ -211,8 +211,8 @@ jobs:
             ARGS+=(--release-env "${RELEASE_ENV}")
           fi
 
-          python scripts/release_promote.py "${ARGS[@]}" --pretty > release-artifacts/plan.json
-          python scripts/release_promote.py "${ARGS[@]}" --human > release-artifacts/plan.txt
+          python -m scripts.release.automation.promote "${ARGS[@]}" --pretty > release-artifacts/plan.json
+          python -m scripts.release.automation.promote "${ARGS[@]}" --human > release-artifacts/plan.txt
 
           printf "promotion_mode=%s\n" "${PROMOTION_MODE}" > release-artifacts/request.txt
           printf "source_branch=%s\n" "${SOURCE_BRANCH}" >> release-artifacts/request.txt
@@ -273,7 +273,7 @@ jobs:
             ARGS+=(--push)
           fi
 
-          python scripts/release_promote.py "${ARGS[@]}" --pretty > release-artifacts/execution.json
+          python -m scripts.release.automation.promote "${ARGS[@]}" --pretty > release-artifacts/execution.json
           python -c "import json, pathlib; data=json.loads(pathlib.Path('release-artifacts/execution.json').read_text(encoding='utf-8')); plan=data['plan']; execution=data['execution']; lines=[f\"Strategy: {plan['strategy']}\", f\"Source branch: {plan['source_branch']}\", f\"Target branch: {plan['target_branch']} ({plan['target_kind']})\", f\"Next release: {plan['next_release']['tag']} ({plan['next_release']['version']})\", f\"Checked out branch: {execution['checked_out_branch']}\", f\"Version updated to: {execution['version_updated_to']}\", f\"Tag created: {execution['release_tag_created']}\", f\"Pushed: {'yes' if execution['pushed'] else 'no'}\"]; pathlib.Path('release-artifacts/execution.txt').write_text('\\n'.join(lines)+'\\n', encoding='utf-8')"
 
           {

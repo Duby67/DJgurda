@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from agent_route import (
+from .route import (
     CLASSIFIER_PATH,
     ROOT,
     ROUTING_PATH,

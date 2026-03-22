@@ -310,14 +310,10 @@
           "верси"
         ],
         "path_prefixes_any": [
-          "scripts/"
+          "scripts/release/",
+          ".github/workflows/"
         ],
         "file_names_any": [
-          "release_promote.py",
-          "release_dev.py",
-          "release_main.py",
-          "release_versioning.py",
-          "release_sync.py",
           "release-promote.yml",
           "release-flow.md",
           "release_notes.md"

@@ -11,8 +11,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-
-ROOT = Path(__file__).resolve().parent.parent
+from scripts.config import ROOT
 DOCS = ROOT / "docs"
 SRC_INIT = ROOT / "src" / "__init__.py"
 RELEASE_NOTES = DOCS / "release_notes.md"
@@ -88,16 +87,26 @@ def ensure_release_notes_section(tag: str, release_date: str, env: str, write: b
 
 def ensure_tech_debt_revision(tag: str, release_date: str, write: bool) -> SyncResult:
     text = TECH_DEBT.read_text(encoding="utf-8")
-    metadata_header = "## Метаданные backlog"
+    metadata_header = "## Backlog Metadata"
+    legacy_metadata_header = "## Метаданные backlog"
     revision_prefix = "- Последняя ревизия backlog:"
     new_revision_line = f"{revision_prefix} {release_date} | version/tag: {tag}"
 
     messages: list[str] = []
     changed = False
 
-    if metadata_header not in text:
+    if legacy_metadata_header in text and metadata_header not in text:
+        if write:
+            text = text.replace(legacy_metadata_header, metadata_header, 1)
+            changed = True
+            messages.append("TECH_DEBT: заголовок backlog metadata обновлен до текущего формата")
+        else:
+            messages.append("TECH_DEBT: найден legacy-заголовок metadata backlog, текущий формат будет использован при --write")
+
+    has_metadata_header = metadata_header in text or legacy_metadata_header in text
+    if not has_metadata_header:
         if not write:
-            return SyncResult(False, ["TECH_DEBT: отсутствует раздел 'Метаданные backlog'"])
+            return SyncResult(False, [f"TECH_DEBT: отсутствует раздел '{metadata_header}'"])
         insert_anchor = "## High Priority"
         insert_block = f"{metadata_header}\n{new_revision_line}\n\n"
         if insert_anchor in text:
@@ -105,7 +114,7 @@ def ensure_tech_debt_revision(tag: str, release_date: str, write: bool) -> SyncR
         else:
             text = text + ("\n" if not text.endswith("\n") else "") + insert_block
         changed = True
-        messages.append("TECH_DEBT: добавлен раздел 'Метаданные backlog'")
+        messages.append(f"TECH_DEBT: добавлен раздел '{metadata_header}'")
 
     revision_re = re.compile(rf"^{re.escape(revision_prefix)}\s+.+$", re.MULTILINE)
     match = revision_re.search(text)
@@ -122,7 +131,8 @@ def ensure_tech_debt_revision(tag: str, release_date: str, write: bool) -> SyncR
     else:
         if not write:
             return SyncResult(False, ["TECH_DEBT: отсутствует строка 'Последняя ревизия backlog'"])
-        text = text.replace(metadata_header, f"{metadata_header}\n{new_revision_line}", 1)
+        header_for_insert = metadata_header if metadata_header in text else legacy_metadata_header
+        text = text.replace(header_for_insert, f"{header_for_insert}\n{new_revision_line}", 1)
         changed = True
         messages.append("TECH_DEBT: добавлена строка 'Последняя ревизия backlog'")
 

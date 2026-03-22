@@ -10,14 +10,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from agent_approve import RUN_CHECKS_ID, COMMIT_ID, PUSH_ID
-from agent_apply import collect_git_snapshot, ensure_apply_allowed, resolve_applied_files
-from agent_close import VALID_OUTCOMES, ensure_close_allowed
-from agent_commit import ensure_commit_allowed
-from agent_execute import DEFAULT_RUNS_DIR
-from agent_push import ensure_push_allowed
-from agent_request_approval import ensure_request_allowed, read_requested_checkpoints
-from agent_route import ROOT
+from .approve import RUN_CHECKS_ID, COMMIT_ID, PUSH_ID
+from .apply import collect_git_snapshot, ensure_apply_allowed, resolve_applied_files
+from .close import VALID_OUTCOMES, ensure_close_allowed
+from .commit import ensure_commit_allowed
+from .execute import DEFAULT_RUNS_DIR
+from .push import ensure_push_allowed
+from .request_approval import ensure_request_allowed, read_requested_checkpoints
+from scripts.config import ROOT
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -354,7 +354,7 @@ def can_execute_push(run_summary: dict[str, Any], approval_payload: dict[str, An
 
 
 def closable_outcomes(run_summary: dict[str, Any]) -> list[str]:
-    """Возвращает список outcome, допустимых для agent_close.py."""
+    """Возвращает список outcome, допустимых для lifecycle close-stage."""
     allowed: list[str] = []
     for outcome in sorted(VALID_OUTCOMES):
         try:
