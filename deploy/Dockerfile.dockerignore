@@ -26,8 +26,7 @@ local/
 README.md
 ARCHITECTURE.md
 
-# requirements корприруется отдельно
-requirements.txt
+# Runtime-зависимости нужны в build context, dev-зависимости нет.
 requirements-dev.txt
 
 # Служебные файлы репозитория не нужны внутри контейнера.
