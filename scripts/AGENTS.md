@@ -80,9 +80,13 @@
 
 - swarm front door:
   - `python -m scripts.agents.mcp plan_task --prompt "..." --path path/to/file --pretty`
-  - `python -m scripts.agents.mcp start_swarm_run --prompt "..." --sandbox-adapter local_dry_run --pretty`
-  - `python -m scripts.agents.mcp continue_swarm_run --run-id <run-id> --sandbox-adapter local_dry_run --pretty`
+  - `python -m scripts.agents.mcp start_swarm_run --prompt "..." --pretty`
+  - `python -m scripts.agents.mcp continue_swarm_run --run-id <run-id> --pretty`
   - `python -m scripts.agents.mcp show_run_status --run-id <run-id> --human`
+  - `python -m scripts.agents.mcp show_job_queue --run-id <run-id> --human`
+  - `python -m scripts.agents.mcp show_diff_preview --run-id <run-id> --human`
+  - `python -m scripts.agents.mcp preview_sandbox_plan --run-id <run-id> --human`
+  - `python -m scripts.agents.mcp run_dispatcher --run-id <run-id> --pretty`
 - классификация задачи:
   - `python -m scripts.agents.routing.route --prompt "..." --path path/to/file --pretty`
 - сбор run bundle:

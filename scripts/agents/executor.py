@@ -17,12 +17,19 @@ from scripts.agents.lifecycle import request_approval as request_approval_stage
 from scripts.agents.lifecycle import review as review_stage
 from scripts.agents.lifecycle import sandbox as sandbox_stage
 from scripts.agents.lifecycle import verify as verify_stage
+from scripts.agents.runtime_trace import (
+    append_runtime_trace_event,
+    artifact_rel_path,
+    runtime_trace_path,
+)
 from scripts.agents.sandbox_adapters import (
     DEFAULT_SANDBOX_IMAGE,
     DOCKER_ADAPTER,
+    GITHUB_ACTIONS_ADAPTER,
     LOCAL_DRY_RUN_ADAPTER,
     derive_conclusion,
     execute_sandbox_request,
+    resolve_sandbox_adapter,
     write_json as write_adapter_json,
 )
 from scripts.agents.workspace import (
@@ -113,6 +120,102 @@ def write_run_summary(run_dir: Path, payload: dict[str, Any]) -> None:
     write_json(run_dir / "run-summary.json", payload)
 
 
+def persist_runtime_trace_ref(run_dir: Path) -> None:
+    """Persists runtime trace artifact ref if the file exists."""
+    trace_path = runtime_trace_path(run_dir)
+    if not trace_path.is_file():
+        return
+    persist_artifact_ref(run_dir, "runtime_context_trace", trace_path)
+
+
+def trace_event(
+    run_dir: Path,
+    *,
+    phase: str,
+    job_id: str,
+    requested_by: str,
+    category: str,
+    item: str,
+    reason: str,
+    source_artifact: Path,
+    resolution: str,
+    before_summary: dict[str, Any] | None = None,
+    after_summary: dict[str, Any] | None = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Appends a runtime trace event and wires it into run-summary artifacts."""
+    event = append_runtime_trace_event(
+        run_dir,
+        phase=phase,
+        job_id=job_id,
+        requested_by=requested_by,
+        category=category,
+        item=item,
+        reason=reason,
+        source_artifact=artifact_rel_path(source_artifact),
+        resolution=resolution,
+        before_summary=before_summary,
+        after_summary=after_summary,
+        extra=extra,
+    )
+    persist_runtime_trace_ref(run_dir)
+    return event
+
+
+def summarize_dispatcher_state(jobs_payload: dict[str, Any]) -> dict[str, Any]:
+    """Builds dispatcher metadata from external role jobs."""
+    by_dispatch_status: dict[str, int] = {}
+    current_external_job: dict[str, Any] | None = None
+
+    for job in jobs_payload.get("jobs", []):
+        if job.get("backend") != "external_ai":
+            continue
+        dispatch_status = str(job.get("dispatch_status") or "queued")
+        by_dispatch_status[dispatch_status] = by_dispatch_status.get(dispatch_status, 0) + 1
+        if current_external_job is None and job.get("status") not in {"completed", "failed", "blocked"}:
+            current_external_job = {
+                "job_id": job.get("job_id", ""),
+                "role": job.get("role", ""),
+                "status": job.get("status", ""),
+                "dispatch_status": dispatch_status,
+                "runtime_target": job.get("runtime_target", ""),
+                "runtime_ref": job.get("runtime_ref", ""),
+            }
+
+    return {
+        "external_job_count": sum(1 for job in jobs_payload.get("jobs", []) if job.get("backend") == "external_ai"),
+        "by_dispatch_status": by_dispatch_status,
+        "current_external_job": current_external_job,
+    }
+
+
+def sync_jobs_summary(run_dir: Path, jobs_payload: dict[str, Any]) -> None:
+    """Keeps run-summary aligned with job/dispatcher metadata."""
+    run_summary = load_run_summary(run_dir)
+    run_summary["dispatcher"] = summarize_dispatcher_state(jobs_payload)
+    run_summary.setdefault("jobs", {})["sandbox_adapter"] = jobs_payload.get("sandbox_adapter", "")
+    write_run_summary(run_dir, run_summary)
+
+
+def record_selected_sandbox_adapter(run_dir: Path, *, sandbox_adapter: str) -> None:
+    """Persists the resolved sandbox adapter into run-summary."""
+    run_summary = load_run_summary(run_dir)
+    sandbox = run_summary.setdefault("sandbox", {})
+    sandbox["selected_adapter"] = sandbox_adapter
+    run_summary["sandbox"] = sandbox
+    write_run_summary(run_dir, run_summary)
+
+
+def resolve_run_sandbox_adapter(run_dir: Path, *, requested_adapter_id: str | None) -> str:
+    """Resolves the effective sandbox adapter for a run."""
+    run_summary = load_run_summary(run_dir)
+    verification_profile = run_summary.get("verification_profile") or get_verification_profile(run_summary["task_type"]["id"])
+    return resolve_sandbox_adapter(
+        requested_adapter_id=requested_adapter_id,
+        verification_profile=verification_profile,
+    )
+
+
 def persist_artifact_ref(run_dir: Path, artifact_key: str, artifact_path: Path) -> None:
     """Persists an artifact reference to run-summary.json."""
     run_summary = load_run_summary(run_dir)
@@ -195,6 +298,10 @@ def build_job_specs(
                 "expected_outputs": expected_outputs.get(role, []),
                 "external_ref": f"external://{run_summary['run_id']}/{job_id}" if backend == "external_ai" else "",
                 "adapter": sandbox_adapter if role == "sandbox_runner" else "",
+                "dispatch_status": "queued" if backend == "external_ai" else "",
+                "dispatched_at_utc": "",
+                "runtime_target": "codex_bridge" if backend == "external_ai" else "",
+                "runtime_ref": "",
                 "created_at_utc": now,
                 "updated_at_utc": now,
             }
@@ -215,13 +322,22 @@ def persist_jobs(run_dir: Path, jobs_payload: dict[str, Any]) -> None:
     for job in jobs_payload.get("jobs", []):
         write_json(jobs_dir(run_dir) / f"{job['job_id']}.json", job)
     persist_artifact_ref(run_dir, "jobs_index", jobs_index_path(run_dir))
+    sync_jobs_summary(run_dir, jobs_payload)
 
 
 def ensure_jobs_seeded(run_dir: Path, *, sandbox_adapter: str) -> dict[str, Any]:
     """Creates jobs/index.json if it does not yet exist."""
     index_path = jobs_index_path(run_dir)
     if index_path.is_file():
-        return load_json(index_path)
+        payload = load_json(index_path)
+        if payload.get("sandbox_adapter") != sandbox_adapter:
+            payload["sandbox_adapter"] = sandbox_adapter
+            for job in payload.get("jobs", []):
+                if job.get("role") == "sandbox_runner":
+                    job["adapter"] = sandbox_adapter
+            persist_jobs(run_dir, payload)
+        record_selected_sandbox_adapter(run_dir, sandbox_adapter=sandbox_adapter)
+        return payload
 
     workspace_ref = read_workspace_ref(workspace_json_path(run_dir))
     payload = {
@@ -231,6 +347,7 @@ def ensure_jobs_seeded(run_dir: Path, *, sandbox_adapter: str) -> dict[str, Any]
         "jobs": build_job_specs(run_dir, workspace_ref=workspace_ref, sandbox_adapter=sandbox_adapter),
     }
     persist_jobs(run_dir, payload)
+    record_selected_sandbox_adapter(run_dir, sandbox_adapter=sandbox_adapter)
     return payload
 
 
@@ -272,13 +389,39 @@ def update_job_status(
         job["started_at_utc"] = now
         if claimed_by:
             job["claimed_by"] = claimed_by
+        if job.get("backend") == "external_ai":
+            job["dispatch_status"] = "claimed"
     if status in {"completed", "failed", "blocked"}:
         job["completed_at_utc"] = now
+        if job.get("backend") == "external_ai":
+            job["dispatch_status"] = status
         if result_payload is not None:
             result_path = jobs_dir(run_dir) / f"{job['job_id']}-result.json"
             write_json(result_path, result_payload)
             job["result_artifact"] = str(result_path.relative_to(ROOT)).replace("\\", "/")
 
+    persist_jobs(run_dir, jobs_payload)
+    return job
+
+
+def update_job_dispatch(
+    run_dir: Path,
+    jobs_payload: dict[str, Any],
+    job: dict[str, Any],
+    *,
+    dispatch_status: str,
+    runtime_target: str = "",
+    runtime_ref: str = "",
+) -> dict[str, Any]:
+    """Updates external dispatch metadata for a job."""
+    job["dispatch_status"] = dispatch_status
+    if dispatch_status == "dispatched":
+        job["dispatched_at_utc"] = now_utc()
+    if runtime_target:
+        job["runtime_target"] = runtime_target
+    if runtime_ref:
+        job["runtime_ref"] = runtime_ref
+    job["updated_at_utc"] = now_utc()
     persist_jobs(run_dir, jobs_payload)
     return job
 
@@ -307,6 +450,7 @@ def build_job_result(
 def build_verification_plan(run_dir: Path, *, sandbox_adapter: str) -> dict[str, Any]:
     """Builds and writes a verification plan from the current verification profile."""
     run_summary = load_run_summary(run_dir)
+    record_selected_sandbox_adapter(run_dir, sandbox_adapter=sandbox_adapter)
     profile = run_summary.get("verification_profile") or get_verification_profile(run_summary["task_type"]["id"])
     workspace_ref = read_workspace_ref(workspace_json_path(run_dir))
     commands = [
@@ -339,6 +483,23 @@ def build_verification_plan(run_dir: Path, *, sandbox_adapter: str) -> dict[str,
     write_json(verification_profile_path(run_dir), profile)
     persist_artifact_ref(run_dir, "verification_plan", verification_plan_path(run_dir))
     persist_artifact_ref(run_dir, "verification_profile", verification_profile_path(run_dir))
+    trace_event(
+        run_dir,
+        phase="tester",
+        job_id="tester",
+        requested_by="tester",
+        category="verification_profile",
+        item=profile.get("profile_id", ""),
+        reason="verification_plan_built_from_profile",
+        source_artifact=verification_plan_path(run_dir),
+        resolution="resolved",
+        after_summary={
+            "adapter_id": sandbox_adapter,
+            "required_checks": len(profile.get("required_checks", [])),
+            "optional_checks": len(profile.get("optional_checks", [])),
+            "command_count": len(commands),
+        },
+    )
     return payload
 
 
@@ -408,6 +569,7 @@ def augment_sandbox_result(
 
     run_summary = load_run_summary(run_dir)
     sandbox_summary = run_summary.setdefault("sandbox", {})
+    sandbox_summary["selected_adapter"] = sandbox_plan.get("adapter_id", adapter_result.get("adapter_id", ""))
     sandbox_summary["adapter_id"] = adapter_result.get("adapter_id", "")
     sandbox_summary["workspace_root"] = sandbox_plan.get("workspace_ref", {}).get("root_path", "")
     run_summary["sandbox"] = sandbox_summary
@@ -422,8 +584,10 @@ def execute_sandbox_for_run(
 ) -> dict[str, Any]:
     """Executes the verification plan through the selected sandbox adapter."""
     run_summary = load_run_summary(run_dir)
+    record_selected_sandbox_adapter(run_dir, sandbox_adapter=adapter_id)
     verification_plan = load_json(verification_plan_path(run_dir))
     workspace_ref = read_workspace_ref(workspace_json_path(run_dir))
+    profile = run_summary.get("verification_profile") or get_verification_profile(run_summary["task_type"]["id"])
 
     sandbox_plan = {
         "version": 1,
@@ -444,6 +608,7 @@ def execute_sandbox_for_run(
         "run_id": run_summary["run_id"],
         "run_dir": str(run_dir),
         "adapter_id": adapter_id,
+        "verification_profile": profile,
         "workspace_root": resolve_workspace_root(workspace_json_path(run_dir), fallback=ROOT),
         "sandbox_plan_path": str(sandbox_plan_path(run_dir).relative_to(ROOT)).replace("\\", "/"),
         "commands": verification_plan.get("commands", []),
@@ -456,7 +621,6 @@ def execute_sandbox_for_run(
     write_adapter_json(adapter_result_path, adapter_result)
     persist_artifact_ref(run_dir, "sandbox_adapter_result", adapter_result_path)
 
-    profile = run_summary.get("verification_profile") or get_verification_profile(run_summary["task_type"]["id"])
     conclusion = adapter_result.get("conclusion", derive_conclusion(adapter_result.get("command_results", [])))
     checks = checks_from_conclusion(profile, conclusion=conclusion)
     log_paths = [
@@ -489,6 +653,34 @@ def execute_sandbox_for_run(
         run_dir,
         adapter_result=adapter_result,
         sandbox_plan=sandbox_plan,
+    )
+    trace_event(
+        run_dir,
+        phase="sandbox_runner",
+        job_id="sandbox_runner",
+        requested_by="sandbox_runner",
+        category="sandbox_adapter",
+        item=adapter_id,
+        reason="sandbox_plan_executed",
+        source_artifact=sandbox_plan_path(run_dir),
+        resolution=(
+            "blocking"
+            if conclusion in {"blocked", "failed"}
+            else "advisory"
+            if conclusion in {"skipped", "partial"}
+            else "resolved"
+        ),
+        before_summary={
+            "command_count": len(verification_plan.get("commands", [])),
+            "check_count": len(verification_plan.get("checks", [])),
+        },
+        after_summary={
+            "conclusion": conclusion,
+            "command_summary": adapter_result.get("command_summary", {}),
+        },
+        extra={
+            "sandbox_ref": adapter_result.get("sandbox_ref", ""),
+        },
     )
 
     return {
@@ -533,6 +725,19 @@ def execute_local_job(
     if job["role"] == "context_loader":
         output = execute_stage.build_output(run_dir)
         status = "blocked" if output["status"] in {"instruction_conflict", "context_insufficient"} else "completed"
+        loaded_context = load_json(run_dir / "loaded-context.json")
+        trace_event(
+            run_dir,
+            phase="context_loader",
+            job_id="context_loader",
+            requested_by="context_loader",
+            category="context_pack",
+            item="context-pack.json",
+            reason="context_loaded_into_runtime_state",
+            source_artifact=run_dir / "loaded-context.json",
+            resolution="blocking" if status == "blocked" else "resolved",
+            after_summary=loaded_context.get("summary", {}),
+        )
         result = build_job_result(job, status=status, summary="Context pack loaded.", output=output)
         return update_job_status(run_dir, jobs_payload, job, status=status, result_payload=result)
 
@@ -582,6 +787,67 @@ def find_next_job(jobs_payload: dict[str, Any]) -> dict[str, Any] | None:
             continue
         return job
     return None
+
+
+def next_claimable_external_job(run_dir: Path) -> dict[str, Any] | None:
+    """Returns the next external AI job that can be claimed right now."""
+    jobs_payload = load_jobs(run_dir)
+    for role in ROLE_SEQUENCE:
+        job = find_job(jobs_payload, role)
+        if job.get("backend") != "external_ai":
+            continue
+        if job.get("status") != "queued":
+            continue
+        if not dependencies_completed(jobs_payload, job):
+            continue
+        try:
+            job_is_claimable(run_dir, job, jobs_payload)
+        except ValueError:
+            continue
+        return job
+    return None
+
+
+def build_external_work_item(run_dir: Path, *, job_id: str) -> dict[str, Any]:
+    """Builds a Codex-facing work item payload for an external role job."""
+    jobs_payload = load_jobs(run_dir)
+    job = find_job(jobs_payload, job_id)
+    workspace_ref = read_workspace_ref(workspace_json_path(run_dir)).to_dict()
+    run_summary = load_run_summary(run_dir)
+    artifacts = run_summary.get("artifacts", {})
+    artifact_refs: dict[str, str] = {}
+    for key, value in artifacts.items():
+        candidate = ROOT / normalize_rel_path(value)
+        if not candidate.exists():
+            continue
+        artifact_refs[key] = value
+        artifact_refs[candidate.name] = value
+
+    return {
+        "version": 1,
+        "run_id": run_dir.name,
+        "job_id": job_id,
+        "role": job.get("role", ""),
+        "workspace_ref": workspace_ref,
+        "input_artifacts": {
+            key: artifact_refs[key]
+            for key in job.get("input_artifacts", [])
+            if key in artifact_refs
+        },
+        "expected_outputs": job.get("expected_outputs", []),
+        "write_scope": job.get("write_scope", []),
+        "next_action": "complete_role_job",
+        "result_contract": {
+            "coder": {
+                "required_fields": ["summary", "applied_files"],
+                "optional_fields": ["applied_by", "allow_empty_diff"],
+            },
+            "reviewer": {
+                "required_fields": ["summary", "conclusion"],
+                "optional_fields": ["reviewed_by", "findings", "risks"],
+            },
+        }.get(job.get("role", ""), {}),
+    }
 
 
 def job_is_claimable(run_dir: Path, job: dict[str, Any], jobs_payload: dict[str, Any]) -> None:
@@ -639,9 +905,11 @@ def ensure_external_job_active(
 def start_or_continue_run(
     run_dir: Path,
     *,
-    sandbox_adapter: str = LOCAL_DRY_RUN_ADAPTER,
+    sandbox_adapter: str | None = None,
 ) -> dict[str, Any]:
     """Runs local orchestration steps until the next external or approval boundary."""
+    sandbox_adapter = resolve_run_sandbox_adapter(run_dir, requested_adapter_id=sandbox_adapter)
+    record_selected_sandbox_adapter(run_dir, sandbox_adapter=sandbox_adapter)
     build_workspace_for_run(run_dir)
     jobs_payload = ensure_jobs_seeded(run_dir, sandbox_adapter=sandbox_adapter)
 
@@ -699,6 +967,45 @@ def claim_job(run_dir: Path, *, job_id: str, claimed_by: str) -> dict[str, Any]:
     }
 
 
+def mark_job_dispatched(
+    run_dir: Path,
+    *,
+    job_id: str,
+    runtime_target: str,
+    runtime_ref: str,
+    dispatched_by: str,
+) -> dict[str, Any]:
+    """Marks an external job as dispatched to a runtime target."""
+    jobs_payload = load_jobs(run_dir)
+    job = find_job(jobs_payload, job_id)
+    if job.get("backend") != "external_ai":
+        raise ValueError(f"Job '{job_id}' is not an external AI role")
+    update_job_dispatch(
+        run_dir,
+        jobs_payload,
+        job,
+        dispatch_status="dispatched",
+        runtime_target=runtime_target,
+        runtime_ref=runtime_ref,
+    )
+    trace_event(
+        run_dir,
+        phase="dispatcher",
+        job_id=job_id,
+        requested_by=dispatched_by,
+        category="external_job",
+        item=job_id,
+        reason="external_job_dispatched_to_runtime",
+        source_artifact=jobs_dir(run_dir) / f"{job_id}.json",
+        resolution="resolved",
+        extra={
+            "runtime_target": runtime_target,
+            "runtime_ref": runtime_ref,
+        },
+    )
+    return find_job(load_jobs(run_dir), job_id)
+
+
 def read_external_payload(
     *,
     summary: str,
@@ -717,7 +1024,7 @@ def complete_external_job(
     job_id: str,
     summary: str,
     result_payload: dict[str, Any] | None,
-    sandbox_adapter: str = LOCAL_DRY_RUN_ADAPTER,
+    sandbox_adapter: str | None = None,
 ) -> dict[str, Any]:
     """Completes an external role job and resumes orchestration."""
     jobs_payload = load_jobs(run_dir)
@@ -758,6 +1065,25 @@ def complete_external_job(
     )
     update_job_status(run_dir, jobs_payload, job, status="completed", result_payload=result)
     resumed = start_or_continue_run(run_dir, sandbox_adapter=sandbox_adapter)
+    if job["role"] == "coder":
+        refreshed_jobs = load_jobs(run_dir)
+        reviewer_job = find_job(refreshed_jobs, "reviewer")
+        if reviewer_job.get("status") == "queued":
+            trace_event(
+                run_dir,
+                phase="reviewer_handoff",
+                job_id="reviewer",
+                requested_by="executor",
+                category="external_job",
+                item="reviewer",
+                reason="reviewer_ready_after_coder_and_verification",
+                source_artifact=jobs_dir(run_dir) / "reviewer.json",
+                resolution="resolved",
+                after_summary={
+                    "next_action": resumed.get("next_action", ""),
+                    "sandbox_adapter": sandbox_adapter,
+                },
+            )
     return {
         "run_id": run_dir.name,
         "job": find_job(load_jobs(run_dir), job_id),

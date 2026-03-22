@@ -17,8 +17,16 @@ from scripts.agents.executor import (
     fail_external_job,
     start_or_continue_run,
 )
+from scripts.agents.lifecycle.approve import build_output as build_approval_action_output
 from scripts.agents.lifecycle.request_approval import build_output as build_request_approval_output
 from scripts.agents.lifecycle.status import build_status as build_run_status, render_human_status
+from scripts.agents.mcp.dispatcher import (
+    build_diff_preview as build_dispatcher_diff_preview,
+    dispatch_next_job,
+    ensure_dispatch_record,
+    mark_dispatch_terminal,
+    show_job_queue as build_dispatcher_job_queue,
+)
 from scripts.agents.routing.plan import build_plan_output, write_artifacts as write_plan_artifacts
 from scripts.agents.routing.run import build_run_bundle, generate_run_id, normalize_runs_dir
 from scripts.agents.routing.route import (
@@ -29,12 +37,23 @@ from scripts.agents.routing.route import (
     read_paths,
     read_prompt,
 )
-from scripts.agents.sandbox_adapters import DOCKER_ADAPTER, LOCAL_DRY_RUN_ADAPTER
+from scripts.agents.sandbox_adapters import (
+    DOCKER_ADAPTER,
+    GITHUB_ACTIONS_ADAPTER,
+    LOCAL_DRY_RUN_ADAPTER,
+)
 
 
 def load_json(path: Path) -> dict[str, Any]:
     """Reads a JSON file."""
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_optional_json(path: Path) -> dict[str, Any] | None:
+    """Reads a JSON file if it exists."""
+    if not path.is_file():
+        return None
+    return load_json(path)
 
 
 def normalize_rel_path(value: str) -> str:
@@ -51,6 +70,13 @@ def resolve_run_dir(*, run_dir: str | None, run_id: str | None, runs_dir: str) -
     if run_id:
         return (ROOT / normalize_rel_path(runs_dir)) / run_id.strip()
     raise ValueError("Нужно указать либо --run-dir, либо --run-id")
+
+
+def write_view(run_dir: Path, filename: str, content: str) -> str:
+    """Writes a generated human-readable view into the run bundle."""
+    view_path = run_dir / filename
+    view_path.write_text(content, encoding="utf-8")
+    return str(view_path.relative_to(ROOT)).replace("\\", "/")
 
 
 def command_inputs(args: argparse.Namespace) -> argparse.Namespace:
@@ -127,10 +153,12 @@ def show_run_status(args: argparse.Namespace) -> dict[str, Any]:
     status_payload = build_run_status(run_dir)
 
     if args.human:
+        human = render_human_status(status_payload)
         return {
             "tool": "show_run_status",
             "run_dir": status_payload["run_dir"],
-            "human": render_human_status(status_payload),
+            "human": human,
+            "view": write_view(run_dir, "run-status.md", human),
         }
 
     return {
@@ -165,13 +193,180 @@ def parse_result_payload(args: argparse.Namespace) -> dict[str, Any] | None:
     return None
 
 
+def build_show_job_queue(args: argparse.Namespace) -> dict[str, Any]:
+    """Shows a compact queue summary for role jobs."""
+    run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
+    output = build_dispatcher_job_queue(run_dir)
+    if args.human:
+        return {
+            "tool": "show_job_queue",
+            "run_id": run_dir.name,
+            "run_dir": str(run_dir.relative_to(ROOT)).replace("\\", "/"),
+            "human": output["human"],
+            "view": output["job_queue_markdown"],
+        }
+    return {
+        "tool": "show_job_queue",
+        "run_id": run_dir.name,
+        "run_dir": str(run_dir.relative_to(ROOT)).replace("\\", "/"),
+        **output,
+    }
+
+
+def build_show_diff_preview(args: argparse.Namespace) -> dict[str, Any]:
+    """Shows a workspace diff preview or changed-files fallback."""
+    run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
+    output = build_dispatcher_diff_preview(
+        run_dir,
+        explicit_paths=[item.strip() for item in args.path] if getattr(args, "path", None) else None,
+    )
+    if args.human:
+        return {
+            "tool": "show_diff_preview",
+            "run_id": run_dir.name,
+            "run_dir": str(run_dir.relative_to(ROOT)).replace("\\", "/"),
+            "human": output["human"],
+            "view": output["diff_preview_markdown"],
+        }
+    return {
+        "tool": "show_diff_preview",
+        "run_id": run_dir.name,
+        "run_dir": str(run_dir.relative_to(ROOT)).replace("\\", "/"),
+        **output,
+    }
+
+
+def render_sandbox_plan_human(payload: dict[str, Any]) -> str:
+    """Renders a compact sandbox plan preview."""
+    lines = [
+        f"Run: {payload.get('run_id', 'unknown')}",
+        f"Adapter: {payload.get('adapter_id', 'unknown')}",
+        f"Risk level: {payload.get('risk_level', 'unknown')}",
+        f"Commands: {len(payload.get('commands', []))}",
+        f"Checks: {len(payload.get('checks', []))}",
+    ]
+    for command in payload.get("commands", [])[:10]:
+        lines.append(f"- {command.get('id', '')}: {command.get('command', '')}")
+    return "\n".join(lines) + "\n"
+
+
+def build_preview_sandbox_plan(args: argparse.Namespace) -> dict[str, Any]:
+    """Shows an existing sandbox plan or derives a preview from the verification plan."""
+    run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
+    sandbox_plan_path = run_dir / "sandbox-plan.json"
+    verification_plan_path = run_dir / "verification-plan.json"
+    sandbox_plan = load_optional_json(sandbox_plan_path)
+
+    if sandbox_plan is not None:
+        output = {
+            "tool": "preview_sandbox_plan",
+            "run_id": run_dir.name,
+            "run_dir": str(run_dir.relative_to(ROOT)).replace("\\", "/"),
+            "source": "sandbox-plan.json",
+            "artifact": str(sandbox_plan_path.relative_to(ROOT)).replace("\\", "/"),
+            **sandbox_plan,
+        }
+    else:
+        verification_plan = load_optional_json(verification_plan_path)
+        if verification_plan is not None:
+            output = {
+                "tool": "preview_sandbox_plan",
+                "run_id": run_dir.name,
+                "run_dir": str(run_dir.relative_to(ROOT)).replace("\\", "/"),
+                "source": "verification-plan.json",
+                "artifact": str(verification_plan_path.relative_to(ROOT)).replace("\\", "/"),
+                "adapter_id": verification_plan.get("adapter_id", ""),
+                "workspace_ref": verification_plan.get("workspace_ref", {}),
+                "risk_level": verification_plan.get("risk_level", "unknown"),
+                "commands": verification_plan.get("commands", []),
+                "checks": verification_plan.get("checks", []),
+                "notes": verification_plan.get("notes", []),
+            }
+        else:
+            run_summary = load_json(run_dir / "run-summary.json")
+            profile = run_summary.get("verification_profile", {})
+            if not profile:
+                raise FileNotFoundError(
+                    f"Не найден sandbox preview ни в {sandbox_plan_path}, ни в {verification_plan_path}",
+                )
+            output = {
+                "tool": "preview_sandbox_plan",
+                "run_id": run_dir.name,
+                "run_dir": str(run_dir.relative_to(ROOT)).replace("\\", "/"),
+                "source": "run-summary.json",
+                "artifact": str((run_dir / 'run-summary.json').relative_to(ROOT)).replace("\\", "/"),
+                "adapter_id": run_summary.get("sandbox", {}).get("selected_adapter", ""),
+                "workspace_ref": load_optional_json(run_dir / "workspace.json") or {},
+                "risk_level": profile.get("risk_level", "unknown"),
+                "commands": [
+                    {"id": f"command_{index + 1}", "command": command}
+                    for index, command in enumerate(profile.get("allowed_commands", []))
+                ],
+                "checks": [
+                    {"id": check_id, "required": True}
+                    for check_id in profile.get("required_checks", [])
+                ] + [
+                    {"id": check_id, "required": False}
+                    for check_id in profile.get("optional_checks", [])
+                ],
+                "notes": profile.get("notes", []),
+            }
+
+    if args.human:
+        return {
+            "tool": "preview_sandbox_plan",
+            "run_dir": output["run_dir"],
+            "human": render_sandbox_plan_human(output),
+        }
+    return output
+
+
+def build_checkpoint_action(
+    args: argparse.Namespace,
+    *,
+    checkpoint: str,
+    action: str,
+    tool_name: str,
+) -> dict[str, Any]:
+    """Applies an approval action through the existing lifecycle approval contract."""
+    run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
+    result = build_approval_action_output(
+        run_dir,
+        checkpoint_id=checkpoint,
+        action=action,
+        note=getattr(args, "note", ""),
+    )
+    return {
+        "tool": tool_name,
+        **result,
+    }
+
+
+def build_run_dispatcher(args: argparse.Namespace) -> dict[str, Any]:
+    """Claims or surfaces the next external job as a Codex-oriented work item."""
+    run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
+    result = dispatch_next_job(
+        run_dir,
+        runtime_target=args.runtime_target,
+        claimed_by=args.claimed_by,
+    )
+    return {
+        "tool": "run_dispatcher",
+        "run_id": run_dir.name,
+        "run_dir": str(run_dir.relative_to(ROOT)).replace("\\", "/"),
+        **result,
+    }
+
+
 def build_claim_role_job(args: argparse.Namespace) -> dict[str, Any]:
     """Claims an external role job."""
     run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
     result = claim_job(run_dir, job_id=args.job_id, claimed_by=args.claimed_by)
+    dispatch = ensure_dispatch_record(run_dir, job_id=args.job_id, runtime_target=args.claimed_by)
     return {
         "tool": "claim_role_job",
         **result,
+        "dispatch": dispatch,
     }
 
 
@@ -185,9 +380,11 @@ def build_complete_role_job(args: argparse.Namespace) -> dict[str, Any]:
         result_payload=parse_result_payload(args),
         sandbox_adapter=args.sandbox_adapter,
     )
+    dispatch = mark_dispatch_terminal(run_dir, job_id=args.job_id, dispatch_status="completed")
     return {
         "tool": "complete_role_job",
         **result,
+        "dispatch": dispatch,
     }
 
 
@@ -200,9 +397,11 @@ def build_fail_role_job(args: argparse.Namespace) -> dict[str, Any]:
         summary=args.summary,
         reason=args.reason,
     )
+    dispatch = mark_dispatch_terminal(run_dir, job_id=args.job_id, dispatch_status="failed")
     return {
         "tool": "fail_role_job",
         **result,
+        "dispatch": dispatch,
     }
 
 
@@ -216,10 +415,24 @@ def handle_tool(command: str, args: argparse.Namespace) -> dict[str, Any]:
         return build_continue_swarm_run(args)
     if command == "show_run_status":
         return show_run_status(args)
+    if command == "show_job_queue":
+        return build_show_job_queue(args)
+    if command == "show_diff_preview":
+        return build_show_diff_preview(args)
+    if command == "preview_sandbox_plan":
+        return build_preview_sandbox_plan(args)
+    if command == "approve_run_checks":
+        return build_checkpoint_action(args, checkpoint="run_checks", action="approve", tool_name="approve_run_checks")
+    if command == "approve_commit":
+        return build_checkpoint_action(args, checkpoint="commit", action="approve", tool_name="approve_commit")
+    if command == "reject_checkpoint":
+        return build_checkpoint_action(args, checkpoint=args.checkpoint, action="reject", tool_name="reject_checkpoint")
     if command == "request_commit_approval":
         return build_commit_or_push_request(args, checkpoint="commit")
     if command == "request_push_approval":
         return build_commit_or_push_request(args, checkpoint="push")
+    if command == "run_dispatcher":
+        return build_run_dispatcher(args)
     if command == "claim_role_job":
         return build_claim_role_job(args)
     if command == "complete_role_job":
@@ -282,9 +495,9 @@ def parse_args() -> argparse.Namespace:
     )
     start_parser.add_argument(
         "--sandbox-adapter",
-        default=LOCAL_DRY_RUN_ADAPTER,
-        choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER],
-        help="Sandbox adapter for automated verification steps.",
+        default=None,
+        choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER, GITHUB_ACTIONS_ADAPTER],
+        help="Optional sandbox adapter override for automated verification steps.",
     )
 
     continue_parser = subparsers.add_parser("continue_swarm_run", help="Continue orchestration for an existing run.")
@@ -298,9 +511,9 @@ def parse_args() -> argparse.Namespace:
     )
     continue_parser.add_argument(
         "--sandbox-adapter",
-        default=LOCAL_DRY_RUN_ADAPTER,
-        choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER],
-        help="Sandbox adapter for resumed local orchestration steps.",
+        default=None,
+        choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER, GITHUB_ACTIONS_ADAPTER],
+        help="Optional sandbox adapter override for resumed local orchestration steps.",
     )
 
     status_parser = subparsers.add_parser("show_run_status", help="Show a run status.")
@@ -313,6 +526,80 @@ def parse_args() -> argparse.Namespace:
         help="Base directory for runs (default: runs).",
     )
     status_parser.add_argument("--human", action="store_true", help="Render compact human-readable status.")
+
+    job_queue_parser = subparsers.add_parser("show_job_queue", help="Show a compact role job queue summary.")
+    add_pretty_flag(job_queue_parser)
+    job_queue_parser.add_argument("--run-dir", help="Path to a run bundle.")
+    job_queue_parser.add_argument("--run-id", help="Run id inside runs-dir.")
+    job_queue_parser.add_argument(
+        "--runs-dir",
+        default=str(normalize_runs_dir("runs")),
+        help="Base directory for runs (default: runs).",
+    )
+    job_queue_parser.add_argument("--human", action="store_true", help="Render compact human-readable queue output.")
+
+    diff_parser = subparsers.add_parser("show_diff_preview", help="Show a workspace diff preview.")
+    add_pretty_flag(diff_parser)
+    diff_parser.add_argument("--run-dir", help="Path to a run bundle.")
+    diff_parser.add_argument("--run-id", help="Run id inside runs-dir.")
+    diff_parser.add_argument(
+        "--runs-dir",
+        default=str(normalize_runs_dir("runs")),
+        help="Base directory for runs (default: runs).",
+    )
+    diff_parser.add_argument("--path", action="append", help="Optional path to preview. Can be repeated.")
+    diff_parser.add_argument("--human", action="store_true", help="Render compact human-readable diff output.")
+    diff_parser.add_argument("--max-lines", type=int, default=80, help="Maximum preview lines to render.")
+
+    sandbox_preview_parser = subparsers.add_parser("preview_sandbox_plan", help="Show sandbox plan preview for a run.")
+    add_pretty_flag(sandbox_preview_parser)
+    sandbox_preview_parser.add_argument("--run-dir", help="Path to a run bundle.")
+    sandbox_preview_parser.add_argument("--run-id", help="Run id inside runs-dir.")
+    sandbox_preview_parser.add_argument(
+        "--runs-dir",
+        default=str(normalize_runs_dir("runs")),
+        help="Base directory for runs (default: runs).",
+    )
+    sandbox_preview_parser.add_argument("--human", action="store_true", help="Render compact human-readable plan output.")
+
+    approve_run_checks_parser = subparsers.add_parser("approve_run_checks", help="Approve run_checks checkpoint.")
+    add_pretty_flag(approve_run_checks_parser)
+    approve_run_checks_parser.add_argument("--run-dir", help="Path to a run bundle.")
+    approve_run_checks_parser.add_argument("--run-id", help="Run id inside runs-dir.")
+    approve_run_checks_parser.add_argument(
+        "--runs-dir",
+        default=str(normalize_runs_dir("runs")),
+        help="Base directory for runs (default: runs).",
+    )
+    approve_run_checks_parser.add_argument("--note", default="", help="Optional approval note.")
+
+    approve_commit_parser = subparsers.add_parser("approve_commit", help="Approve commit checkpoint.")
+    add_pretty_flag(approve_commit_parser)
+    approve_commit_parser.add_argument("--run-dir", help="Path to a run bundle.")
+    approve_commit_parser.add_argument("--run-id", help="Run id inside runs-dir.")
+    approve_commit_parser.add_argument(
+        "--runs-dir",
+        default=str(normalize_runs_dir("runs")),
+        help="Base directory for runs (default: runs).",
+    )
+    approve_commit_parser.add_argument("--note", default="", help="Optional approval note.")
+
+    reject_parser = subparsers.add_parser("reject_checkpoint", help="Reject a lifecycle checkpoint.")
+    add_pretty_flag(reject_parser)
+    reject_parser.add_argument("--run-dir", help="Path to a run bundle.")
+    reject_parser.add_argument("--run-id", help="Run id inside runs-dir.")
+    reject_parser.add_argument(
+        "--runs-dir",
+        default=str(normalize_runs_dir("runs")),
+        help="Base directory for runs (default: runs).",
+    )
+    reject_parser.add_argument(
+        "--checkpoint",
+        required=True,
+        choices=["run_checks", "commit", "push"],
+        help="Checkpoint to reject.",
+    )
+    reject_parser.add_argument("--note", default="", help="Optional rejection note.")
 
     commit_parser = subparsers.add_parser("request_commit_approval", help="Request commit approval.")
     add_pretty_flag(commit_parser)
@@ -338,6 +625,18 @@ def parse_args() -> argparse.Namespace:
     push_parser.add_argument("--summary", default="", help="Approval summary.")
     push_parser.add_argument("--requested-by", default="release_manager", help="Requester identity.")
 
+    dispatcher_parser = subparsers.add_parser("run_dispatcher", help="Claim or surface the next external role job.")
+    add_pretty_flag(dispatcher_parser)
+    dispatcher_parser.add_argument("--run-dir", help="Path to a run bundle.")
+    dispatcher_parser.add_argument("--run-id", help="Run id inside runs-dir.")
+    dispatcher_parser.add_argument(
+        "--runs-dir",
+        default=str(normalize_runs_dir("runs")),
+        help="Base directory for runs (default: runs).",
+    )
+    dispatcher_parser.add_argument("--claimed-by", default="ux_dispatcher", help="Identity used for claim operations.")
+    dispatcher_parser.add_argument("--runtime-target", default="codex", help="External runtime target label.")
+
     for command_name in ("claim_role_job", "complete_role_job", "fail_role_job"):
         job_parser = subparsers.add_parser(command_name, help=f"{command_name.replace('_', ' ').title()}.")
         add_pretty_flag(job_parser)
@@ -356,9 +655,9 @@ def parse_args() -> argparse.Namespace:
         job_parser.add_argument("--result-file", help="Path to a JSON payload for complete_role_job.")
         job_parser.add_argument(
             "--sandbox-adapter",
-            default=LOCAL_DRY_RUN_ADAPTER,
-            choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER],
-            help="Sandbox adapter for resumed local orchestration after external completion.",
+            default=None,
+            choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER, GITHUB_ACTIONS_ADAPTER],
+            help="Optional sandbox adapter override for resumed local orchestration after external completion.",
         )
 
     stdio_parser = subparsers.add_parser("serve_stdio", help="Serve newline-delimited JSON requests over stdio.")

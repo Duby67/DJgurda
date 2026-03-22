@@ -174,6 +174,7 @@ def test_show_run_status_includes_workspace_and_jobs() -> None:
         assert payload["workspace"]["mode"] in {"git_worktree", "snapshot_copy"}
         assert run_id in payload["workspace"]["root_path"]
         assert payload["jobs"]["total_jobs"] == 8
+        assert payload["selected_sandbox_adapter"] == "local_dry_run"
         assert {job["job_id"] for job in payload["jobs"]["external_jobs"]} == {"coder", "reviewer"}
     finally:
         cleanup_run_dir(run_dir)
@@ -220,6 +221,124 @@ def test_continue_swarm_run_resumes_after_run_checks_approval() -> None:
         cleanup_run_dir(run_dir)
 
 
+def test_run_dispatcher_builds_work_item_and_dispatcher_artifacts() -> None:
+    run_id = f"mcp-dispatch-{uuid4().hex}"
+    run_module(
+        "-m",
+        "scripts.agents.mcp",
+        "start_swarm_run",
+        "--prompt",
+        "Обновить swarm usage docs",
+        "--run-id",
+        run_id,
+    )
+
+    run_dir = ROOT / "runs" / run_id
+    try:
+        approve_run_checks(run_id)
+        dispatched = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "run_dispatcher",
+            "--run-id",
+            run_id,
+            "--pretty",
+        )
+
+        assert dispatched.returncode == 0, dispatched.stderr or dispatched.stdout
+        payload = json.loads(dispatched.stdout)
+        assert payload["tool"] == "run_dispatcher"
+        assert payload["dispatch_status"] == "dispatched"
+        assert payload["job"]["job_id"] == "coder"
+        assert payload["job"]["dispatch_status"] == "dispatched"
+        assert payload["work_item"]["role"] == "coder"
+        assert payload["work_item"]["completion_contract"]["command"] == "complete_role_job"
+        assert (run_dir / "jobs" / "coder-dispatch.json").is_file()
+        assert (run_dir / "dispatcher-state.json").is_file()
+        runtime_trace = (run_dir / "runtime-context-trace.jsonl").read_text(encoding="utf-8").splitlines()
+        assert runtime_trace
+        assert any(json.loads(line)["phase"] == "dispatcher" for line in runtime_trace)
+
+        dispatcher_state = read_json(run_dir / "dispatcher-state.json")
+        assert dispatcher_state["current_job"]["job_id"] == "coder"
+    finally:
+        cleanup_run_dir(run_dir)
+
+
+def test_show_job_queue_and_diff_preview_generate_views() -> None:
+    run_id = f"mcp-views-{uuid4().hex}"
+    run_module(
+        "-m",
+        "scripts.agents.mcp",
+        "start_swarm_run",
+        "--prompt",
+        "Обновить swarm usage docs",
+        "--run-id",
+        run_id,
+    )
+
+    run_dir = ROOT / "runs" / run_id
+    try:
+        approve_run_checks(run_id)
+        run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "run_dispatcher",
+            "--run-id",
+            run_id,
+        )
+
+        workspace_root = Path(read_json(run_dir / "workspace.json")["workspace"]["root_path"])
+        target_file = workspace_root / "docs" / "swarm-usage.md"
+        target_file.write_text(
+            target_file.read_text(encoding="utf-8") + "\nDispatcher view smoke change.\n",
+            encoding="utf-8",
+        )
+
+        queue = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "show_job_queue",
+            "--run-id",
+            run_id,
+            "--human",
+        )
+        assert queue.returncode == 0, queue.stderr or queue.stdout
+        queue_payload = json.loads(queue.stdout)
+        assert queue_payload["tool"] == "show_job_queue"
+        assert "coder" in queue_payload["human"]
+        assert (run_dir / "job-queue.md").is_file()
+
+        diff = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "show_diff_preview",
+            "--run-id",
+            run_id,
+            "--human",
+        )
+        assert diff.returncode == 0, diff.stderr or diff.stdout
+        diff_payload = json.loads(diff.stdout)
+        assert diff_payload["tool"] == "show_diff_preview"
+        assert "swarm-usage.md" in diff_payload["human"]
+        assert (run_dir / "diff-preview.md").is_file()
+
+        status = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "show_run_status",
+            "--run-id",
+            run_id,
+            "--human",
+        )
+        assert status.returncode == 0, status.stderr or status.stdout
+        status_payload = json.loads(status.stdout)
+        assert status_payload["tool"] == "show_run_status"
+        assert (run_dir / "run-status.md").is_file()
+    finally:
+        cleanup_run_dir(run_dir)
+
+
 def test_external_role_jobs_resume_pipeline_until_commit_approval() -> None:
     run_id = f"mcp-external-{uuid4().hex}"
     run_module(
@@ -237,18 +356,19 @@ def test_external_role_jobs_resume_pipeline_until_commit_approval() -> None:
         approve_payload = approve_run_checks(run_id)
         assert approve_payload["status"] == "approved_for_implementation"
 
-        claim_coder = run_module(
+        dispatch_coder = run_module(
             "-m",
             "scripts.agents.mcp",
-            "claim_role_job",
+            "run_dispatcher",
             "--run-id",
             run_id,
-            "--job-id",
-            "coder",
-            "--claimed-by",
+            "--runtime-target",
             "codex-runtime",
         )
-        assert claim_coder.returncode == 0, claim_coder.stderr or claim_coder.stdout
+        assert dispatch_coder.returncode == 0, dispatch_coder.stderr or dispatch_coder.stdout
+        dispatch_coder_payload = json.loads(dispatch_coder.stdout)
+        assert dispatch_coder_payload["job"]["job_id"] == "coder"
+        assert dispatch_coder_payload["job"]["dispatch_status"] == "dispatched"
 
         workspace_root = Path(read_json(run_dir / "workspace.json")["workspace"]["root_path"])
         target_file = workspace_root / "docs" / "swarm-usage.md"
@@ -278,6 +398,7 @@ def test_external_role_jobs_resume_pipeline_until_commit_approval() -> None:
         assert complete_coder.returncode == 0, complete_coder.stderr or complete_coder.stdout
         complete_coder_payload = json.loads(complete_coder.stdout)
         assert complete_coder_payload["resume"]["next_action"] == "review_result"
+        assert complete_coder_payload["dispatch"]["job"]["dispatch_status"] == "completed"
         assert (run_dir / "verification-plan.json").is_file()
         assert (run_dir / "sandbox-plan.json").is_file()
         assert (run_dir / "sandbox-result.json").is_file()
@@ -288,18 +409,19 @@ def test_external_role_jobs_resume_pipeline_until_commit_approval() -> None:
         assert status_by_job["sandbox_runner"] == "completed"
         assert status_by_job["reviewer"] == "queued"
 
-        claim_reviewer = run_module(
+        dispatch_reviewer = run_module(
             "-m",
             "scripts.agents.mcp",
-            "claim_role_job",
+            "run_dispatcher",
             "--run-id",
             run_id,
-            "--job-id",
-            "reviewer",
-            "--claimed-by",
+            "--runtime-target",
             "review-runtime",
         )
-        assert claim_reviewer.returncode == 0, claim_reviewer.stderr or claim_reviewer.stdout
+        assert dispatch_reviewer.returncode == 0, dispatch_reviewer.stderr or dispatch_reviewer.stdout
+        dispatch_reviewer_payload = json.loads(dispatch_reviewer.stdout)
+        assert dispatch_reviewer_payload["job"]["job_id"] == "reviewer"
+        assert dispatch_reviewer_payload["job"]["dispatch_status"] == "dispatched"
 
         complete_reviewer = run_module(
             "-m",
@@ -324,6 +446,7 @@ def test_external_role_jobs_resume_pipeline_until_commit_approval() -> None:
         assert complete_reviewer.returncode == 0, complete_reviewer.stderr or complete_reviewer.stdout
         review_payload = json.loads(complete_reviewer.stdout)
         assert review_payload["resume"]["status"] == "awaiting_commit_approval"
+        assert review_payload["dispatch"]["job"]["dispatch_status"] == "completed"
         assert (run_dir / "approval-request.json").is_file()
         assert (run_dir / "jobs" / "reviewer-result.json").is_file()
 
@@ -380,6 +503,7 @@ def test_fail_role_job_marks_external_job_failure() -> None:
         assert failed_payload["job"]["status"] == "failed"
         assert failed_payload["status"] == "external_job_failed"
         assert failed_payload["next_action"] == "resolve_coder_failure"
+        assert failed_payload["dispatch"]["job"]["dispatch_status"] == "failed"
     finally:
         cleanup_run_dir(run_dir)
 
@@ -431,6 +555,79 @@ def test_commit_and_push_approval_wrappers_delegate_to_request_approval() -> Non
         cleanup_run_dir(run_dir)
 
 
+def test_checkpoint_action_wrappers_delegate_to_lifecycle_approve() -> None:
+    run_id = f"mcp-approve-{uuid4().hex}"
+    run_module(
+        "-m",
+        "scripts.agents.mcp",
+        "start_swarm_run",
+        "--prompt",
+        "Обновить swarm usage docs",
+        "--run-id",
+        run_id,
+    )
+    run_dir = ROOT / "runs" / run_id
+    try:
+        run_checks = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "approve_run_checks",
+            "--run-id",
+            run_id,
+            "--pretty",
+        )
+        assert run_checks.returncode == 0, run_checks.stderr or run_checks.stdout
+        run_checks_payload = json.loads(run_checks.stdout)
+        assert run_checks_payload["tool"] == "approve_run_checks"
+        assert run_checks_payload["updated_checkpoint"]["id"] == "run_checks"
+        assert run_checks_payload["updated_checkpoint"]["new_status"] == "approved"
+    finally:
+        cleanup_run_dir(run_dir)
+
+    commit_run_id = f"mcp-commit-approve-{uuid4().hex}"
+    commit_run_dir = create_approval_ready_run(commit_run_id)
+    try:
+        commit = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "approve_commit",
+            "--run-id",
+            commit_run_id,
+            "--pretty",
+        )
+        assert commit.returncode == 0, commit.stderr or commit.stdout
+        commit_payload = json.loads(commit.stdout)
+        assert commit_payload["tool"] == "approve_commit"
+        assert commit_payload["updated_checkpoint"]["id"] == "commit"
+        assert commit_payload["updated_checkpoint"]["new_status"] == "approved"
+    finally:
+        cleanup_run_dir(commit_run_dir)
+
+    reject_run_id = f"mcp-reject-{uuid4().hex}"
+    reject_run_dir = create_approval_ready_run(reject_run_id)
+    try:
+        reject = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "reject_checkpoint",
+            "--run-id",
+            reject_run_id,
+            "--checkpoint",
+            "commit",
+            "--note",
+            "hold changes",
+            "--pretty",
+        )
+        assert reject.returncode == 0, reject.stderr or reject.stdout
+        reject_payload = json.loads(reject.stdout)
+        assert reject_payload["tool"] == "reject_checkpoint"
+        assert reject_payload["updated_checkpoint"]["id"] == "commit"
+        assert reject_payload["updated_checkpoint"]["new_status"] == "rejected"
+        assert reject_payload["status"] == "approval_rejected"
+    finally:
+        cleanup_run_dir(reject_run_dir)
+
+
 def test_tasks_json_calls_front_door_commands() -> None:
     tasks = read_json(TASKS_PATH)
     labels = {task["label"] for task in tasks["tasks"]}
@@ -438,7 +635,14 @@ def test_tasks_json_calls_front_door_commands() -> None:
         "Plan task",
         "Start swarm run",
         "Continue swarm run",
+        "Preview sandbox plan",
+        "Run dispatcher",
         "Show run status",
+        "Show job queue",
+        "Show diff preview",
+        "Approve run checks",
+        "Approve commit",
+        "Reject checkpoint",
         "Request commit approval",
         "Request push approval",
     }
@@ -448,3 +652,5 @@ def test_tasks_json_calls_front_door_commands() -> None:
         args = task["args"]
         assert "scripts.agents.mcp" in args
         assert command.endswith(r"venv\Scripts\python.exe")
+        if task["label"] in {"Start swarm run", "Continue swarm run"}:
+            assert "local_dry_run" not in args

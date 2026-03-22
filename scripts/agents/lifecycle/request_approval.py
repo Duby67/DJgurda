@@ -204,6 +204,20 @@ def build_artifact_snapshot(run_summary: dict[str, Any]) -> dict[str, str]:
     return snapshot
 
 
+def build_trace_snapshot(run_summary: dict[str, Any]) -> dict[str, str]:
+    """Keeps only available trace artifacts inside a dedicated snapshot."""
+    artifacts = run_summary.get("artifacts", {})
+    snapshot: dict[str, str] = {}
+    for key in ("context_trace", "runtime_context_trace"):
+        rel_path = artifacts.get(key, "")
+        if not rel_path:
+            continue
+        full_path = ROOT / normalize_rel_path(rel_path)
+        if full_path.exists():
+            snapshot[key] = rel_path
+    return snapshot
+
+
 def build_approval_request_packet(
     *,
     run_summary: dict[str, Any],
@@ -239,6 +253,7 @@ def build_approval_request_packet(
         "sandbox": sandbox,
         "review": review,
         "artifacts": build_artifact_snapshot(run_summary),
+        "trace_artifacts": build_trace_snapshot(run_summary),
     }
 
 
@@ -280,6 +295,10 @@ def render_markdown_packet(packet: dict[str, Any]) -> str:
     artifact_lines = "\n".join(
         f"- `{key}`: `{value}`"
         for key, value in packet.get("artifacts", {}).items()
+    ) or "- none"
+    trace_lines = "\n".join(
+        f"- `{key}`: `{value}`"
+        for key, value in packet.get("trace_artifacts", {}).items()
     ) or "- none"
 
     return (
@@ -325,6 +344,8 @@ def render_markdown_packet(packet: dict[str, Any]) -> str:
         f"- Findings: {packet.get('review', {}).get('finding_count', 0)}\n"
         f"- Residual Risks: {residual_risks}\n"
         f"{risks_block}\n\n"
+        "## Trace Artifacts\n\n"
+        f"{trace_lines}\n\n"
         "## Artifacts\n\n"
         f"{artifact_lines}\n"
     )

@@ -122,6 +122,13 @@ def test_external_job_flow_progresses_to_commit_approval() -> None:
         assert summary["status"] == "awaiting_commit_approval"
         assert summary["next_action"] == "await_commit_approval"
         assert (run_dir / "approval-request.json").is_file()
+        approval_request = json.loads((run_dir / "approval-request.json").read_text(encoding="utf-8"))
+        assert "context_trace" in approval_request["trace_artifacts"]
+        assert "runtime_context_trace" in approval_request["trace_artifacts"]
+        runtime_trace = (run_dir / "runtime-context-trace.jsonl").read_text(encoding="utf-8").splitlines()
+        assert runtime_trace
+        phases = {json.loads(line)["phase"] for line in runtime_trace}
+        assert {"context_loader", "tester", "sandbox_runner", "reviewer_handoff"} <= phases
     finally:
         cleanup_run_dir(run_dir)
 
@@ -141,5 +148,64 @@ def test_fail_external_job_records_failure_state() -> None:
 
         assert payload["status"] == "external_job_failed"
         assert payload["next_action"] == "resolve_coder_failure"
+    finally:
+        cleanup_run_dir(run_dir)
+
+
+def test_profile_required_sandbox_defaults_to_docker_and_blocks_when_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run_id = f"executor-docker-{uuid4().hex}"
+    run_dir = ROOT / "runs" / run_id
+    build_run_bundle(
+        prompt="Исправить multi-link routing bug",
+        paths=["src/bot/processing/media_router.py"],
+        run_id=run_id,
+        run_dir=run_dir,
+    )
+    start_or_continue_run(run_dir, sandbox_adapter=None)
+
+    try:
+        approve_checkpoint(run_dir, checkpoint_id="run_checks", action="approve", note="ready")
+        claim_job(run_dir, job_id="coder", claimed_by="codex-runtime")
+
+        workspace_root = Path(json.loads((run_dir / "workspace.json").read_text(encoding="utf-8"))["workspace"]["root_path"])
+        target_file = workspace_root / "src" / "bot" / "processing" / "media_router.py"
+        target_file.write_text(
+            target_file.read_text(encoding="utf-8") + "\n# Docker selection regression.\n",
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr(
+            "scripts.agents.sandbox_adapters.detect_docker",
+            lambda: {"available": False, "reason": "docker_binary_not_found", "command": []},
+        )
+
+        payload = complete_external_job(
+            run_dir,
+            job_id="coder",
+            summary="coder done",
+            result_payload={
+                "summary": "Coder updated swarm docs in isolated workspace.",
+                "applied_by": "codex-runtime",
+                "applied_files": ["src/bot/processing/media_router.py"],
+            },
+            sandbox_adapter=None,
+        )
+
+        assert payload["resume"]["status"] == "sandbox_blocked"
+        summary = json.loads((run_dir / "run-summary.json").read_text(encoding="utf-8"))
+        assert summary["sandbox"]["selected_adapter"] == "docker"
+
+        jobs_payload = load_jobs(run_dir)
+        assert jobs_payload["sandbox_adapter"] == "docker"
+        sandbox_job = next(job for job in jobs_payload["jobs"] if job["job_id"] == "sandbox_runner")
+        assert sandbox_job["adapter"] == "docker"
+        assert sandbox_job["status"] == "blocked"
+
+        verification_plan = json.loads((run_dir / "verification-plan.json").read_text(encoding="utf-8"))
+        sandbox_plan = json.loads((run_dir / "sandbox-plan.json").read_text(encoding="utf-8"))
+        assert verification_plan["adapter_id"] == "docker"
+        assert sandbox_plan["adapter_id"] == "docker"
     finally:
         cleanup_run_dir(run_dir)

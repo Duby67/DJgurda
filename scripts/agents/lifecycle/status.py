@@ -17,6 +17,7 @@ from .commit import ensure_commit_allowed
 from .execute import DEFAULT_RUNS_DIR
 from .push import ensure_push_allowed
 from .request_approval import ensure_request_allowed, read_requested_checkpoints
+from scripts.agents.runtime_trace import load_runtime_trace, summarize_runtime_trace
 from scripts.config import ROOT
 
 
@@ -294,25 +295,47 @@ def summarize_jobs(jobs_payload: dict[str, Any] | None) -> dict[str, Any] | None
 
     jobs = jobs_payload.get("jobs", [])
     by_status: dict[str, int] = {}
+    by_dispatch_status: dict[str, int] = {}
     external_jobs: list[dict[str, Any]] = []
 
     for job in jobs:
         status = str(job.get("status", "unknown"))
         by_status[status] = by_status.get(status, 0) + 1
         if job.get("backend") == "external_ai":
+            dispatch_status = str(job.get("dispatch_status") or "queued")
+            by_dispatch_status[dispatch_status] = by_dispatch_status.get(dispatch_status, 0) + 1
             external_jobs.append(
                 {
                     "job_id": job.get("job_id", ""),
                     "role": job.get("role", ""),
                     "status": status,
+                    "dispatch_status": dispatch_status,
                     "external_ref": job.get("external_ref", ""),
+                    "runtime_target": job.get("runtime_target", ""),
+                    "runtime_ref": job.get("runtime_ref", ""),
                 }
             )
+
+    current_external_job = next(
+        (
+            {
+                "job_id": job.get("job_id", ""),
+                "role": job.get("role", ""),
+                "status": job.get("status", ""),
+                "dispatch_status": job.get("dispatch_status") or "queued",
+            }
+            for job in jobs
+            if job.get("backend") == "external_ai" and job.get("status") not in {"completed", "failed", "blocked"}
+        ),
+        None,
+    )
 
     return {
         "total_jobs": len(jobs),
         "by_status": by_status,
+        "by_dispatch_status": by_dispatch_status,
         "external_jobs": external_jobs,
+        "current_external_job": current_external_job,
     }
 
 
@@ -771,6 +794,7 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     close_result_path = run_dir / "close-result.json"
     workspace_path = run_dir / "workspace.json"
     jobs_index_path = run_dir / "jobs" / "index.json"
+    runtime_trace_events = load_runtime_trace(run_dir)
 
     if not summary_path.is_file():
         raise FileNotFoundError(f"Не найден файл: {summary_path}")
@@ -812,6 +836,7 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     close_summary = summarize_closure(close_payload)
     workspace_summary = summarize_workspace(workspace_payload)
     jobs_summary = summarize_jobs(jobs_payload)
+    runtime_trace_summary = summarize_runtime_trace(runtime_trace_events)
     blockers = build_blockers(
         run_summary=run_summary,
         artifact_status=artifact_status,
@@ -832,6 +857,7 @@ def build_status(run_dir: Path) -> dict[str, Any]:
         "task_type": run_summary["task_type"],
         "status": run_summary["status"],
         "next_action": run_summary["next_action"],
+        "selected_sandbox_adapter": run_summary.get("sandbox", {}).get("selected_adapter", ""),
         "recommended_agents": run_summary.get("recommended_agents", []),
         "changed_paths": run_summary.get("changed_paths", []),
         "artifacts": artifact_status,
@@ -870,6 +896,10 @@ def build_status(run_dir: Path) -> dict[str, Any]:
         output["workspace"] = workspace_summary
     if jobs_summary is not None:
         output["jobs"] = jobs_summary
+    if runtime_trace_summary["total_events"] > 0:
+        output["runtime_trace"] = runtime_trace_summary
+    if run_summary.get("dispatcher"):
+        output["dispatcher"] = run_summary["dispatcher"]
 
     return output
 
@@ -887,6 +917,8 @@ def render_human_status(status_payload: dict[str, Any]) -> str:
         f"State: {status_payload.get('status', 'unknown')} -> {status_payload.get('next_action', 'unknown')}",
         f"Task: {status_payload.get('task_type', {}).get('id', 'unknown')}",
     ]
+    if status_payload.get("selected_sandbox_adapter"):
+        lines.append(f"Selected sandbox adapter: {status_payload['selected_sandbox_adapter']}")
 
     next_step = plan.get("next_pending_step")
     if next_step:
@@ -938,7 +970,36 @@ def render_human_status(status_payload: dict[str, Any]) -> str:
     if jobs:
         lines.append(
             "Jobs: "
-            f"{jobs.get('total_jobs', 0)} total, by_status={jobs.get('by_status', {})}"
+            f"{jobs.get('total_jobs', 0)} total, by_status={jobs.get('by_status', {})}, "
+            f"dispatch={jobs.get('by_dispatch_status', {})}"
+        )
+        current_external_job = jobs.get("current_external_job")
+        if current_external_job:
+            lines.append(
+                "Current external job: "
+                f"{current_external_job.get('job_id', 'unknown')} "
+                f"({current_external_job.get('dispatch_status', 'queued')})"
+            )
+
+    dispatcher = status_payload.get("dispatcher")
+    if dispatcher:
+        lines.append(
+            "Dispatcher: "
+            f"{dispatcher.get('by_dispatch_status', {})}"
+        )
+
+    sandbox = status_payload.get("sandbox")
+    if sandbox:
+        lines.append(
+            "Sandbox: "
+            f"{sandbox.get('adapter_id', 'unknown')} -> {sandbox.get('conclusion', 'unknown')}"
+        )
+
+    runtime_trace = status_payload.get("runtime_trace")
+    if runtime_trace:
+        lines.append(
+            "Runtime trace: "
+            f"{runtime_trace.get('total_events', 0)} events, by_phase={runtime_trace.get('by_phase', {})}"
         )
 
     if blockers:

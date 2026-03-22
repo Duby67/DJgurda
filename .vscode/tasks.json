@@ -25,8 +25,6 @@
         "start_swarm_run",
         "--prompt",
         "${input:swarmPrompt}",
-        "--sandbox-adapter",
-        "local_dry_run",
         "--pretty"
       ],
       "problemMatcher": []
@@ -41,8 +39,34 @@
         "continue_swarm_run",
         "--run-id",
         "${input:swarmRunId}",
-        "--sandbox-adapter",
-        "local_dry_run",
+        "--pretty"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Preview sandbox plan",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "preview_sandbox_plan",
+        "--run-id",
+        "${input:swarmRunId}",
+        "--human"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Run dispatcher",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "run_dispatcher",
+        "--run-id",
+        "${input:swarmRunId}",
         "--pretty"
       ],
       "problemMatcher": []
@@ -58,6 +82,80 @@
         "--run-id",
         "${input:swarmRunId}",
         "--human"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Show job queue",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "show_job_queue",
+        "--run-id",
+        "${input:swarmRunId}",
+        "--human"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Show diff preview",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "show_diff_preview",
+        "--run-id",
+        "${input:swarmRunId}",
+        "--human"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Approve run checks",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "approve_run_checks",
+        "--run-id",
+        "${input:swarmRunId}",
+        "--pretty"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Approve commit",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "approve_commit",
+        "--run-id",
+        "${input:swarmRunId}",
+        "--pretty"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Reject checkpoint",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "reject_checkpoint",
+        "--run-id",
+        "${input:swarmRunId}",
+        "--checkpoint",
+        "${input:swarmCheckpointId}",
+        "--note",
+        "${input:swarmApprovalNote}",
+        "--pretty"
       ],
       "problemMatcher": []
     },
@@ -100,6 +198,23 @@
       "id": "swarmRunId",
       "type": "promptString",
       "description": "Swarm run id"
+    },
+    {
+      "id": "swarmCheckpointId",
+      "type": "pickString",
+      "description": "Swarm checkpoint id",
+      "options": [
+        "run_checks",
+        "commit",
+        "push"
+      ],
+      "default": "run_checks"
+    },
+    {
+      "id": "swarmApprovalNote",
+      "type": "promptString",
+      "description": "Optional approval note",
+      "default": ""
     }
   ]
 }

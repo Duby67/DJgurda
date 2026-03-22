@@ -23,11 +23,21 @@
 - `start_swarm_run`
 - `continue_swarm_run`
 - `show_run_status`
+- `show_job_queue`
+- `show_diff_preview`
+- `preview_sandbox_plan`
+- `run_dispatcher`
+- `approve_run_checks`
+- `approve_commit`
+- `reject_checkpoint`
 - `request_commit_approval`
 - `request_push_approval`
 - `claim_role_job`
 - `complete_role_job`
 - `fail_role_job`
+
+Эти UX-oriented команды не меняют executor core.
+Они работают как поверхностный MCP/CLI слой над уже существующими run artifacts и lifecycle contracts.
 
 ## Run Bundle
 
@@ -47,6 +57,7 @@
 Дополнительные runtime artifacts появляются по мере прохождения lifecycle:
 
 - `workspace.json`
+- `runtime-context-trace.jsonl`
 - `loaded-context.json`
 - `context-brief.json`
 - `context-summary.md`
@@ -59,9 +70,19 @@
 - `sandbox-result.json`
 - `review-result.json`
 - `approval-request.json`
+- `dispatcher-state.json`
+- `run-status.md`
+- `job-queue.md`
+- `diff-preview.md`
 - `commit-result.json`
 - `push-result.json`
 - `close-result.json`
+
+UX layer читает эти артефакты и поверх них строит:
+
+- diff preview через `workspace-diff.patch` или fallback на `changed-files.json`
+- sandbox preview через `sandbox-plan.json` или fallback на `verification-plan.json`
+- job queue view через `jobs/index.json`
 
 ## Role Jobs
 
@@ -94,6 +115,8 @@ Swarm runtime использует фиксированный Phase 3 job order:
 
 - `jobs/index.json`
 - `jobs/<job-id>.json`
+- `jobs/<job-id>-dispatch.json` после dispatcher handoff
+- `jobs/<job-id>-work-item.json` после Codex-style dispatch
 - `jobs/<job-id>-result.json` после исполнения
 
 ## Job Status Model
@@ -106,10 +129,27 @@ Swarm runtime использует фиксированный Phase 3 job order:
 - `failed`
 - `blocked`
 
+Отдельно для external jobs ведется dispatch-layer metadata:
+
+- `queued`
+- `claimed`
+- `dispatched`
+- `completed`
+- `failed`
+- `blocked`
+
 External AI job нельзя завершать напрямую из `queued`:
 
 - сначала `claim_role_job`;
 - затем `complete_role_job` или `fail_role_job`.
+
+`run_dispatcher` в текущем UX-слое не является отдельным executor backend.
+Это repo-local dispatcher helper, который:
+
+- находит следующий claimable external job;
+- при необходимости делает `claim_role_job`;
+- пишет dispatch metadata и runtime trace;
+- возвращает machine-readable work item для Codex-style runtime handoff.
 
 ## Isolated Workspace
 
@@ -136,11 +176,19 @@ Workspace metadata хранится в `workspace.json`.
 - `local_dry_run`
   - preview-only adapter;
 - `docker`
-  - реальный execution backend;
+  - default execution backend, если verification profile требует реальный sandbox;
 - `github_actions`
-  - зарезервирован на будущее.
+  - explicit remote backend через `dispatch + poll`, не используемый по умолчанию.
 
 Sandbox всегда работает поверх isolated workspace, а не поверх корня репозитория.
+Выбор adapter теперь делается в executor core:
+
+- явный `--sandbox-adapter` override всегда имеет приоритет;
+- если `verification_profile.sandbox_required_for` непустой, по умолчанию выбирается `docker`;
+- если профиль не требует реального sandbox, default остается `local_dry_run`.
+
+`preview_sandbox_plan` не запускает sandbox.
+Команда только показывает уже собранный sandbox/verification plan в удобном UX-формате.
 
 ## Approval Boundaries
 
@@ -153,6 +201,37 @@ Swarm runtime не отменяет human approval.
 - `push`
 
 `continue_swarm_run` полезен после approval или ручного вмешательства, но сам по себе не обходит approval boundaries.
+
+UX wrappers для approval:
+
+- `approve_run_checks`
+- `approve_commit`
+- `reject_checkpoint`
+
+Они используют тот же lifecycle approval contract, что и низкоуровневая команда approve-stage.
+
+## CLI-First UX Surface
+
+Текущий VSCode/MCP UX специально остается CLI-first.
+Вместо отдельной панели или extension UI репозиторий дает тонкие команды и tasks:
+
+- `show_run_status` для общей картины run;
+- `show_job_queue` для внешних job handoff;
+- `show_diff_preview` для проверки workspace diff перед review/approval;
+- `preview_sandbox_plan` для проверки verification/sandbox intent;
+- `run_dispatcher` для получения следующего external work item;
+- approval wrappers для быстрого approve/reject без ручного редактирования JSON.
+
+Human-readable views пишутся прямо в run bundle:
+
+- `show_run_status --human` -> `run-status.md`
+- `show_job_queue --human` -> `job-queue.md`
+- `show_diff_preview --human` -> `diff-preview.md`
+
+Runtime context audit trail остается append-only:
+
+- initial route/plan trace живет в `context-trace.json`;
+- runtime stage events живут в `runtime-context-trace.jsonl`.
 
 ## Source Of Truth
 

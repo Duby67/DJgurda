@@ -159,11 +159,15 @@ def ensure_sandbox_allowed(run_summary: dict[str, Any], plan_payload: dict[str, 
         "verification_recorded_pending_sandbox",
         "verification_partial_pending_sandbox",
         "verification_skipped_pending_sandbox",
+        "verification_failed",
+        "verification_blocked",
         "sandbox_failed",
         "sandbox_blocked",
     }
     allowed_next_actions = {
         "run_in_sandbox",
+        "review_verification_failures",
+        "resolve_verification_blockers",
         "review_sandbox_failures",
         "resolve_sandbox_blockers",
     }
