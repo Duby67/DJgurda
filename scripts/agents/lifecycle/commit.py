@@ -15,6 +15,7 @@ from typing import Any
 from .apply import collect_git_snapshot, file_presence_summary
 from .approve import COMMIT_ID, PUSH_ID
 from .execute import DEFAULT_RUNS_DIR
+from scripts.agents.workspace import resolve_workspace_root
 from scripts.config import ROOT
 
 
@@ -131,9 +132,9 @@ def ensure_commit_allowed(run_summary: dict[str, Any], approval_payload: dict[st
         raise ValueError("Commit-stage можно запускать только после commit approval")
 
 
-def run_git_command(args: list[str], paths: list[str] | None = None) -> subprocess.CompletedProcess[str]:
+def run_git_command(args: list[str], paths: list[str] | None = None, *, repo_root: Path = ROOT) -> subprocess.CompletedProcess[str]:
     """Запускает git-команду в корне репозитория."""
-    command = ["git", "-C", str(ROOT), *args]
+    command = ["git", "-C", str(repo_root), *args]
     if paths:
         command.append("--")
         command.extend(paths)
@@ -147,19 +148,19 @@ def run_git_command(args: list[str], paths: list[str] | None = None) -> subproce
     )
 
 
-def create_commit(message: str, files: list[str]) -> tuple[str, str]:
+def create_commit(message: str, files: list[str], *, repo_root: Path) -> tuple[str, str]:
     """Создает git commit только по указанным файлам."""
-    add_result = run_git_command(["add"], files)
+    add_result = run_git_command(["add"], files, repo_root=repo_root)
     if add_result.returncode != 0:
         raise ValueError(f"Не удалось выполнить git add: {add_result.stderr.strip() or add_result.stdout.strip()}")
 
-    commit_result = run_git_command(["commit", "-m", message], files)
+    commit_result = run_git_command(["commit", "-m", message], files, repo_root=repo_root)
     if commit_result.returncode != 0:
         raise ValueError(
             f"Не удалось выполнить git commit: {commit_result.stderr.strip() or commit_result.stdout.strip()}",
         )
 
-    rev_result = run_git_command(["rev-parse", "HEAD"])
+    rev_result = run_git_command(["rev-parse", "HEAD"], repo_root=repo_root)
     if rev_result.returncode != 0:
         raise ValueError(
             f"Commit создан, но не удалось получить hash: {rev_result.stderr.strip() or rev_result.stdout.strip()}",
@@ -260,15 +261,16 @@ def build_output(
     execution_state = load_json(execution_state_path) if execution_state_path.is_file() else None
 
     ensure_commit_allowed(run_summary, approval_payload)
-    file_presence = file_presence_summary(files)
-    git_snapshot = collect_git_snapshot(files)
+    repo_root = resolve_workspace_root(run_dir / "workspace.json", fallback=ROOT)
+    file_presence = file_presence_summary(files, repo_root=repo_root)
+    git_snapshot = collect_git_snapshot(files, repo_root=repo_root)
     if execute and git_snapshot["diff_summary"]["file_count"] == 0:
         raise ValueError("Нечего коммитить: git diff по указанным файлам пуст")
 
     commit_hash: str | None = None
     commit_stdout = ""
     if execute:
-        commit_hash, commit_stdout = create_commit(message, files)
+        commit_hash, commit_stdout = create_commit(message, files, repo_root=repo_root)
 
     commit_result = build_commit_result(
         run_summary=run_summary,

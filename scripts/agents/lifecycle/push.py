@@ -14,6 +14,7 @@ from typing import Any
 
 from .approve import PUSH_ID
 from .execute import DEFAULT_RUNS_DIR
+from scripts.agents.workspace import resolve_workspace_root
 from scripts.config import ROOT
 
 
@@ -51,9 +52,9 @@ def resolve_run_dir(args: argparse.Namespace) -> Path:
     raise ValueError("Нужно указать либо --run-dir, либо --run-id")
 
 
-def run_git_command(args: list[str]) -> subprocess.CompletedProcess[str]:
+def run_git_command(args: list[str], *, repo_root: Path = ROOT) -> subprocess.CompletedProcess[str]:
     """Запускает git-команду в корне репозитория."""
-    command = ["git", "-C", str(ROOT), *args]
+    command = ["git", "-C", str(repo_root), *args]
     return subprocess.run(
         command,
         text=True,
@@ -100,12 +101,12 @@ def ensure_push_allowed(run_summary: dict[str, Any], approval_payload: dict[str,
         raise ValueError("Push-stage можно запускать только после push approval")
 
 
-def resolve_branch(args: argparse.Namespace) -> str:
+def resolve_branch(args: argparse.Namespace, *, repo_root: Path) -> str:
     """Определяет branch для push."""
     if args.branch:
         return args.branch.strip()
 
-    branch_result = run_git_command(["rev-parse", "--abbrev-ref", "HEAD"])
+    branch_result = run_git_command(["rev-parse", "--abbrev-ref", "HEAD"], repo_root=repo_root)
     if branch_result.returncode != 0:
         raise ValueError(
             f"Не удалось определить текущую ветку: {branch_result.stderr.strip() or branch_result.stdout.strip()}",
@@ -117,9 +118,9 @@ def resolve_branch(args: argparse.Namespace) -> str:
     return branch
 
 
-def execute_push(remote: str, branch: str) -> str:
+def execute_push(remote: str, branch: str, *, repo_root: Path) -> str:
     """Выполняет git push HEAD в указанную ветку remote."""
-    push_result = run_git_command(["push", remote, f"HEAD:{branch}"])
+    push_result = run_git_command(["push", remote, f"HEAD:{branch}"], repo_root=repo_root)
     if push_result.returncode != 0:
         raise ValueError(
             f"Не удалось выполнить git push: {push_result.stderr.strip() or push_result.stdout.strip()}",
@@ -206,10 +207,11 @@ def build_output(
     execution_state = load_json(execution_state_path) if execution_state_path.is_file() else None
 
     ensure_push_allowed(run_summary, approval_payload)
+    repo_root = resolve_workspace_root(run_dir / "workspace.json", fallback=ROOT)
 
     push_stdout = ""
     if execute:
-        push_stdout = execute_push(remote, branch)
+        push_stdout = execute_push(remote, branch, repo_root=repo_root)
 
     push_result = build_push_result(
         run_summary=run_summary,
@@ -296,11 +298,12 @@ def main() -> int:
         if not summary_path.is_file():
             raise FileNotFoundError(f"Не найден файл: {summary_path}")
         run_summary = load_json(summary_path)
+        repo_root = resolve_workspace_root(run_dir / "workspace.json", fallback=ROOT)
         result = build_output(
             run_dir,
             pushed_by=args.pushed_by.strip() or "release_manager",
             remote=args.remote.strip() or "origin",
-            branch=resolve_branch(args),
+            branch=resolve_branch(args, repo_root=repo_root),
             execute=args.execute,
         )
     except (FileNotFoundError, ValueError) as exc:

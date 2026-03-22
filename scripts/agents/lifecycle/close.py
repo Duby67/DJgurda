@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .execute import DEFAULT_RUNS_DIR
+from scripts.agents.workspace import cleanup_workspace
 from scripts.config import ROOT
 
 
@@ -120,6 +121,7 @@ def build_close_result(
     closed_by: str,
     summary_text: str,
     notes: list[str],
+    workspace_cleanup: dict[str, Any],
 ) -> dict[str, Any]:
     """Строит close-result.json."""
     return {
@@ -130,6 +132,7 @@ def build_close_result(
         "outcome": outcome,
         "summary": summary_text,
         "notes": notes,
+        "workspace_cleanup": workspace_cleanup,
         "status_before_close": run_summary.get("status"),
         "next_action_before_close": run_summary.get("next_action"),
         "final_state": build_closure_summary(run_summary),
@@ -229,6 +232,7 @@ def build_output(
     summary_text: str,
     closed_by: str,
     notes: list[str],
+    keep_workspace: bool,
 ) -> dict[str, Any]:
     """Закрывает run bundle и записывает финальные артефакты."""
     summary_path = run_dir / "run-summary.json"
@@ -243,6 +247,12 @@ def build_output(
     execution_state = load_json(execution_state_path) if execution_state_path.is_file() else None
 
     ensure_close_allowed(run_summary, outcome)
+    preserve_workspace = keep_workspace or outcome in {"failed", "cancelled"}
+    workspace_cleanup = cleanup_workspace(
+        run_dir / "workspace.json",
+        source_root=ROOT,
+        keep_workspace=preserve_workspace,
+    )
 
     close_result = build_close_result(
         run_summary=run_summary,
@@ -250,6 +260,7 @@ def build_output(
         closed_by=closed_by,
         summary_text=summary_text,
         notes=notes,
+        workspace_cleanup=workspace_cleanup,
     )
     final_report = build_final_report(
         run_summary=run_summary,
@@ -273,6 +284,7 @@ def build_output(
         "closed_at_utc": close_result["closed_at_utc"],
         "summary": summary_text,
         "notes": notes,
+        "workspace_cleanup": workspace_cleanup,
     }
 
     write_json(close_result_path, close_result)
@@ -322,6 +334,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--notes-file", help="Путь к файлу со списком заметок, по одной на строку.")
     parser.add_argument(
+        "--keep-workspace",
+        action="store_true",
+        help="Сохранить isolated workspace после закрытия run bundle.",
+    )
+    parser.add_argument(
         "--pretty",
         action="store_true",
         help="Печатать JSON с отступами.",
@@ -340,6 +357,7 @@ def main() -> int:
             summary_text=read_summary(args),
             closed_by=args.closed_by.strip() or "release_manager",
             notes=read_notes(args),
+            keep_workspace=args.keep_workspace,
         )
     except (FileNotFoundError, ValueError) as exc:
         json.dump(

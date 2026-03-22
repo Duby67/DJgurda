@@ -174,10 +174,13 @@ def summarize_sandbox(sandbox_payload: dict[str, Any] | None) -> dict[str, Any] 
         "sandboxed_at_utc": sandbox_payload.get("sandboxed_at_utc"),
         "sandboxed_by": sandbox_payload.get("sandboxed_by"),
         "environment": sandbox_payload.get("environment"),
+        "adapter_id": sandbox_payload.get("adapter_id", ""),
+        "workspace_ref": sandbox_payload.get("workspace_ref", {}),
         "sandbox_ref": sandbox_payload.get("sandbox_ref", ""),
         "conclusion": sandbox_payload.get("conclusion"),
         "summary": sandbox_payload.get("summary", ""),
         "check_summary": sandbox_payload.get("check_summary", {}),
+        "command_summary": sandbox_payload.get("command_summary", {}),
         "failed_checks": failed_checks,
         "blocked_checks": blocked_checks,
         "log_count": len(sandbox_payload.get("logs", [])),
@@ -266,6 +269,50 @@ def summarize_closure(close_payload: dict[str, Any] | None) -> dict[str, Any] | 
         "next_action_before_close": close_payload.get("next_action_before_close"),
         "commit_created": final_state.get("commit_created", False),
         "push_created": final_state.get("push_created", False),
+    }
+
+
+def summarize_workspace(workspace_payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Сводит workspace metadata к компактному формату."""
+    if workspace_payload is None:
+        return None
+
+    source = workspace_payload.get("workspace", workspace_payload)
+    return {
+        "mode": source.get("mode", "unknown"),
+        "root_path": source.get("root_path", ""),
+        "base_ref": source.get("base_ref", ""),
+        "source_dirty": source.get("source_dirty", None),
+        "cleanup_policy": source.get("cleanup_policy", "unknown"),
+    }
+
+
+def summarize_jobs(jobs_payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Сводит jobs/index.json к компактному формату."""
+    if jobs_payload is None:
+        return None
+
+    jobs = jobs_payload.get("jobs", [])
+    by_status: dict[str, int] = {}
+    external_jobs: list[dict[str, Any]] = []
+
+    for job in jobs:
+        status = str(job.get("status", "unknown"))
+        by_status[status] = by_status.get(status, 0) + 1
+        if job.get("backend") == "external_ai":
+            external_jobs.append(
+                {
+                    "job_id": job.get("job_id", ""),
+                    "role": job.get("role", ""),
+                    "status": status,
+                    "external_ref": job.get("external_ref", ""),
+                }
+            )
+
+    return {
+        "total_jobs": len(jobs),
+        "by_status": by_status,
+        "external_jobs": external_jobs,
     }
 
 
@@ -585,6 +632,8 @@ def build_blockers(
         blockers.append("sandbox_failed")
     if run_summary.get("status") == "sandbox_blocked":
         blockers.append("sandbox_blocked")
+    if run_summary.get("status") == "external_job_failed":
+        blockers.append("external_job_failed")
     if run_summary.get("status") == "review_failed":
         blockers.append("review_failed")
     if run_summary.get("status") == "review_blocked":
@@ -720,6 +769,8 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     commit_result_path = run_dir / "commit-result.json"
     push_result_path = run_dir / "push-result.json"
     close_result_path = run_dir / "close-result.json"
+    workspace_path = run_dir / "workspace.json"
+    jobs_index_path = run_dir / "jobs" / "index.json"
 
     if not summary_path.is_file():
         raise FileNotFoundError(f"Не найден файл: {summary_path}")
@@ -740,6 +791,8 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     commit_payload = load_optional_json(commit_result_path)
     push_payload = load_optional_json(push_result_path)
     close_payload = load_optional_json(close_result_path)
+    workspace_payload = load_optional_json(workspace_path)
+    jobs_payload = load_optional_json(jobs_index_path)
 
     artifact_status = collect_artifact_status(run_summary.get("artifacts", {}))
     plan_summary = summarize_plan(plan_payload)
@@ -757,6 +810,8 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     commit_summary = summarize_commit(commit_payload)
     push_summary = summarize_push_execution(push_payload)
     close_summary = summarize_closure(close_payload)
+    workspace_summary = summarize_workspace(workspace_payload)
+    jobs_summary = summarize_jobs(jobs_payload)
     blockers = build_blockers(
         run_summary=run_summary,
         artifact_status=artifact_status,
@@ -811,6 +866,10 @@ def build_status(run_dir: Path) -> dict[str, Any]:
         output["push_execution"] = push_summary
     if close_summary is not None:
         output["closure"] = close_summary
+    if workspace_summary is not None:
+        output["workspace"] = workspace_summary
+    if jobs_summary is not None:
+        output["jobs"] = jobs_summary
 
     return output
 
@@ -867,6 +926,20 @@ def render_human_status(status_payload: dict[str, Any]) -> str:
 
     if approval.get("awaiting_approval"):
         lines.append("Awaiting approval: " + ", ".join(approval["awaiting_approval"]))
+
+    workspace = status_payload.get("workspace")
+    if workspace:
+        lines.append(
+            "Workspace: "
+            f"{workspace.get('mode', 'unknown')} @ {workspace.get('root_path', '')}"
+        )
+
+    jobs = status_payload.get("jobs")
+    if jobs:
+        lines.append(
+            "Jobs: "
+            f"{jobs.get('total_jobs', 0)} total, by_status={jobs.get('by_status', {})}"
+        )
 
     if blockers:
         lines.append("Global blockers: " + ", ".join(blockers))

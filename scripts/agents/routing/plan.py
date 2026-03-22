@@ -56,6 +56,7 @@ def infer_agent_roles(route_result: dict[str, Any]) -> list[str]:
     has_profile_checks = bool(
         verification_profile.get("required_checks") or verification_profile.get("optional_checks")
     )
+    has_profile_commands = bool(verification_profile.get("allowed_commands"))
     roles = [
         "planner",
         "context_loader",
@@ -73,10 +74,10 @@ def infer_agent_roles(route_result: dict[str, Any]) -> list[str]:
     ):
         roles.append("release_manager")
 
-    if (
-        route_result["context_pack"]["tests"]
-        or route_result["task_type"]["id"] in {"deploy_or_infra_change", "test_harness_or_smoke_setup_change"}
-    ):
+    if has_profile_commands or route_result["context_pack"]["tests"] or route_result["task_type"]["id"] in {
+        "deploy_or_infra_change",
+        "test_harness_or_smoke_setup_change",
+    }:
         roles.append("sandbox_runner")
 
     return unique_keep_order(roles)
@@ -112,6 +113,7 @@ def build_plan_steps(route_result: dict[str, Any], planning_context: dict[str, A
     has_profile_checks = bool(
         verification_profile.get("required_checks") or verification_profile.get("optional_checks")
     )
+    has_profile_commands = bool(verification_profile.get("allowed_commands"))
 
     steps: list[PlanStep] = [
         PlanStep(
@@ -168,7 +170,10 @@ def build_plan_steps(route_result: dict[str, Any], planning_context: dict[str, A
             )
         )
 
-    if tests or route_result["task_type"]["id"] in {"deploy_or_infra_change", "test_harness_or_smoke_setup_change"}:
+    if tests or has_profile_commands or route_result["task_type"]["id"] in {
+        "deploy_or_infra_change",
+        "test_harness_or_smoke_setup_change",
+    }:
         steps.append(
             PlanStep(
                 step_id="run_in_sandbox",

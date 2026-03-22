@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .execute import DEFAULT_RUNS_DIR
+from scripts.agents.workspace import resolve_workspace_root
 from scripts.config import ROOT
 
 
@@ -130,13 +131,13 @@ def resolve_applied_files(
     raise ValueError("Не удалось определить applied files: передайте --file или заполните changed_paths")
 
 
-def file_presence_summary(paths: list[str]) -> dict[str, list[str]]:
+def file_presence_summary(paths: list[str], *, repo_root: Path = ROOT) -> dict[str, list[str]]:
     """Показывает, какие из applied files реально существуют в workspace."""
     existing: list[str] = []
     missing: list[str] = []
 
     for rel_path in paths:
-        if (ROOT / rel_path).exists():
+        if (repo_root / rel_path).exists():
             existing.append(rel_path)
         else:
             missing.append(rel_path)
@@ -147,9 +148,9 @@ def file_presence_summary(paths: list[str]) -> dict[str, list[str]]:
     }
 
 
-def run_git_command(args: list[str], paths: list[str]) -> subprocess.CompletedProcess[str]:
+def run_git_command(args: list[str], paths: list[str], *, repo_root: Path = ROOT) -> subprocess.CompletedProcess[str]:
     """Запускает git-команду в корне репозитория."""
-    command = ["git", "-C", str(ROOT), *args]
+    command = ["git", "-C", str(repo_root), *args]
     if paths:
         command.append("--")
         command.extend(paths)
@@ -246,13 +247,13 @@ def merge_numstat_summaries(*summaries: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def collect_git_snapshot(paths: list[str]) -> dict[str, Any]:
+def collect_git_snapshot(paths: list[str], *, repo_root: Path = ROOT) -> dict[str, Any]:
     """Снимает git snapshot по выбранным файлам."""
-    status_proc = run_git_command(["status", "--short"], paths)
-    working_diff_proc = run_git_command(["diff"], paths)
-    staged_diff_proc = run_git_command(["diff", "--cached"], paths)
-    working_numstat_proc = run_git_command(["diff", "--numstat"], paths)
-    staged_numstat_proc = run_git_command(["diff", "--cached", "--numstat"], paths)
+    status_proc = run_git_command(["status", "--short"], paths, repo_root=repo_root)
+    working_diff_proc = run_git_command(["diff"], paths, repo_root=repo_root)
+    staged_diff_proc = run_git_command(["diff", "--cached"], paths, repo_root=repo_root)
+    working_numstat_proc = run_git_command(["diff", "--numstat"], paths, repo_root=repo_root)
+    staged_numstat_proc = run_git_command(["diff", "--cached", "--numstat"], paths, repo_root=repo_root)
 
     warnings: list[str] = []
     if status_proc.returncode != 0:
@@ -448,8 +449,9 @@ def build_output(
 
     ensure_apply_allowed(run_summary, plan_payload)
     applied_files = resolve_applied_files(explicit_paths, run_summary)
-    file_presence = file_presence_summary(applied_files)
-    git_snapshot = collect_git_snapshot(applied_files)
+    repo_root = resolve_workspace_root(run_dir / "workspace.json", fallback=ROOT)
+    file_presence = file_presence_summary(applied_files, repo_root=repo_root)
+    git_snapshot = collect_git_snapshot(applied_files, repo_root=repo_root)
     if not allow_empty_diff and git_snapshot["diff_summary"]["file_count"] == 0:
         raise ValueError(
             "Apply-stage требует непустой git diff по указанным файлам. "

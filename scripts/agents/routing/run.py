@@ -51,7 +51,11 @@ def build_input_payload(prompt: str, paths: list[str]) -> dict[str, Any]:
 
 def build_approval_checkpoints(route_result: dict[str, Any], plan_output: dict[str, Any]) -> dict[str, Any]:
     """Формирует approval checkpoints для run bundle."""
-    tests_required = bool(route_result["context_pack"]["tests"])
+    verification_profile = plan_output.get("verification_profile", {})
+    profile_checks_exist = bool(
+        verification_profile.get("required_checks") or verification_profile.get("optional_checks")
+    )
+    tests_required = bool(route_result["context_pack"]["tests"]) or profile_checks_exist
     escalation_required = route_result["escalation"]["needed"]
     run_checks_required = tests_required or escalation_required
 
