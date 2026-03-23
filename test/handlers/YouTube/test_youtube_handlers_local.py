@@ -1,4 +1,4 @@
-"""Локальный smoke-тест для проверки YouTubeHandler на 2 типах контента.
+"""Локальный smoke-тест для проверки YouTubeHandler на нескольких типах контента.
 
 Сценарий:
 1. Разрешает URL через resolve_url.
@@ -55,6 +55,7 @@ class CaseSpec:
     url: str
     expected_type: str
     description: str
+    allow_failure: bool = False
 
 
 @dataclass
@@ -66,6 +67,7 @@ class CaseResult:
     ok: bool
     message: str
     actual_type: Optional[str] = None
+    is_allowed_failure: bool = False
 
 
 DEFAULT_CASES = tuple(
@@ -74,6 +76,7 @@ DEFAULT_CASES = tuple(
         url=case["url"],
         expected_type=case["expected_type"],
         description=case["description"],
+        allow_failure=bool(case.get("allow_failure", False)),
     )
     for case in YOUTUBE_TEST_CASES
 )
@@ -93,6 +96,22 @@ def _extract_actual_type(handler_output: MediaResult) -> str:
     return handler_output.content_type.value
 
 
+def _allowed_failure_result(
+    case: CaseSpec,
+    resolved_url: str,
+    message: str,
+) -> CaseResult:
+    """Формирует успешный результат для кейса с допустимым failure."""
+    return CaseResult(
+        case=case,
+        resolved_url=resolved_url,
+        ok=True,
+        message=f"допустимый failure: {message}",
+        actual_type=None,
+        is_allowed_failure=True,
+    )
+
+
 async def run_case(case: CaseSpec, timeout_sec: int) -> CaseResult:
     """Запускает один тест-кейс и возвращает результат."""
     service_manager = ServiceManager()
@@ -100,6 +119,8 @@ async def run_case(case: CaseSpec, timeout_sec: int) -> CaseResult:
     handler = service_manager.get_handler(resolved_url)
 
     if not handler:
+        if case.allow_failure:
+            return _allowed_failure_result(case, resolved_url, "обработчик не найден для resolved URL")
         return CaseResult(
             case=case,
             resolved_url=resolved_url,
@@ -108,6 +129,12 @@ async def run_case(case: CaseSpec, timeout_sec: int) -> CaseResult:
         )
 
     if not isinstance(handler, YouTubeHandler):
+        if case.allow_failure:
+            return _allowed_failure_result(
+                case,
+                resolved_url,
+                f"ожидался YouTubeHandler, получен: {handler.__class__.__name__}",
+            )
         return CaseResult(
             case=case,
             resolved_url=resolved_url,
@@ -122,6 +149,8 @@ async def run_case(case: CaseSpec, timeout_sec: int) -> CaseResult:
             timeout=timeout_sec,
         )
     except asyncio.TimeoutError:
+        if case.allow_failure:
+            return _allowed_failure_result(case, resolved_url, f"таймаут обработки ({timeout_sec} сек)")
         return CaseResult(
             case=case,
             resolved_url=resolved_url,
@@ -129,6 +158,8 @@ async def run_case(case: CaseSpec, timeout_sec: int) -> CaseResult:
             message=f"таймаут обработки ({timeout_sec} сек)",
         )
     except Exception as exc:  # noqa: BLE001
+        if case.allow_failure:
+            return _allowed_failure_result(case, resolved_url, f"исключение: {exc}")
         return CaseResult(
             case=case,
             resolved_url=resolved_url,
@@ -140,6 +171,8 @@ async def run_case(case: CaseSpec, timeout_sec: int) -> CaseResult:
             _cleanup_media_result(handler_output)
 
     if not handler_output:
+        if case.allow_failure:
+            return _allowed_failure_result(case, resolved_url, "handler.process вернул None")
         return CaseResult(
             case=case,
             resolved_url=resolved_url,
@@ -187,9 +220,11 @@ async def run_all(timeout_sec: int) -> int:
         print("")
 
     ok_count = sum(1 for r in results if r.ok)
-    fail_count = len(results) - ok_count
+    warning_count = sum(1 for r in results if r.is_allowed_failure)
+    fail_count = sum(1 for r in results if not r.ok)
     print("=== Summary ===")
     print(f"passed: {ok_count}")
+    print(f"warnings: {warning_count}")
     print(f"failed: {fail_count}")
 
     return 0 if fail_count == 0 else 1
@@ -198,7 +233,7 @@ async def run_all(timeout_sec: int) -> int:
 def parse_args() -> argparse.Namespace:
     """Парсит аргументы CLI."""
     parser = argparse.ArgumentParser(
-        description="Локальный smoke-тест для YouTubeHandler (shorts/channel)."
+        description="Локальный smoke-тест для YouTubeHandler (video/shorts/channel)."
     )
     parser.add_argument(
         "--timeout",

@@ -1,10 +1,11 @@
 """
-Процессор Shorts-контента YouTube.
+Процессор обычного видео-контента YouTube.
 """
 
 from __future__ import annotations
 
-import re
+from urllib.parse import parse_qs, urlsplit
+
 from typing import Any, Optional
 
 from src.handlers.contracts import ContentType, MediaResult
@@ -12,10 +13,8 @@ from src.handlers.contracts import ContentType, MediaResult
 from .YouTubeDependencies import YouTubeMediaGatewayProtocol, YouTubeOptionsProviderProtocol
 
 
-class YouTubeShorts:
-    """Процессор для скачивания и подготовки YouTube Shorts."""
-
-    SHORTS_ID_PATTERN = re.compile(r"/shorts/([A-Za-z0-9_-]+)")
+class YouTubeVideo:
+    """Процессор для скачивания и подготовки обычного YouTube видео."""
 
     def __init__(
         self,
@@ -26,15 +25,36 @@ class YouTubeShorts:
         self._media_gateway = media_gateway
         self._options_provider = options_provider
 
+    @staticmethod
+    def _extract_video_id(url: str) -> str:
+        """Извлекает video id из watch/youtu.be/live/embed/v URL."""
+        parts = urlsplit(url)
+        host = parts.netloc.lower()
+        path_parts = [part for part in parts.path.split("/") if part]
+        query = parse_qs(parts.query)
+
+        if host == "youtu.be" and path_parts:
+            return path_parts[0]
+
+        if "v" in query and query["v"]:
+            return query["v"][0]
+
+        if path_parts and path_parts[0].lower() in {"embed", "live", "v"} and len(path_parts) >= 2:
+            return path_parts[1]
+
+        if path_parts:
+            return path_parts[-1]
+
+        return "youtube_video"
+
     async def process(
         self,
         url: str,
         context: str,
         original_url: str,
     ) -> Optional[MediaResult]:
-        """Скачивает Shorts и возвращает typed `MediaResult`."""
-        shorts_match = self.SHORTS_ID_PATTERN.search(url)
-        shorts_id = shorts_match.group(1) if shorts_match else self._media_gateway.extract_video_id(url)
+        """Скачивает видео и возвращает typed `MediaResult`."""
+        video_id = self._extract_video_id(url)
 
         ydl_opts: dict[str, Any] = {
             "format": "best[height<=1920][ext=mp4]/best[height<=1920]/best",
@@ -43,7 +63,6 @@ class YouTubeShorts:
             "noplaylist": True,
             "extractor_args": {
                 "youtube": {
-                    # Сначала мобильные/embedded-клиенты, чтобы снизить риск bot-check на web-клиенте.
                     "player_client": ["android", "tv_embedded", "ios", "web"],
                 }
             },
@@ -53,7 +72,7 @@ class YouTubeShorts:
         result = await self._media_gateway.download_video(
             url,
             ydl_opts,
-            video_id=shorts_id,
+            video_id=video_id,
             size_limit=self._media_gateway.video_limit,
         )
         if not result:
@@ -67,15 +86,13 @@ class YouTubeShorts:
         if file_path is None:
             return None
 
-        thumbnail_path = result.get("thumbnail_path")
-
         return MediaResult(
-            content_type=ContentType.SHORTS,
+            content_type=ContentType.VIDEO,
             source_name="YouTube",
             original_url=original_url,
             context=context,
-            title=info.get("title", "YouTube Shorts"),
+            title=info.get("title", "YouTube Video"),
             uploader=info.get("uploader", info.get("channel", "Unknown")),
             main_file_path=file_path,
-            thumbnail_path=thumbnail_path,
+            thumbnail_path=result.get("thumbnail_path"),
         )

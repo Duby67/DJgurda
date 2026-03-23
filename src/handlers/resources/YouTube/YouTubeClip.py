@@ -1,5 +1,5 @@
 """
-Процессор Shorts-контента YouTube.
+Процессор clip-ссылок YouTube.
 """
 
 from __future__ import annotations
@@ -12,10 +12,10 @@ from src.handlers.contracts import ContentType, MediaResult
 from .YouTubeDependencies import YouTubeMediaGatewayProtocol, YouTubeOptionsProviderProtocol
 
 
-class YouTubeShorts:
-    """Процессор для скачивания и подготовки YouTube Shorts."""
+class YouTubeClip:
+    """Процессор для скачивания и подготовки YouTube Clips."""
 
-    SHORTS_ID_PATTERN = re.compile(r"/shorts/([A-Za-z0-9_-]+)")
+    CLIP_ID_PATTERN = re.compile(r"/clip/([A-Za-z0-9_-]+)")
 
     def __init__(
         self,
@@ -32,9 +32,9 @@ class YouTubeShorts:
         context: str,
         original_url: str,
     ) -> Optional[MediaResult]:
-        """Скачивает Shorts и возвращает typed `MediaResult`."""
-        shorts_match = self.SHORTS_ID_PATTERN.search(url)
-        shorts_id = shorts_match.group(1) if shorts_match else self._media_gateway.extract_video_id(url)
+        """Скачивает clip и возвращает video-like typed `MediaResult`."""
+        clip_match = self.CLIP_ID_PATTERN.search(url)
+        clip_id = clip_match.group(1) if clip_match else self._media_gateway.extract_video_id(url)
 
         ydl_opts: dict[str, Any] = {
             "format": "best[height<=1920][ext=mp4]/best[height<=1920]/best",
@@ -43,7 +43,6 @@ class YouTubeShorts:
             "noplaylist": True,
             "extractor_args": {
                 "youtube": {
-                    # Сначала мобильные/embedded-клиенты, чтобы снизить риск bot-check на web-клиенте.
                     "player_client": ["android", "tv_embedded", "ios", "web"],
                 }
             },
@@ -53,7 +52,7 @@ class YouTubeShorts:
         result = await self._media_gateway.download_video(
             url,
             ydl_opts,
-            video_id=shorts_id,
+            video_id=clip_id,
             size_limit=self._media_gateway.video_limit,
         )
         if not result:
@@ -67,15 +66,13 @@ class YouTubeShorts:
         if file_path is None:
             return None
 
-        thumbnail_path = result.get("thumbnail_path")
-
         return MediaResult(
-            content_type=ContentType.SHORTS,
+            content_type=ContentType.VIDEO,
             source_name="YouTube",
             original_url=original_url,
             context=context,
-            title=info.get("title", "YouTube Shorts"),
+            title=info.get("title", "YouTube Clip"),
             uploader=info.get("uploader", info.get("channel", "Unknown")),
             main_file_path=file_path,
-            thumbnail_path=thumbnail_path,
+            thumbnail_path=result.get("thumbnail_path"),
         )

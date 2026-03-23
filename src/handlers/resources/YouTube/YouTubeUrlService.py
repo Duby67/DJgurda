@@ -4,13 +4,15 @@
 
 from __future__ import annotations
 
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 class YouTubeUrlService:
     """Нормализатор и классификатор YouTube URL."""
 
-    TRACKING_QUERY_PARAMS = frozenset({"si", "feature", "pp"})
+    TRACKING_QUERY_PARAMS = frozenset({"is", "si", "feature", "pp"})
+    CHANNEL_ROOT_SEGMENTS = frozenset({"channel", "c", "user"})
+    VIDEO_ROOT_SEGMENTS = frozenset({"watch", "live", "embed", "v"})
 
     def normalize(self, url: str) -> str:
         """Нормализует YouTube URL и удаляет только трекинговые query-параметры."""
@@ -29,22 +31,49 @@ class YouTubeUrlService:
 
         return urlunsplit((parts.scheme, netloc, parts.path, normalized_query, parts.fragment))
 
+    @staticmethod
+    def _has_non_empty_query_value(query: dict[str, list[str]], key: str) -> bool:
+        """Проверяет наличие непустого query-параметра."""
+        return any(isinstance(value, str) and value.strip() for value in query.get(key, []))
+
     def detect_content_type(self, url: str) -> str | None:
-        """Определяет поддерживаемый тип YouTube-контента (`shorts` или `channel`)."""
+        """Определяет поддерживаемый тип YouTube-контента."""
         parts = urlsplit(url)
+        host = parts.netloc.lower()
         path_parts = [part for part in parts.path.split("/") if part]
+        query = parse_qs(parts.query)
+
+        if host == "youtu.be" and path_parts:
+            return "video"
+
         if not path_parts:
-            return None
+            return "playlist" if self._has_non_empty_query_value(query, "list") else None
 
         first_part = path_parts[0].lower()
 
         if first_part == "shorts" and len(path_parts) >= 2:
             return "shorts"
 
+        if first_part == "clip" and len(path_parts) >= 2:
+            return "clip"
+
+        if first_part == "playlist" and self._has_non_empty_query_value(query, "list"):
+            return "playlist"
+
+        if first_part == "watch":
+            if self._has_non_empty_query_value(query, "v"):
+                return "video"
+            if self._has_non_empty_query_value(query, "list"):
+                return "playlist"
+            return None
+
+        if first_part in self.VIDEO_ROOT_SEGMENTS and len(path_parts) >= 2:
+            return "video"
+
         if path_parts[0].startswith("@"):
             return "channel"
 
-        if first_part in {"channel", "c", "user"} and len(path_parts) >= 2:
+        if first_part in self.CHANNEL_ROOT_SEGMENTS and len(path_parts) >= 2:
             return "channel"
 
         return None
