@@ -21,6 +21,16 @@
 
 Swarm run bundles и lifecycle artifacts сохраняются в корневую папку `runs/`.
 
+## Agent-Driven Flow
+
+Рекомендованный режим работы для этого репозитория - agent-driven swarm orchestration:
+
+- пользователь пишет агенту один prompt обычным языком;
+- агент сам использует swarm contour как operational model для route, plan, orchestration и verification;
+- для нетривиальной задачи агент сам поднимает субагентов там, где это ускоряет работу и не ломает source of truth;
+- в progress updates агент показывает, какие подзадачи сейчас активны и какие субагенты задействованы;
+- если для продолжения нужны clarification, тесты, `commit`, `push` или другая human boundary, агент задает пользователю явный вопрос и ждет ответа вместо молчаливого продолжения.
+
 ## Main Entry Points
 
 Основной front door:
@@ -229,18 +239,19 @@ Supervisor крутит persistent loop и, если задан `--runtime-comma
 - `local_dry_run` остается явным preview-режимом, а `github_actions` доступен как explicit remote adapter
 - `commit` и `push` выполняются только по явному запросу разработчика
 - реальные тесты и smoke-прогоны все еще требуют явного approval пользователя
+- если run уперся в clarification или approval, агент должен показать текущее состояние orchestration и дождаться ответа пользователя, а не закрывать цикл как завершенный
 
 ## Recommended Daily Flow
 
 Обычный ежедневный путь работы выглядит так:
 
-1. Сначала спланировать задачу через `scripts.agents.mcp plan_task`.
-2. Запустить orchestration через `scripts.agents.mcp start_supervised_swarm_run` или `start_autonomous_swarm_run`, а `start_swarm_run` оставить как более низкоуровневый controlled entrypoint.
-3. Проверять progress через `show_run_status`, очередь ролей через `show_job_queue`, а изменения через `show_diff_preview`.
-4. Для sandbox intent использовать `preview_sandbox_plan`.
-5. После approval или других ручных шагов возобновлять orchestration через `scripts.agents.mcp continue_swarm_run`.
-6. Для внешних AI-ролей использовать `run_supervisor` с built-in runtime worker, `run_dispatcher` как UX helper или низкоуровневые `claim_role_job` / `complete_role_job` / `fail_role_job`.
-7. Для approval checkpoints использовать wrappers `approve_run_checks`, `approve_run_checks_and_continue`, `approve_commit`, `approve_commit_and_continue`, `approve_push_and_continue`, `reject_checkpoint` или request-команды, когда нужен полный approval packet.
+1. Пользователь формулирует задачу агенту обычным prompt-ом.
+2. Агент сам проводит route/plan и выбирает, нужен ли supervised swarm-run, autonomous cycle или более локальный orchestrated проход.
+3. Агент показывает progress: активные workstreams, локальные шаги, подключенных субагентов и текущую human boundary, если она есть.
+4. Для sandbox intent, diff review и run status агент при необходимости опирается на `preview_sandbox_plan`, `show_diff_preview`, `show_job_queue` и `show_run_status`.
+5. Если для продолжения нужны clarification, тесты, `commit` или `push`, агент задает пользователю прямой вопрос и ждет решения.
+6. После ответа пользователя агент продолжает тот же swarm-run до следующей boundary или до завершения задачи.
+7. Если нужен ручной CLI-контроль, можно использовать wrappers `approve_run_checks`, `approve_run_checks_and_continue`, `approve_commit`, `approve_commit_and_continue`, `approve_push_and_continue`, `reject_checkpoint` и `continue_swarm_run`.
 
 ## Related Docs
 

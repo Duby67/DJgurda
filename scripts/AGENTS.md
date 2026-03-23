@@ -83,6 +83,15 @@ Release automation запускать только при реальном relea
 - `python -m scripts.release.automation.promote`
 - `python -m scripts.release.automation.sync`
 
+Для нетривиальных задач agent должен использовать этот automation-layer как основной orchestration contour, даже если пользователь общается с агентом напрямую, а не вызывает CLI вручную.
+Ожидаемый режим работы такой:
+
+- пользователь дает один prompt;
+- orchestrator классифицирует задачу и строит context/plan;
+- при необходимости поднимает субагентов с ограниченными зонами ответственности;
+- в progress updates показывает активные подзадачи и задействованных субагентов;
+- на clarification, test approval, `commit` approval и `push` approval останавливается на human boundary и запрашивает решение пользователя, а не завершает run молча.
+
 ## Common Commands
 
 Типовые swarm-команды:

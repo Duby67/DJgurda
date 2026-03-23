@@ -204,6 +204,7 @@ Runtime worker command можно передать:
 - создает новый run bundle;
 - сразу стартует supervisor loop;
 - может довести run от prompt до `awaiting_commit_approval` без ручного dispatcher-step, если задан runtime worker.
+- в user-facing orchestrator flow должен по пути показывать активные workstreams, локальные шаги и подключенных субагентов, чтобы человек видел текущее состояние run-а.
 
 ## Isolated Workspace
 
@@ -280,6 +281,12 @@ Swarm runtime не отменяет human approval.
 
 `continue_swarm_run` полезен после approval или ручного вмешательства, но сам по себе не обходит approval boundaries.
 
+Если orchestration упрется в clarification или decision point с нетривиальными tradeoff-ами:
+
+- run должен остановиться на human boundary;
+- orchestrator должен коротко описать, что уже сделано и какой выбор нужен дальше;
+- orchestrator должен явно запросить ответ пользователя перед продолжением, а не молча выбирать спорный путь.
+
 UX wrappers для approval:
 
 - `approve_run_checks`
@@ -296,6 +303,7 @@ UX wrappers для approval:
 - сначала записывает approval для `run_checks`;
 - если run действительно перешел в `approved_for_implementation`, сразу запускает `run_autonomous_cycle`;
 - тем самым убирает еще один ручной шов между human approval и следующим external handoff.
+- до этого approval orchestrator должен считать run приостановленным и показать пользователю текущие проверки, активные роли и остаточные риски.
 
 `approve_commit_and_continue` закрывает следующий шов:
 
@@ -303,6 +311,7 @@ UX wrappers для approval:
 - затем сразу выполняет `commit-stage` внутри isolated workspace;
 - по умолчанию создает реальный git commit в detached/swarm workspace;
 - после этого останавливается на `decide_on_push` или `push_approved_pending_execution`, не обходя отдельную push-boundary.
+- до approval на `commit` orchestrator должен явно запросить решение пользователя и не считать run завершенным.
 
 `approve_push_and_continue` замыкает последнюю boundary controlled-способом:
 
@@ -310,6 +319,7 @@ UX wrappers для approval:
 - затем может выполнить `push-stage` в isolated workspace;
 - без `--execute` команда создает только dry-run `push-result.json`;
 - реальный `git push` выполняется только с явным `--execute`, поэтому policy-граница на push сохраняется.
+- до approval на `push` orchestrator должен явно остановить run и запросить отдельное решение пользователя.
 
 ## CLI-First UX Surface
 
@@ -322,6 +332,14 @@ UX wrappers для approval:
 - `preview_sandbox_plan` для проверки verification/sandbox intent;
 - `run_dispatcher` для получения следующего external work item;
 - approval wrappers для быстрого approve/reject без ручного редактирования JSON.
+
+Когда пользователем front door является сам агент, а не прямой CLI-вызов, ожидаемый UX поверх этого слоя такой:
+
+- пользователь отправляет один prompt;
+- orchestrator сам проводит задачу через swarm stages;
+- progress updates показывают активные workstreams, локальные шаги и подключенных субагентов;
+- на clarification и approval boundary агент задает вопрос пользователю и ждет ответа;
+- после ответа пользователя orchestrator продолжает тот же run, а не начинает новый с нуля.
 
 Human-readable views пишутся прямо в run bundle:
 
