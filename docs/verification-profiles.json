@@ -2,6 +2,53 @@
   "version": 1,
   "description": "Verification profiles for swarm task types.",
   "profiles": {
+    "swarm_runtime_orchestration_change": {
+      "profile_id": "swarm_runtime_orchestration_change",
+      "risk_level": "high",
+      "required_checks": ["dispatcher_or_mcp_smoke", "executor_flow_regression"],
+      "optional_checks": ["cli_status_regression"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_mcp_smoke.py",
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_executor_smoke.py",
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_cli_smoke.py"
+      ],
+      "sandbox_required_for": [],
+      "notes": ["Keep dispatcher, supervisor, lifecycle transitions and approval wrappers aligned."]
+    },
+    "swarm_sandbox_or_remote_execution_change": {
+      "profile_id": "swarm_sandbox_or_remote_execution_change",
+      "risk_level": "high",
+      "required_checks": ["sandbox_adapter_regression", "workflow_contract_review"],
+      "optional_checks": ["docker_smoke_path"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_sandbox_adapters.py"
+      ],
+      "sandbox_required_for": ["container-backed or remote execution validation"],
+      "notes": ["Keep exact replay, workflow correlation and artifact download semantics visible."]
+    },
+    "swarm_workspace_or_artifact_change": {
+      "profile_id": "swarm_workspace_or_artifact_change",
+      "risk_level": "high",
+      "required_checks": ["workspace_isolation_regression", "artifact_schema_review"],
+      "optional_checks": ["human_status_view_smoke"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_workspace_isolation.py",
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_cli_smoke.py"
+      ],
+      "sandbox_required_for": [],
+      "notes": ["Preserve branch intent, runtime trace and human-readable artifact views."]
+    },
+    "swarm_policy_or_planning_change": {
+      "profile_id": "swarm_policy_or_planning_change",
+      "risk_level": "medium",
+      "required_checks": ["routing_policy_review"],
+      "optional_checks": ["planning_cli_smoke"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_cli_smoke.py"
+      ],
+      "sandbox_required_for": [],
+      "notes": ["Keep routing policy, planning heuristics and verification profiles synchronized."]
+    },
     "bot_command_change": {
       "profile_id": "bot_command_change",
       "risk_level": "medium",

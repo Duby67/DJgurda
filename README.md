@@ -87,6 +87,12 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
+Если PowerShell блокирует `Activate.ps1` через `ExecutionPolicy`, можно использовать обычный `cmd`:
+
+```bat
+venv\Scripts\activate.bat
+```
+
 При необходимости dev-инструментов:
 
 ```bash
@@ -110,6 +116,20 @@ python -m pip install -r requirements-dev.txt
 ```bash
 python -m src.main
 ```
+
+### Рекомендуемые настройки VS Code
+
+В репозитории хранится tracked workspace-файл [.vscode/settings.json](/c:/Work/djgurda/.vscode/settings.json) с рекомендуемыми настройками для локальной разработки.
+
+Он:
+
+- направляет Python extension на `venv\Scripts\python.exe`;
+- открывает встроенный терминал VS Code с уже активированным `venv` через `activate.bat`;
+- согласован с `.vscode/tasks.json`, который тоже ожидает проектный `venv/`.
+
+Сообщение VS Code про `python.defaultInterpreterPath` является информационным.
+Эта настройка используется как default только при первом выборе интерпретатора для workspace.
+Если VS Code уже запомнил другой Python для этого репозитория, нужно один раз выполнить `Python: Select Interpreter` и выбрать `.\venv\Scripts\python.exe`.
 
 ## Cookies и локальная среда
 

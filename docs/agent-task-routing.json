@@ -13,10 +13,112 @@
     "notes": [
       "README.md is human-facing and not a source of truth for agents.",
       "Do not use local/ as a primary source of truth without an explicit user request.",
-      "Code in src/ has priority over outdated markdown context."
+      "If the task touches scripts/agents/, approvals, sandbox, MCP/CLI or run artifacts, move into the swarm contour docs early."
     ]
   },
   "task_types": [
+    {
+      "id": "swarm_runtime_orchestration_change",
+      "label": "Swarm Runtime Orchestration Change",
+      "read_agents": [
+        "AGENTS.md",
+        "scripts/AGENTS.md"
+      ],
+      "read_docs": [
+        "ARCHITECTURE.md",
+        "docs/swarm-runtime.md",
+        "docs/swarm-usage.md",
+        "docs/commit-policy.md"
+      ],
+      "read_code": [
+        "scripts/agents/mcp/",
+        "scripts/agents/lifecycle/",
+        "scripts/agents/executor.py"
+      ],
+      "check_tests": [
+        "test/scripts/test_swarm_mcp_smoke.py",
+        "test/scripts/test_swarm_executor_smoke.py"
+      ],
+      "notes": [
+        "Keep dispatcher, supervisor, lifecycle transitions and approval wrappers aligned."
+      ]
+    },
+    {
+      "id": "swarm_sandbox_or_remote_execution_change",
+      "label": "Swarm Sandbox Or Remote Execution Change",
+      "read_agents": [
+        "AGENTS.md",
+        "scripts/AGENTS.md",
+        "test/docker/AGENTS.md"
+      ],
+      "read_docs": [
+        "docs/swarm-runtime.md",
+        "docs/sandbox-execution.md",
+        "docs/testing-policy.md"
+      ],
+      "read_code": [
+        "scripts/agents/sandbox_adapters.py",
+        ".github/workflows/swarm-sandbox.yml",
+        "test/docker/swarm-test/"
+      ],
+      "check_tests": [
+        "test/scripts/test_swarm_sandbox_adapters.py"
+      ],
+      "notes": [
+        "Preserve exact replay, workflow correlation and artifact download behavior."
+      ]
+    },
+    {
+      "id": "swarm_workspace_or_artifact_change",
+      "label": "Swarm Workspace Or Artifact Change",
+      "read_agents": [
+        "AGENTS.md",
+        "scripts/AGENTS.md"
+      ],
+      "read_docs": [
+        "docs/swarm-runtime.md",
+        "docs/commit-policy.md"
+      ],
+      "read_code": [
+        "scripts/agents/workspace.py",
+        "scripts/agents/runtime_trace.py",
+        "scripts/agents/lifecycle/status.py",
+        "scripts/agents/lifecycle/request_approval.py"
+      ],
+      "check_tests": [
+        "test/scripts/test_workspace_isolation.py",
+        "test/scripts/test_swarm_cli_smoke.py"
+      ],
+      "notes": [
+        "Preserve branch intent, trace artifacts and human-readable bundle views."
+      ]
+    },
+    {
+      "id": "swarm_policy_or_planning_change",
+      "label": "Swarm Policy Or Planning Change",
+      "read_agents": [
+        "AGENTS.md",
+        "scripts/AGENTS.md"
+      ],
+      "read_docs": [
+        "docs/swarm-runtime.md",
+        "docs/swarm-usage.md",
+        "docs/agent-context-map.md",
+        "docs/agent-task-classifier.json",
+        "docs/verification-profiles.json",
+        "docs/exec-plans/tech-debt-tracker.md"
+      ],
+      "read_code": [
+        "scripts/agents/routing/",
+        "scripts/agents/knowledge.py"
+      ],
+      "check_tests": [
+        "test/scripts/test_swarm_cli_smoke.py"
+      ],
+      "notes": [
+        "Keep routing policy, planning heuristics and verification profiles synchronized."
+      ]
+    },
     {
       "id": "bot_command_change",
       "label": "Bot Command Change",
@@ -68,108 +170,6 @@
       ]
     },
     {
-      "id": "caption_or_error_message_change",
-      "label": "Caption Or Error Message Change",
-      "read_agents": [
-        "AGENTS.md",
-        "src/bot/processing/AGENTS.md"
-      ],
-      "read_docs": [
-        "docs/PRODUCT_SENSE.md",
-        "docs/RELIABILITY.md"
-      ],
-      "read_code": [
-        "src/utils/messages.py",
-        "src/bot/processing/media_processor.py",
-        "src/bot/processing/media_router.py"
-      ],
-      "check_tests": [
-        "test/bot/processing/test_media_processor_errors.py",
-        "test/handlers/test_cleanup_helpers.py"
-      ]
-    },
-    {
-      "id": "stable_source_handler_fix",
-      "label": "Stable Source Handler Fix",
-      "read_agents": [
-        "AGENTS.md",
-        "src/handlers/AGENTS.md",
-        "src/handlers/resources/AGENTS.md",
-        "test/handlers/AGENTS.md"
-      ],
-      "read_docs": [
-        "ARCHITECTURE.md",
-        "docs/RELIABILITY.md",
-        "docs/design-docs/runtime-pipeline.md"
-      ],
-      "read_code": [
-        "src/handlers/resources/<Source>/",
-        "src/handlers/registry.py",
-        "src/handlers/manager.py"
-      ],
-      "check_tests": [
-        "test/handlers/<Source>/test_<source>_handlers_local.py",
-        "test/handlers/<Source>/"
-      ],
-      "notes": [
-        "Read manager.py only if the task affects handler registration or selection."
-      ]
-    },
-    {
-      "id": "vk_research_or_bugfix",
-      "label": "VK Research Or VK Bugfix",
-      "read_agents": [
-        "AGENTS.md",
-        "src/handlers/AGENTS.md",
-        "src/handlers/resources/AGENTS.md",
-        "src/handlers/resources/VK/AGENTS.md",
-        "test/handlers/AGENTS.md"
-      ],
-      "read_docs": [
-        "docs/RELIABILITY.md",
-        "docs/exec-plans/tech-debt-tracker.md"
-      ],
-      "read_code": [
-        "src/handlers/resources/VK/",
-        "src/handlers/registry.py"
-      ],
-      "check_tests": [
-        "test/handlers/VK/test_vk_handlers_local.py",
-        "test/handlers/VK/VK_urls.py"
-      ],
-      "notes": [
-        "Do not treat this task as stable-runtime stabilization without an explicit user decision.",
-        "Read registry.py only if the task affects source status."
-      ]
-    },
-    {
-      "id": "db_settings_or_stats_change",
-      "label": "DB Settings Or Stats Change",
-      "read_agents": [
-        "AGENTS.md",
-        "src/middlewares/AGENTS.md",
-        "src/middlewares/db/AGENTS.md",
-        "src/bot/AGENTS.md"
-      ],
-      "read_docs": [
-        "ARCHITECTURE.md",
-        "docs/RELIABILITY.md",
-        "docs/exec-plans/tech-debt-tracker.md"
-      ],
-      "read_code": [
-        "src/middlewares/db/core.py",
-        "src/middlewares/db/models/",
-        "src/middlewares/db/processing/",
-        "src/middlewares/bot_enabled.py"
-      ],
-      "check_tests": [
-        "test/bot/processing/"
-      ],
-      "notes": [
-        "Read src/bot/AGENTS.md and bot-level tests only if the task affects runtime orchestration."
-      ]
-    },
-    {
       "id": "runtime_contract_or_registry_change",
       "label": "Runtime Contract Or Registry Change",
       "read_agents": [
@@ -201,14 +201,14 @@
       "label": "Deploy Or Infra Change",
       "read_agents": [
         "AGENTS.md",
+        "scripts/AGENTS.md",
         "deploy/AGENTS.md",
         "test/docker/AGENTS.md"
       ],
       "read_docs": [
         "docs/SECURITY.md",
         "docs/RELIABILITY.md",
-        "docs/design-docs/deploy-storage-layout.md",
-        "docs/release_notes.md"
+        "docs/design-docs/deploy-storage-layout.md"
       ],
       "read_code": [
         "deploy/",
@@ -241,62 +241,6 @@
         "Tests are usually not required.",
         "At minimum, verify that the docs do not diverge from code."
       ]
-    },
-    {
-      "id": "release_or_versioning_change",
-      "label": "Release Or Versioning Change",
-      "read_agents": [
-        "AGENTS.md",
-        "scripts/AGENTS.md"
-      ],
-      "read_docs": [
-        "docs/release-flow.md",
-        "docs/release_notes.md",
-        "docs/PLANS.md",
-        "docs/exec-plans/tech-debt-tracker.md"
-      ],
-      "read_code": [
-        "src/__init__.py",
-        "scripts/config.py",
-        "scripts/release/rules/versioning.py",
-        "scripts/release/automation/promote.py",
-        "scripts/release/automation/sync.py",
-        ".github/workflows/release-promote.yml"
-      ],
-      "check_tests": [
-        "dry-run python -m scripts.release.automation.promote for the target branch",
-        "verify workflow_dispatch flow in .github/workflows/release-promote.yml when promotion automation changes",
-        "python -m scripts.release.automation.sync"
-      ],
-      "notes": [
-        "Other checks depend on release scope and require explicit approval."
-      ]
-    },
-    {
-      "id": "test_harness_or_smoke_setup_change",
-      "label": "Test Harness Or Smoke Setup Change",
-      "read_agents": [
-        "AGENTS.md",
-        "test/AGENTS.md",
-        "test/docker/AGENTS.md",
-        "test/handlers/AGENTS.md"
-      ],
-      "read_docs": [
-        "docs/RELIABILITY.md",
-        "docs/SECURITY.md"
-      ],
-      "read_code": [
-        "test/handlers/_local_cookie_setup.py",
-        "test/handlers/",
-        "src/"
-      ],
-      "check_tests": [
-        "affected-local-smoke-path",
-        "helper-tests-near-changed-files"
-      ],
-      "notes": [
-        "Read the relevant src-level AGENTS.md for the touched source or subsystem."
-      ]
     }
   ],
   "context_expansion_rules": {
@@ -304,19 +248,20 @@
       "task-specific code directly calls a neighboring module",
       "a test failure points to a neighboring subsystem",
       "a local AGENTS.md explicitly routes to a neighboring zone",
-      "the task changes a contract, registry, or shared helper"
+      "the task changes a contract, registry, artifact schema, or shared helper"
     ],
     "avoid_by_default": [
       "src/",
+      "scripts/",
       "test/",
       "local/",
       "unrelated source folders inside src/handlers/resources/"
     ]
   },
   "default_escalation_cases": [
-    "the task changes typed contracts or the stable runtime source list",
-    "the patch spreads from one source into several sources",
-    "the task changes bot orchestration, DB semantics, and handler behavior in one increment",
+    "the task changes typed contracts, approval boundaries or artifact schema",
+    "the patch spreads from one contour into another contour",
+    "the task changes bot orchestration, swarm lifecycle and sandbox behavior in one increment",
     "validation requires cookies, secrets, network, or isolated execution"
   ]
 }

@@ -129,9 +129,9 @@ def test_route_module_smoke_for_release_docs() -> None:
 
     assert result.returncode == 0, result.stderr or result.stdout
     payload = json.loads(result.stdout)
-    assert payload["task_type"]["id"] == "release_or_versioning_change"
-    assert "scripts/AGENTS.md" in payload["context_pack"]["agents"]
-    assert "scripts/release/automation/promote.py" in payload["context_pack"]["code"]
+    assert payload["task_type"]["id"] == "docs_only_change"
+    assert "tracked-docs-relevant-to-scope" in payload["context_pack"]["docs"]
+    assert "only-the-code-needed-to-verify-behavior" in payload["context_pack"]["code"]
 
 
 def test_release_promote_preview_dry_run_smoke() -> None:
@@ -383,7 +383,7 @@ def test_plan_output_builds_profile_context_from_real_route() -> None:
     plan_output = build_plan_output(route_result)
 
     assert "tester" in plan_output["recommended_agents"]
-    assert plan_output["verification_profile"]["profile_id"] == "docs_only_change"
+    assert plan_output["verification_profile"]["profile_id"] == "swarm_policy_or_planning_change"
     assert any(risk["title"] == "Docs Cleanup After Typed-Runtime Transition" for risk in plan_output["known_risks"])
     assert plan_output["active_initiatives"]
     assert plan_output["active_initiatives"][0]["path"] == "docs/exec-plans/active/agent-first-docs-migration.md"

@@ -35,6 +35,7 @@ pip-wheel-metadata/
 .idea/
 .vscode/*
 !.vscode/tasks.json
+!.vscode/settings.json
 *.iml
 
 # Локальные логи и временные файлы

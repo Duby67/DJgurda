@@ -3,18 +3,16 @@
   "description": "Machine-readable task classifier config for mapping prompts and changed areas to routing ids.",
   "routing_source": "docs/agent-task-routing.json",
   "default_task_type": "docs_only_change",
-  "manual_review_task_type": "runtime_contract_or_registry_change",
+  "manual_review_task_type": "swarm_runtime_orchestration_change",
   "precedence": [
-    "vk_research_or_bugfix",
+    "swarm_sandbox_or_remote_execution_change",
+    "swarm_runtime_orchestration_change",
+    "swarm_workspace_or_artifact_change",
+    "swarm_policy_or_planning_change",
     "runtime_contract_or_registry_change",
     "deploy_or_infra_change",
-    "db_settings_or_stats_change",
     "media_routing_bugfix",
-    "stable_source_handler_fix",
     "bot_command_change",
-    "caption_or_error_message_change",
-    "test_harness_or_smoke_setup_change",
-    "release_or_versioning_change",
     "docs_only_change"
   ],
   "global_signals": {
@@ -27,26 +25,146 @@
     "code_paths": [
       "src/",
       "deploy/",
-      "test/docker/",
-      ".github/workflows/",
       "scripts/",
-      "test/"
+      "test/",
+      ".github/workflows/",
+      ".vscode/"
     ],
     "high_risk_keywords": [
       "contract",
       "registry",
-      "contenttype",
-      "mediaresult",
       "runtime boundary",
       "schema",
       "migration",
       "push",
       "release",
       "deploy",
-      "infra"
+      "infra",
+      "dispatcher",
+      "supervisor",
+      "sandbox",
+      "github actions",
+      "approval",
+      "artifact"
     ]
   },
   "task_types": [
+    {
+      "id": "swarm_runtime_orchestration_change",
+      "description_ru": "Изменения dispatcher, supervisor, lifecycle orchestration и MCP/CLI front door.",
+      "match": {
+        "prompt_keywords_any": [
+          "dispatcher",
+          "supervisor",
+          "autonomous cycle",
+          "approval boundary",
+          "orchestration",
+          "mcp",
+          "run bundle",
+          "оркестра",
+          "супервиз",
+          "апрув"
+        ],
+        "path_prefixes_any": [
+          "scripts/agents/mcp/",
+          "scripts/agents/lifecycle/"
+        ],
+        "file_names_any": [
+          "cli.py",
+          "dispatcher.py",
+          "executor.py",
+          "approve.py",
+          "request_approval.py",
+          "status.py"
+        ]
+      }
+    },
+    {
+      "id": "swarm_sandbox_or_remote_execution_change",
+      "description_ru": "Изменения sandbox adapters, Docker flow и GitHub Actions remote execution.",
+      "match": {
+        "prompt_keywords_any": [
+          "sandbox",
+          "docker",
+          "github actions",
+          "workflow",
+          "remote execution",
+          "artifact download",
+          "gha",
+          "контейнер",
+          "воркфлоу",
+          "удаленн"
+        ],
+        "path_prefixes_any": [
+          "test/docker/",
+          ".github/workflows/"
+        ],
+        "file_names_any": [
+          "sandbox_adapters.py",
+          "swarm-sandbox.yml",
+          "Dockerfile",
+          "Dockerfile.dockerignore"
+        ]
+      }
+    },
+    {
+      "id": "swarm_workspace_or_artifact_change",
+      "description_ru": "Изменения isolated workspace, runtime trace, run artifacts и human-readable views.",
+      "match": {
+        "prompt_keywords_any": [
+          "workspace",
+          "artifact",
+          "context trace",
+          "branch intent",
+          "diff preview",
+          "job queue",
+          "run status",
+          "артефакт",
+          "воркспейс",
+          "трейс"
+        ],
+        "path_prefixes_any": [
+          "runs/"
+        ],
+        "file_names_any": [
+          "workspace.py",
+          "runtime_trace.py",
+          "status.py",
+          "request_approval.py"
+        ]
+      }
+    },
+    {
+      "id": "swarm_policy_or_planning_change",
+      "description_ru": "Изменения routing policy, planning knowledge и verification profiles для swarm contour.",
+      "match": {
+        "prompt_keywords_any": [
+          "routing",
+          "verification profile",
+          "classifier",
+          "planning",
+          "context map",
+          "task type",
+          "policy",
+          "маршрутизац",
+          "классифик",
+          "профил"
+        ],
+        "path_prefixes_any": [
+          "docs/exec-plans/",
+          "scripts/agents/routing/"
+        ],
+        "file_names_any": [
+          "agent-context-map.md",
+          "agent-task-classifier.json",
+          "agent-task-routing.json",
+          "verification-profiles.json",
+          "knowledge.py",
+          "plan.py",
+          "route.py"
+        ]
+      }
+    },
     {
       "id": "bot_command_change",
       "description_ru": "Изменения команд бота и chat-control поведения.",
@@ -102,116 +220,6 @@
           "media_processor.py",
           "link_extractor.py",
           "messages.py"
-        ]
-      }
-    },
-    {
-      "id": "caption_or_error_message_change",
-      "description_ru": "Изменения пользовательских caption и error messages.",
-      "match": {
-        "prompt_keywords_any": [
-          "caption",
-          "error message",
-          "error reply",
-          "сообщени",
-          "подпис",
-          "ошибк"
-        ],
-        "path_prefixes_any": [
-          "src/utils/",
-          "src/bot/processing/"
-        ],
-        "file_names_any": [
-          "messages.py",
-          "media_processor.py",
-          "media_router.py"
-        ]
-      }
-    },
-    {
-      "id": "stable_source_handler_fix",
-      "description_ru": "Изменения stable source handler-ов вне VK.",
-      "match": {
-        "prompt_keywords_any": [
-          "handler",
-          "tiktok",
-          "youtube",
-          "instagram",
-          "coub",
-          "yandex music",
-          "source handler",
-          "обработчик",
-          "источник"
-        ],
-        "path_prefixes_any": [
-          "src/handlers/resources/TikTok/",
-          "src/handlers/resources/YouTube/",
-          "src/handlers/resources/Instagram/",
-          "src/handlers/resources/Coub/",
-          "src/handlers/resources/YandexMusic/"
-        ]
-      },
-      "exclude": {
-        "path_prefixes_any": [
-          "src/handlers/resources/VK/"
-        ],
-        "prompt_keywords_any": [
-          "vk",
-          "vkontakte"
-        ]
-      }
-    },
-    {
-      "id": "vk_research_or_bugfix",
-      "description_ru": "Любые задачи по VK как отдельному R&D-треку.",
-      "match": {
-        "prompt_keywords_any": [
-          "vk",
-          "vkontakte",
-          "vk music",
-          "playlist",
-          "audio extraction"
-        ],
-        "path_prefixes_any": [
-          "src/handlers/resources/VK/",
-          "test/handlers/VK/"
-        ],
-        "file_names_any": [
-          "VKHandler.py",
-          "VKAudio.py",
-          "VKPlaylist.py",
-          "VKUrlService.py"
-        ]
-      }
-    },
-    {
-      "id": "db_settings_or_stats_change",
-      "description_ru": "Изменения middleware/db, настроек чата и статистики.",
-      "match": {
-        "prompt_keywords_any": [
-          "database",
-          "db",
-          "sqlalchemy",
-          "stats",
-          "bot_enabled",
-          "settings",
-          "cache",
-          "upsert",
-          "бд",
-          "статист",
-          "настройк"
-        ],
-        "path_prefixes_any": [
-          "src/middlewares/",
-          "src/middlewares/db/"
-        ],
-        "file_names_any": [
-          "bot_enabled.py",
-          "bot_settings_processor.py",
-          "stats_processor.py",
-          "core.py",
-          "sources.py",
-          "stats.py"
         ]
       }
     },
@@ -294,87 +302,38 @@
           "docs/"
         ]
       }
-    },
-    {
-      "id": "release_or_versioning_change",
-      "description_ru": "Изменения версий, release notes и release sync.",
-      "match": {
-        "prompt_keywords_any": [
-          "release",
-          "version",
-          "tag",
-          "promote",
-          "merge to dev",
-          "merge to main",
-          "release notes",
-          "релиз",
-          "верси"
-        ],
-        "path_prefixes_any": [
-          "scripts/release/",
-          ".github/workflows/"
-        ],
-        "file_names_any": [
-          "release-promote.yml",
-          "release-flow.md",
-          "release_notes.md"
-        ]
-      }
-    },
-    {
-      "id": "test_harness_or_smoke_setup_change",
-      "description_ru": "Изменения тестового контура, smoke setup, cookies setup и helper scripts.",
-      "match": {
-        "prompt_keywords_any": [
-          "smoke test",
-          "test harness",
-          "cookie setup",
-          "cleanup helper",
-          "pytest",
-          "тест",
-          "smoke",
-          "cookie"
-        ],
-        "path_prefixes_any": [
-          "test/"
-        ],
-        "file_names_any": [
-          "_local_cookie_setup.py",
-          "test_cleanup_helpers.py"
-        ]
-      }
     }
   ],
   "tie_break_rules": [
     {
       "when_ids_overlap": [
-        "stable_source_handler_fix",
-        "vk_research_or_bugfix"
+        "swarm_sandbox_or_remote_execution_change",
+        "deploy_or_infra_change"
       ],
-      "prefer": "vk_research_or_bugfix",
-      "reason": "VK is a separate R&D track and should not be classified as a normal stable source fix."
+      "prefer": "swarm_sandbox_or_remote_execution_change",
+      "reason": "Swarm sandbox changes should not collapse into generic deploy/infra routing."
+    },
+    {
+      "when_ids_overlap": [
+        "swarm_runtime_orchestration_change",
+        "swarm_workspace_or_artifact_change"
+      ],
+      "prefer": "swarm_runtime_orchestration_change",
+      "reason": "Lifecycle and dispatcher changes have broader orchestration impact than artifact-only changes."
     },
     {
       "when_ids_overlap": [
         "docs_only_change",
-        "release_or_versioning_change"
+        "swarm_policy_or_planning_change"
       ],
-      "prefer": "release_or_versioning_change",
-      "reason": "Release docs usually imply versioning workflow rather than plain documentation work."
-    },
-    {
-      "when_ids_overlap": [
-        "media_routing_bugfix",
-        "caption_or_error_message_change"
-      ],
-      "prefer": "media_routing_bugfix",
-      "reason": "Caption or error text changes inside processing often affect runtime behavior and need broader routing context."
+      "prefer": "swarm_policy_or_planning_change",
+      "reason": "Routing and verification policy changes should not collapse into plain docs-only work."
     }
   ],
   "manual_review_cases": [
     "Multiple high-risk task types match with similar confidence.",
-    "The task touches both deploy/infra and runtime contracts.",
-    "The task changes registry/contracts together with DB semantics.",
-    "The task requests push, release, or other irreversible actions."
+    "The task touches both swarm orchestration and sandbox execution.",
+    "The task changes approval boundaries, push behavior or remote execution contracts.",
+    "The task requests push, release or other irreversible actions."
   ]
 }

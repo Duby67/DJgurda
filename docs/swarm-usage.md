@@ -11,6 +11,13 @@
 - активный проектный `venv` или явный запуск через `.\venv\Scripts\python.exe`
 - установленные dev-зависимости из `requirements-dev.txt`
 - работа из корня репозитория
+- локальные `pytest`, smoke-checks и verification-команды нельзя запускать вне проектного `venv`
+
+Для VS Code в репозитории рекомендован tracked workspace-файл [.vscode/settings.json](/c:/Work/djgurda/.vscode/settings.json).
+Он фиксирует `venv\Scripts\python.exe` как repo-default interpreter и открывает терминал с активацией `venv` через `activate.bat`, что особенно полезно на Windows-хостах с ограниченным PowerShell `ExecutionPolicy`.
+
+Важно: `python.defaultInterpreterPath` в VS Code работает как начальный default для workspace.
+Если редактор уже сохранил другой interpreter selection, нужно вручную переуказать интерпретатор на `.\venv\Scripts\python.exe`.
 
 Swarm run bundles и lifecycle artifacts сохраняются в корневую папку `runs/`.
 
