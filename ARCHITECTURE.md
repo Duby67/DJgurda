@@ -2,36 +2,27 @@
 
 ## Purpose
 
-Этот файл дает короткую карту системы и маршрутизирует к более узким документам.
+Этот файл дает короткую карту репозитория и разделяет два основных рабочих контура:
 
-## System Summary
+- application runtime бота;
+- swarm automation contour для agent-first orchestration.
 
-DJgurda Bot - асинхронный Telegram-бот для обработки медиа-ссылок в чатах. Пользователь отправляет ссылку, бот определяет источник, извлекает контент и отправляет результат в унифицированном формате обратно в чат.
+## Repository Summary
 
-Стабильный runtime-контур:
+Репозиторий одновременно содержит:
 
-- TikTok
-- YouTube
-- Instagram
-- COUB
-- Yandex Music
+- асинхронный Telegram-бот для обработки медиа-ссылок;
+- automation/runtime слой, через который агент может планировать, запускать и сопровождать swarm-oriented работу по задачам в репозитории.
 
-Источник в статусе `in_development`:
+## Application Runtime
 
-- VK
+Application runtime живет в `src/`.
 
-## Core Runtime Flow
+Основной пользовательский поток:
 
 `Telegram update -> router -> media_router -> resolve_url -> HandlerRegistry/ServiceManager -> handler.process() -> MediaResult -> sender registry -> Telegram API`
 
-## Current Architecture Boundary
-
-- Рабочая boundary-модель опирается на typed result `MediaResult`.
-- Stable runtime больше не должен опираться на broad legacy payload как на основной контракт.
-- Stable gateways строятся вокруг composition-based services.
-- Внешние источники считаются нестабильной внешней средой, а не надежной частью системы.
-
-## Subsystems
+Основные области:
 
 - `src/bot/`
   - Telegram-роутеры, команды, orchestration, startup и shutdown.
@@ -43,10 +34,41 @@ DJgurda Bot - асинхронный Telegram-бот для обработки �
   - URL helpers, message formatting, cookies, runtime storage и другие общие утилиты.
 - `deploy/`
   - live deploy assets: production/dev bot image, deploy scripts и cookie sync tooling.
+
+## Swarm Automation Contour
+
+Swarm contour живет в `scripts/agents/`, `docs/swarm-runtime.md`, `docs/swarm-usage.md`, `.github/workflows/` и связанных test assets.
+
+Его основной рабочий поток:
+
+`prompt -> route -> plan -> run bundle -> workspace -> local roles -> external roles -> verification/sandbox -> review -> approval boundaries`
+
+Основные области:
+
+- `scripts/agents/routing/`
+  - классификация задач, context pack, plan и run bundle bootstrap.
+- `scripts/agents/mcp/`
+  - front door для swarm orchestration, dispatcher, supervisor и UX wrappers.
+- `scripts/agents/lifecycle/`
+  - execute/apply/verify/review/approval/commit/push/status stages.
+- `scripts/agents/executor.py`
+  - role jobs, dependency order и handoff между local/external ролями.
+- `scripts/agents/workspace.py`
+  - isolated workspace planning и materialization.
+- `scripts/agents/sandbox_adapters.py`
+  - `local_dry_run`, `docker`, `github_actions`.
+- `runs/`
+  - run artifacts, а не source of truth.
+- `test/scripts/`
+  - smoke/regression coverage для swarm contour.
 - `test/docker/`
-  - test-only container assets для sandbox, smoke и verification.
+  - test-only container assets для sandbox и smoke.
+- `.github/workflows/swarm-sandbox.yml`
+  - remote sandbox entrypoint для `github_actions`.
 
 ## Key Entrypoints
+
+Application runtime:
 
 - `src/main.py`
 - `src/config.py`
@@ -55,17 +77,36 @@ DJgurda Bot - асинхронный Telegram-бот для обработки �
 - `src/bot/lifespan/startup.py`
 - `src/bot/lifespan/shutdown.py`
 
-## Key Constraints
+Swarm contour:
 
-- Основной UX-контекст - mobile Telegram.
-- Webhook-режим сейчас не реализован.
-- `VK` не должен восприниматься как stable runtime-source.
-- `tests/` и `test/` не являются общим source of truth, кроме согласованных handler smoke flows.
+- `scripts/agents/mcp/cli.py`
+- `scripts/agents/mcp/dispatcher.py`
+- `scripts/agents/executor.py`
+- `scripts/agents/workspace.py`
+- `scripts/agents/sandbox_adapters.py`
+- `scripts/agents/routing/run.py`
+
+## Shared Constraints
+
+- `README.md` human-facing и не является главным source of truth для агента.
+- `runs/` хранит artifacts и не является source of truth для policy или runtime behavior.
+- tests не равны source of truth, но остаются важным validation layer.
+- Любые тесты и smoke-проверки запускаются только после явного подтверждения пользователя.
+- `push`, merge, release и операции с секретами всегда остаются за отдельной approval boundary.
+
+## Swarm-Specific Constraints
+
+- `local_dry_run` - preview-only sandbox adapter.
+- `docker` - основной локальный real execution backend для sandbox.
+- `github_actions` - remote sandbox backend, а не замена локальному source of truth.
+- supervisor и dispatcher снимают ручные швы orchestration, но не обходят approval boundaries.
 
 ## Read Next
 
-- `docs/design-docs/index.md`
-- `docs/product-specs/index.md`
+- `scripts/AGENTS.md` для automation-слоя и точек входа.
+- `docs/swarm-runtime.md` для runtime-контрактов swarm-контура.
+- `docs/swarm-usage.md` для практического использования swarm automation.
 - `docs/RELIABILITY.md`
 - `docs/SECURITY.md`
 - `docs/PLANS.md`
+- `docs/design-docs/index.md` и `docs/product-specs/index.md`, если задача уходит в application runtime.

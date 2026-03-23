@@ -248,7 +248,7 @@ Branch intent теперь сохраняется как first-class metadata:
   - после первичного correlation match runtime закрепляется на конкретном `workflow_run_id` и дальше поллит уже его detail endpoint.
 
 Build context для sandbox test image хранится в `test/docker/swarm-test/`.
-Он не должен смешиваться с live deploy assets из `deploy/`.
+Он не должен смешиваться с production runtime assets или с обычным source tree вне isolated workspace.
 
 Sandbox всегда работает поверх isolated workspace, а не поверх корня репозитория.
 Выбор adapter теперь делается в executor core:

@@ -4,20 +4,46 @@
 
 Это корневой policy-файл для агентной работы в репозитории.
 
+Репозиторий содержит два рабочих контура:
+
+- application runtime бота в `src/`;
+- swarm automation contour в `scripts/agents/`, `docs/swarm-runtime.md` и связанных policy/docs.
+
+Агент должен сначала понять, в каком контуре находится задача, и не смешивать их без необходимости.
+
 ## Reading Order
 
-Агент должен собирать контекст в таком порядке:
+Базовый reading path для любой нетривиальной задачи:
 
 1. `AGENTS.md`
 2. `ARCHITECTURE.md`
+
+Если задача затрагивает swarm automation, orchestration, sandbox, approvals, MCP/CLI, run artifacts или VSCode task wrappers, читать дальше в таком порядке:
+
+3. `scripts/AGENTS.md`
+4. `docs/swarm-runtime.md`
+5. `docs/swarm-usage.md`
+6. нужный policy-документ из:
+   - `docs/testing-policy.md`
+   - `docs/sandbox-execution.md`
+   - `docs/commit-policy.md`
+   - `docs/SECURITY.md`
+7. код и тесты только для затронутой области в `scripts/agents/`, `.github/workflows/`, `test/scripts/`, `test/docker/`
+
+Если задача затрагивает application runtime бота, читать дальше в таком порядке:
+
 3. нужный файл из `docs/product-specs/`
 4. нужный файл из `docs/design-docs/`
 5. нужный файл из `docs/exec-plans/`
-6. код и тесты только для затронутой области
+6. код и тесты только для затронутой области в `src/`, `deploy/`, `test/`
 
 ## Source Of Truth
 
-- Основной источник истины по поведению системы: `src/`.
+- Основной источник истины по поведению application runtime: `src/`.
+- Основной источник истины по поведению swarm automation contour:
+  - `scripts/agents/`
+  - `docs/swarm-runtime.md`
+  - связанные tracked policy/docs
 - Основной источник истины по правилам работы: tracked-документы, а не архив в `local/`.
 - `README.md` считать обзорным human-facing документом, а не source of truth для агента.
 - `local/` считать legacy/scratch/archive-слоем, если пользователь явно не попросил опереться на него.
@@ -30,14 +56,20 @@
 - Расширять контекст только если:
   - зависимость реально пересекает модуль;
   - тест или ошибка указывает на соседнюю область;
-  - локальный policy требует прочитать соседний контракт.
+  - локальный policy требует прочитать соседний контракт;
+  - задача пересекает application runtime и swarm contour.
 - Не использовать обзорные и архивные документы как замену чтению целевого кода.
+- Не подменять чтение swarm runtime-доков чтением bot-only архитектурных документов, если задача лежит в `scripts/agents/`.
 
 ## Change Rules
 
 - Предпочитать локальные изменения внутри одной подсистемы.
 - Если изменение пересекает несколько подсистем, явно описывать причину.
 - При изменении поведения синхронизировать релевантные docs.
+- Если меняется swarm command surface, lifecycle contract, artifact schema или sandbox behavior, синхронизировать:
+  - `docs/swarm-runtime.md`
+  - `docs/swarm-usage.md`
+  - при необходимости `scripts/AGENTS.md`
 - Не подключать новые runtime-handlers без явной проверки readiness и env-зависимостей.
 
 ## Test And Check Rules
@@ -46,6 +78,9 @@
 - Для локальных Python-команд использовать проектный `venv`.
 - Environment-sensitive проверки предпочитать в изолированной среде.
 - Handler smoke-тесты считать специальным исключением из общего правила, что tests не равны source of truth.
+- Для swarm contour учитывать, что:
+  - `local_dry_run` не заменяет реальный execution backend;
+  - `docker` и `github_actions` являются отдельными sandbox backend'ами со своими ограничениями.
 
 ## Approval Rules
 
@@ -65,9 +100,11 @@
 
 ## Read Next
 
-- `ARCHITECTURE.md` для карты системы.
-- `scripts/AGENTS.md` если задача затрагивает automation, swarm lifecycle или release scripts.
-- `docs/PRODUCT_SENSE.md` для пользовательских ожиданий.
+- `ARCHITECTURE.md` для общей карты репозитория.
+- `scripts/AGENTS.md`, если задача затрагивает automation, swarm lifecycle, sandbox, approvals или release scripts.
+- `docs/swarm-runtime.md` для runtime-контрактов swarm-контура.
+- `docs/swarm-usage.md` для пользовательских точек входа swarm automation.
+- `docs/PRODUCT_SENSE.md` для пользовательских ожиданий application runtime.
 - `docs/RELIABILITY.md` для runtime и testing posture.
 - `docs/SECURITY.md` для секретов, deploy-boundaries и approval-политики.
 - `docs/PLANS.md` для активных и завершенных планов.

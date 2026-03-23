@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Этот документ кратко описывает, как запускать swarm-oriented automation в репозитории и какие команды являются основными точками входа в текущем Phase 3 контуре.
+Этот документ кратко описывает, как использовать swarm-oriented automation в репозитории и какие команды являются основными точками входа в текущем контуре.
 
 ## Prerequisites
 
@@ -27,8 +27,6 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 - `python -m scripts.agents.routing.run`
 - `python -m scripts.agents.lifecycle.execute`
 - `python -m scripts.agents.lifecycle.status`
-- `python -m scripts.release.automation.promote`
-- `python -m scripts.release.automation.sync`
 
 `scripts.agents.mcp` строит run bundle, создает isolated workspace, инициирует role jobs и служит основным пользовательским входом для swarm orchestration.
 
@@ -39,8 +37,8 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   plan_task `
-  --prompt "Исправить release flow документацию" `
-  --path docs/release-flow.md `
+  --prompt "Усилить dispatcher loop после completion inbox" `
+  --path scripts/agents/mcp/dispatcher.py `
   --pretty
 ```
 
@@ -49,8 +47,8 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   start_swarm_run `
-  --prompt "Исправить удаление исходного сообщения при multi-link routing" `
-  --path src/bot/processing/media_router.py `
+  --prompt "Улучшить статус sandbox blocked state" `
+  --path scripts/agents/lifecycle/status.py `
   --pretty
 ```
 
@@ -59,8 +57,8 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   start_autonomous_swarm_run `
-  --prompt "Исправить удаление исходного сообщения при multi-link routing" `
-  --path src/bot/processing/media_router.py `
+  --prompt "Усилить runtime context trace для reviewer handoff" `
+  --path scripts/agents/runtime_trace.py `
   --pretty
 ```
 
@@ -69,8 +67,8 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   start_supervised_swarm_run `
-  --prompt "Исправить удаление исходного сообщения при multi-link routing" `
-  --path src/bot/processing/media_router.py `
+  --prompt "Довести supervisor до следующей human boundary" `
+  --path scripts/agents/mcp/dispatcher.py `
   --pretty
 ```
 
@@ -79,7 +77,7 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   continue_swarm_run `
-  --run-id demo-media-router `
+  --run-id demo-swarm-run `
   --pretty
 ```
 
@@ -88,7 +86,7 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   show_run_status `
-  --run-id demo-media-router `
+  --run-id demo-swarm-run `
   --human
 ```
 
@@ -97,7 +95,7 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   show_job_queue `
-  --run-id demo-media-router `
+  --run-id demo-swarm-run `
   --human
 ```
 
@@ -106,7 +104,7 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   show_diff_preview `
-  --run-id demo-media-router `
+  --run-id demo-swarm-run `
   --human
 ```
 
@@ -115,7 +113,7 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   preview_sandbox_plan `
-  --run-id demo-media-router `
+  --run-id demo-swarm-run `
   --human
 ```
 
@@ -124,7 +122,7 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   run_dispatcher `
-  --run-id demo-media-router `
+  --run-id demo-swarm-run `
   --pretty
 ```
 
@@ -136,7 +134,7 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   run_supervisor `
-  --run-id demo-media-router `
+  --run-id demo-swarm-run `
   --pretty
 ```
 
@@ -148,42 +146,42 @@ Supervisor крутит persistent loop и, если задан `--runtime-comma
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   approve_run_checks `
-  --run-id demo-media-router `
+  --run-id demo-swarm-run `
   --pretty
 ```
 
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   approve_run_checks_and_continue `
-  --run-id demo-media-router `
+  --run-id demo-swarm-run `
   --pretty
 ```
 
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   approve_commit `
-  --run-id demo-media-router `
+  --run-id demo-swarm-run `
   --pretty
 ```
 
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   approve_commit_and_continue `
-  --run-id demo-media-router `
+  --run-id demo-swarm-run `
   --pretty
 ```
 
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   approve_push_and_continue `
-  --run-id demo-media-router `
+  --run-id demo-swarm-run `
   --pretty
 ```
 
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   reject_checkpoint `
-  --run-id demo-media-router `
+  --run-id demo-swarm-run `
   --checkpoint run_checks `
   --note "Нужна доработка контекста" `
   --pretty
@@ -194,7 +192,7 @@ Supervisor крутит persistent loop и, если задан `--runtime-comma
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   claim_role_job `
-  --run-id demo-media-router `
+  --run-id demo-swarm-run `
   --job-id coder `
   --claimed-by external-runtime
 ```
@@ -202,35 +200,9 @@ Supervisor крутит persistent loop и, если задан `--runtime-comma
 ```powershell
 .\venv\Scripts\python.exe -m scripts.agents.mcp `
   complete_role_job `
-  --run-id demo-media-router `
+  --run-id demo-swarm-run `
   --job-id coder `
   --result-json "{\"summary\":\"changes applied\",\"applied_files\":[\"docs/swarm-usage.md\"]}"
-```
-
-### Preview Promotion To Dev
-
-```powershell
-.\venv\Scripts\python.exe -m scripts.release.automation.promote `
-  --source-branch swarm-dev `
-  --target-branch dev `
-  --target-kind preview `
-  --human
-```
-
-### Stable Promotion To Main
-
-```powershell
-.\venv\Scripts\python.exe -m scripts.release.automation.promote `
-  --source-branch dev `
-  --target-branch main `
-  --target-kind stable `
-  --human
-```
-
-### Validate Release Sync
-
-```powershell
-.\venv\Scripts\python.exe -m scripts.release.automation.sync --tag v1.2.4
 ```
 
 ## Approval Boundaries
@@ -248,7 +220,7 @@ Supervisor крутит persistent loop и, если задан `--runtime-comma
 - `run_supervisor` закрывает следующий слой и может сам запускать built-in runtime worker для внешних AI jobs
 - если verification profile требует реальный sandbox, executor по умолчанию выберет `docker`
 - `local_dry_run` остается явным preview-режимом, а `github_actions` доступен как explicit remote adapter
-- `commit`, `push`, merge и release promotion вверх по веткам выполняются только по явному запросу разработчика
+- `commit` и `push` выполняются только по явному запросу разработчика
 - реальные тесты и smoke-прогоны все еще требуют явного approval пользователя
 
 ## Recommended Daily Flow
@@ -262,12 +234,10 @@ Supervisor крутит persistent loop и, если задан `--runtime-comma
 5. После approval или других ручных шагов возобновлять orchestration через `scripts.agents.mcp continue_swarm_run`.
 6. Для внешних AI-ролей использовать `run_supervisor` с built-in runtime worker, `run_dispatcher` как UX helper или низкоуровневые `claim_role_job` / `complete_role_job` / `fail_role_job`.
 7. Для approval checkpoints использовать wrappers `approve_run_checks`, `approve_run_checks_and_continue`, `approve_commit`, `approve_commit_and_continue`, `approve_push_and_continue`, `reject_checkpoint` или request-команды, когда нужен полный approval packet.
-8. Для продвижения preview и release использовать `scripts.release.automation.promote`.
 
 ## Related Docs
 
 - `scripts/AGENTS.md`
-- `docs/release-flow.md`
 - `docs/agent-context-map.md`
 - `docs/testing-policy.md`
 - `docs/commit-policy.md`
