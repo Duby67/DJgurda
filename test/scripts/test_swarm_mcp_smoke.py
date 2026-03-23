@@ -92,6 +92,57 @@ def create_approval_ready_run(run_id: str) -> Path:
     return run_dir
 
 
+def write_runtime_worker(tmp_path: Path) -> Path:
+    worker_path = tmp_path / "runtime_worker.py"
+    worker_path.write_text(
+        "\n".join(
+            [
+                "import json",
+                "import sys",
+                "from pathlib import Path",
+                "",
+                "payload = json.loads(sys.stdin.read())",
+                "role = payload.get('role', '')",
+                "workspace_root = Path(payload.get('workspace_root', ''))",
+                "if role == 'coder':",
+                "    target = workspace_root / 'docs' / 'swarm-usage.md'",
+                "    target.write_text(target.read_text(encoding='utf-8') + '\\nSupervisor runtime worker change.\\n', encoding='utf-8')",
+                "    response = {",
+                "        'status': 'completed',",
+                "        'summary': 'Runtime worker completed coder job.',",
+                "        'result': {",
+                "            'summary': 'Runtime worker completed coder job.',",
+                "            'applied_by': 'runtime-worker',",
+                "            'applied_files': ['docs/swarm-usage.md'],",
+                "        },",
+                "    }",
+                "elif role == 'reviewer':",
+                "    response = {",
+                "        'status': 'completed',",
+                "        'summary': 'Runtime worker completed reviewer job.',",
+                "        'result': {",
+                "            'summary': 'Runtime worker completed reviewer job.',",
+                "            'reviewed_by': 'runtime-worker',",
+                "            'conclusion': 'passed',",
+                "            'findings': [],",
+                "            'risks': ['Dry-run sandbox only'],",
+                "        },",
+                "    }",
+                "else:",
+                "    response = {",
+                "        'status': 'failed',",
+                "        'summary': f'Unsupported role: {role}',",
+                "        'reason': 'unsupported_role',",
+                "    }",
+                "sys.stdout.write(json.dumps(response, ensure_ascii=False))",
+                "",
+            ],
+        ),
+        encoding="utf-8",
+    )
+    return worker_path
+
+
 def test_plan_task_returns_plan_preview() -> None:
     result = run_module(
         "-m",
@@ -129,6 +180,9 @@ def test_start_swarm_run_prepares_workspace_and_local_jobs() -> None:
         assert payload["tool"] == "start_swarm_run"
         assert (run_dir / "workspace.json").is_file()
         assert (run_dir / "jobs" / "index.json").is_file()
+        workspace = read_json(run_dir / "workspace.json")["workspace"]
+        assert "source_branch" in workspace
+        assert "source_remote" in workspace
 
         jobs = read_json(run_dir / "jobs" / "index.json")
         statuses = {job["job_id"]: job["status"] for job in jobs["jobs"]}
@@ -170,6 +224,31 @@ def test_start_autonomous_swarm_run_reaches_first_stable_boundary() -> None:
         assert payload["cycle"]["run_status"] == "context_loaded_pending_run_checks_approval"
         assert payload["status"]["status"] == "context_loaded_pending_run_checks_approval"
         assert payload["status"]["next_action"] == "approve_run_checks_before_implementation"
+    finally:
+        cleanup_run_dir(run_dir)
+
+
+def test_start_supervised_swarm_run_reaches_first_human_boundary() -> None:
+    run_id = f"mcp-supervised-start-{uuid4().hex}"
+    result = run_module(
+        "-m",
+        "scripts.agents.mcp",
+        "start_supervised_swarm_run",
+        "--prompt",
+        "Обновить swarm usage docs",
+        "--run-id",
+        run_id,
+        "--pretty",
+    )
+
+    run_dir = ROOT / "runs" / run_id
+    try:
+        assert result.returncode == 0, result.stderr or result.stdout
+        payload = json.loads(result.stdout)
+        assert payload["tool"] == "start_supervised_swarm_run"
+        assert payload["supervisor"]["supervisor_status"] == "awaiting_human_or_terminal_boundary"
+        assert payload["status"]["status"] == "context_loaded_pending_run_checks_approval"
+        assert (run_dir / "supervisor-state.json").is_file()
     finally:
         cleanup_run_dir(run_dir)
 
@@ -467,6 +546,61 @@ def test_run_autonomous_cycle_drives_run_to_external_and_human_boundaries() -> N
         assert third_payload["cycle_status"] == "human_or_terminal_boundary"
         assert third_payload["run_status"] == "awaiting_commit_approval"
         assert third_payload["next_action"] == "await_commit_approval"
+    finally:
+        cleanup_run_dir(run_dir)
+
+
+def test_run_supervisor_executes_external_jobs_via_runtime_worker(tmp_path: Path) -> None:
+    run_id = f"mcp-supervisor-{uuid4().hex}"
+    worker_path = write_runtime_worker(tmp_path)
+    run_module(
+        "-m",
+        "scripts.agents.mcp",
+        "start_swarm_run",
+        "--prompt",
+        "Обновить swarm usage docs",
+        "--run-id",
+        run_id,
+    )
+
+    run_dir = ROOT / "runs" / run_id
+    try:
+        approve_run_checks(run_id)
+        supervise = run_module(
+            "-m",
+            "scripts.agents.mcp",
+            "run_supervisor",
+            "--run-id",
+            run_id,
+            "--sandbox-adapter",
+            "local_dry_run",
+            "--runtime-command-json",
+            json.dumps([sys.executable, str(worker_path)], ensure_ascii=False),
+            "--runtime-target",
+            "codex-worker",
+            "--max-iterations",
+            "8",
+            "--max-cycles",
+            "4",
+            "--pretty",
+        )
+
+        assert supervise.returncode == 0, supervise.stderr or supervise.stdout
+        payload = json.loads(supervise.stdout)
+        assert payload["tool"] == "run_supervisor"
+        assert payload["supervisor_status"] == "awaiting_human_or_terminal_boundary"
+        assert (run_dir / "supervisor-state.json").is_file()
+        summary = read_json(run_dir / "run-summary.json")
+        assert summary["status"] == "awaiting_commit_approval"
+        assert summary["next_action"] == "await_commit_approval"
+        supervisor = summary["supervisor"]
+        assert supervisor["status"] == "awaiting_human_or_terminal_boundary"
+        assert supervisor["runtime_target"] == "codex-worker"
+
+        jobs = read_json(run_dir / "jobs" / "index.json")
+        statuses = {job["job_id"]: job["status"] for job in jobs["jobs"]}
+        assert statuses["coder"] == "completed"
+        assert statuses["reviewer"] == "completed"
     finally:
         cleanup_run_dir(run_dir)
 
@@ -1093,6 +1227,13 @@ def test_checkpoint_action_wrappers_delegate_to_lifecycle_approve() -> None:
             "--run-id",
             push_continue_run_id,
         )
+        workspace_payload = read_json(push_continue_run_dir / "workspace.json")
+        workspace_payload["workspace"]["source_branch"] = "swarm-intent-branch"
+        workspace_payload["workspace"]["source_remote"] = "intent-remote"
+        (push_continue_run_dir / "workspace.json").write_text(
+            json.dumps(workspace_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
 
         request_push = run_module(
             "-m",
@@ -1122,6 +1263,9 @@ def test_checkpoint_action_wrappers_delegate_to_lifecycle_approve() -> None:
         assert resume_push_payload["push"]["status"] == "push_approved_pending_execution"
         assert resume_push_payload["push"]["next_action"] == "execute_push"
         assert (push_continue_run_dir / "push-result.json").is_file()
+        push_result = read_json(push_continue_run_dir / "push-result.json")
+        assert push_result["branch"] == "swarm-intent-branch"
+        assert push_result["remote"] == "intent-remote"
     finally:
         cleanup_run_dir(push_continue_run_dir)
 
@@ -1176,10 +1320,12 @@ def test_tasks_json_calls_front_door_commands() -> None:
         "Plan task",
         "Start swarm run",
         "Start autonomous swarm run",
+        "Start supervised swarm run",
         "Continue swarm run",
         "Preview sandbox plan",
         "Build swarm test image",
         "Run dispatcher",
+        "Run supervisor",
         "Show run status",
         "Show job queue",
         "Show diff preview",
@@ -1202,5 +1348,5 @@ def test_tasks_json_calls_front_door_commands() -> None:
             continue
         assert "scripts.agents.mcp" in args
         assert command.endswith(r"venv\Scripts\python.exe")
-        if task["label"] in {"Start swarm run", "Start autonomous swarm run", "Continue swarm run"}:
+        if task["label"] in {"Start swarm run", "Start autonomous swarm run", "Start supervised swarm run", "Continue swarm run"}:
             assert "local_dry_run" not in args

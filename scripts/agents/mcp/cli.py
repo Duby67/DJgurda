@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 
 from pathlib import Path
@@ -29,6 +30,7 @@ from scripts.agents.mcp.dispatcher import (
     mark_dispatch_terminal,
     run_autonomous_cycle,
     run_dispatcher_loop,
+    run_supervisor,
     submit_role_result,
     show_job_queue as build_dispatcher_job_queue,
 )
@@ -169,6 +171,42 @@ def build_start_autonomous_swarm_run(args: argparse.Namespace) -> dict[str, Any]
     }
 
 
+def build_start_supervised_swarm_run(args: argparse.Namespace) -> dict[str, Any]:
+    """Builds a run bundle and immediately starts the persistent supervisor loop."""
+    prompt = read_prompt(command_inputs(args))
+    paths = read_paths(command_inputs(args))
+    run_id = normalize_rel_path(args.run_id) if args.run_id else generate_run_id("swarm")
+    runs_dir = ROOT / normalize_runs_dir(args.runs_dir)
+    run_dir = runs_dir / run_id
+
+    bundle = build_run_bundle(prompt=prompt, paths=paths, run_id=run_id, run_dir=run_dir)
+    supervisor = run_supervisor(
+        run_dir,
+        runtime_target=args.runtime_target,
+        runtime_command=parse_runtime_command(args),
+        claimed_by=args.claimed_by,
+        sandbox_adapter=args.sandbox_adapter or "",
+        poll_interval_seconds=args.poll_interval_seconds,
+        max_iterations=args.max_iterations,
+        max_cycles=args.max_cycles,
+        runtime_timeout_seconds=args.runtime_timeout_seconds,
+    )
+    status_payload = build_run_status(run_dir)
+
+    return {
+        "tool": "start_supervised_swarm_run",
+        "run_id": run_id,
+        "run_dir": str(run_dir.relative_to(ROOT)).replace("\\", "/"),
+        "bundle": {
+            "task_type": bundle["summary"]["task_type"],
+            "status": bundle["summary"]["status"],
+            "next_action": bundle["summary"]["next_action"],
+        },
+        "supervisor": supervisor,
+        "status": status_payload,
+    }
+
+
 def build_continue_swarm_run(args: argparse.Namespace) -> dict[str, Any]:
     """Continues orchestration for an existing run bundle."""
     run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
@@ -228,6 +266,28 @@ def parse_result_payload(args: argparse.Namespace) -> dict[str, Any] | None:
     if args.result_json:
         return json.loads(args.result_json)
     return None
+
+
+def parse_runtime_command(args: argparse.Namespace) -> list[str]:
+    """Parses an optional runtime worker command from CLI arguments."""
+    raw = str(getattr(args, "runtime_command_json", "") or "").strip()
+    if not raw:
+        raw = str(os.environ.get("SWARM_RUNTIME_COMMAND_JSON", "")).strip()
+    if not raw:
+        return []
+    payload = json.loads(raw)
+    if not isinstance(payload, list) or not payload or not all(isinstance(item, str) and item.strip() for item in payload):
+        raise ValueError("--runtime-command-json must be a non-empty JSON array of command strings")
+    return [item.strip() for item in payload]
+
+
+def load_workspace_intent(run_dir: Path) -> dict[str, Any]:
+    """Loads branch/remote intent from workspace metadata when present."""
+    payload = load_optional_json(run_dir / "workspace.json") or {}
+    workspace = payload.get("workspace", {})
+    if not isinstance(workspace, dict):
+        return {}
+    return workspace
 
 
 def build_show_job_queue(args: argparse.Namespace) -> dict[str, Any]:
@@ -441,14 +501,18 @@ def build_approve_push_and_continue(args: argparse.Namespace) -> dict[str, Any]:
     )
     push_result = None
     if approval.get("status") == "push_approved_pending_execution":
+        workspace_intent = load_workspace_intent(run_dir)
         if getattr(args, "branch", None):
             branch = args.branch.strip()
+        elif str(workspace_intent.get("source_branch", "")).strip():
+            branch = str(workspace_intent.get("source_branch", "")).strip()
         else:
             branch = push_stage.resolve_branch(args, repo_root=ROOT)
+        remote = (getattr(args, "remote", "") or "").strip() or str(workspace_intent.get("source_remote", "")).strip() or "origin"
         push_result = push_stage.build_output(
             run_dir,
             pushed_by=(getattr(args, "pushed_by", "") or "release_manager").strip() or "release_manager",
-            remote=(getattr(args, "remote", "") or "origin").strip() or "origin",
+            remote=remote,
             branch=branch,
             execute=bool(getattr(args, "execute", False)),
         )
@@ -505,6 +569,28 @@ def build_run_autonomous_cycle(args: argparse.Namespace) -> dict[str, Any]:
     )
     return {
         "tool": "run_autonomous_cycle",
+        "run_id": run_dir.name,
+        "run_dir": str(run_dir.relative_to(ROOT)).replace("\\", "/"),
+        **result,
+    }
+
+
+def build_run_supervisor(args: argparse.Namespace) -> dict[str, Any]:
+    """Runs the persistent supervisor loop for an existing run."""
+    run_dir = resolve_run_dir(run_dir=args.run_dir, run_id=args.run_id, runs_dir=args.runs_dir)
+    result = run_supervisor(
+        run_dir,
+        runtime_target=args.runtime_target,
+        runtime_command=parse_runtime_command(args),
+        claimed_by=args.claimed_by,
+        sandbox_adapter=args.sandbox_adapter or "",
+        poll_interval_seconds=args.poll_interval_seconds,
+        max_iterations=args.max_iterations,
+        max_cycles=args.max_cycles,
+        runtime_timeout_seconds=args.runtime_timeout_seconds,
+    )
+    return {
+        "tool": "run_supervisor",
         "run_id": run_dir.name,
         "run_dir": str(run_dir.relative_to(ROOT)).replace("\\", "/"),
         **result,
@@ -588,6 +674,8 @@ def handle_tool(command: str, args: argparse.Namespace) -> dict[str, Any]:
         return build_start_swarm_run(args)
     if command == "start_autonomous_swarm_run":
         return build_start_autonomous_swarm_run(args)
+    if command == "start_supervised_swarm_run":
+        return build_start_supervised_swarm_run(args)
     if command == "continue_swarm_run":
         return build_continue_swarm_run(args)
     if command == "show_run_status":
@@ -620,6 +708,8 @@ def handle_tool(command: str, args: argparse.Namespace) -> dict[str, Any]:
         return build_run_dispatcher_loop(args)
     if command == "run_autonomous_cycle":
         return build_run_autonomous_cycle(args)
+    if command == "run_supervisor":
+        return build_run_supervisor(args)
     if command == "claim_role_job":
         return build_claim_role_job(args)
     if command == "complete_role_job":
@@ -668,6 +758,19 @@ def parse_args() -> argparse.Namespace:
         parent.add_argument("--path", action="append", help="Changed path. Can be repeated.")
         parent.add_argument("--paths-file", help="Path to a newline-separated list of changed paths.")
 
+    def add_runtime_worker_options(parent: argparse.ArgumentParser) -> None:
+        parent.add_argument("--claimed-by", default="ux_dispatcher", help="Identity used for claim operations.")
+        parent.add_argument("--runtime-target", default="codex", help="External runtime target label.")
+        parent.add_argument(
+            "--runtime-command-json",
+            default="",
+            help="Optional JSON array command for a built-in runtime worker, for example [\"python\", \"path/to/worker.py\"].",
+        )
+        parent.add_argument("--poll-interval-seconds", type=float, default=2.0, help="Supervisor poll interval in seconds.")
+        parent.add_argument("--max-iterations", type=int, default=32, help="Maximum supervisor iterations per invocation.")
+        parent.add_argument("--max-cycles", type=int, default=8, help="Maximum autonomous iterations per invocation.")
+        parent.add_argument("--runtime-timeout-seconds", type=int, default=1200, help="Timeout for a single runtime worker execution.")
+
     plan_parser = subparsers.add_parser("plan_task", help="Build a task plan.")
     add_prompt_paths(plan_parser)
     add_pretty_flag(plan_parser)
@@ -701,15 +804,34 @@ def parse_args() -> argparse.Namespace:
         default=str(normalize_runs_dir("runs")),
         help="Base directory for runs (default: runs).",
     )
-    autonomous_start_parser.add_argument("--claimed-by", default="ux_dispatcher", help="Identity used for claim operations.")
-    autonomous_start_parser.add_argument("--runtime-target", default="codex", help="External runtime target label.")
+    add_runtime_worker_options(autonomous_start_parser)
     autonomous_start_parser.add_argument(
         "--sandbox-adapter",
         default=None,
         choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER, GITHUB_ACTIONS_ADAPTER],
         help="Optional sandbox adapter override when the autonomous cycle resumes local orchestration.",
     )
-    autonomous_start_parser.add_argument("--max-cycles", type=int, default=8, help="Maximum autonomous iterations per invocation.")
+    autonomous_start_parser.set_defaults(poll_interval_seconds=2.0, max_iterations=32, runtime_timeout_seconds=1200)
+
+    supervised_start_parser = subparsers.add_parser(
+        "start_supervised_swarm_run",
+        help="Build a run bundle and keep supervising it until the next human or terminal boundary.",
+    )
+    add_prompt_paths(supervised_start_parser)
+    add_pretty_flag(supervised_start_parser)
+    supervised_start_parser.add_argument("--run-id", help="Optional explicit run id.")
+    supervised_start_parser.add_argument(
+        "--runs-dir",
+        default=str(normalize_runs_dir("runs")),
+        help="Base directory for runs (default: runs).",
+    )
+    add_runtime_worker_options(supervised_start_parser)
+    supervised_start_parser.add_argument(
+        "--sandbox-adapter",
+        default=None,
+        choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER, GITHUB_ACTIONS_ADAPTER],
+        help="Optional sandbox adapter override when supervisor resumes local orchestration.",
+    )
 
     continue_parser = subparsers.add_parser("continue_swarm_run", help="Continue orchestration for an existing run.")
     add_pretty_flag(continue_parser)
@@ -855,7 +977,7 @@ def parse_args() -> argparse.Namespace:
         help="Base directory for runs (default: runs).",
     )
     approve_push_and_continue_parser.add_argument("--note", default="", help="Optional approval note.")
-    approve_push_and_continue_parser.add_argument("--remote", default="origin", help="Remote for push-stage.")
+    approve_push_and_continue_parser.add_argument("--remote", default="", help="Remote for push-stage.")
     approve_push_and_continue_parser.add_argument("--branch", help="Target branch for push-stage.")
     approve_push_and_continue_parser.add_argument("--pushed-by", default="release_manager", help="Who records the push-stage.")
     approve_push_and_continue_parser.add_argument(
@@ -960,6 +1082,26 @@ def parse_args() -> argparse.Namespace:
         help="Optional sandbox adapter override when autonomous cycle resumes local orchestration.",
     )
     autonomous_cycle_parser.add_argument("--max-cycles", type=int, default=8, help="Maximum autonomous iterations per invocation.")
+
+    supervisor_parser = subparsers.add_parser(
+        "run_supervisor",
+        help="Run the persistent supervisor loop for an existing swarm run.",
+    )
+    add_pretty_flag(supervisor_parser)
+    supervisor_parser.add_argument("--run-dir", help="Path to a run bundle.")
+    supervisor_parser.add_argument("--run-id", help="Run id inside runs-dir.")
+    supervisor_parser.add_argument(
+        "--runs-dir",
+        default=str(normalize_runs_dir("runs")),
+        help="Base directory for runs (default: runs).",
+    )
+    add_runtime_worker_options(supervisor_parser)
+    supervisor_parser.add_argument(
+        "--sandbox-adapter",
+        default=None,
+        choices=[LOCAL_DRY_RUN_ADAPTER, DOCKER_ADAPTER, GITHUB_ACTIONS_ADAPTER],
+        help="Optional sandbox adapter override when supervisor resumes local orchestration.",
+    )
 
     for command_name in ("claim_role_job", "complete_role_job", "fail_role_job"):
         job_parser = subparsers.add_parser(command_name, help=f"{command_name.replace('_', ' ').title()}.")

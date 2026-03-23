@@ -62,6 +62,9 @@ def test_clean_repo_builds_git_worktree_plan(tmp_path: Path) -> None:
     assert plan["workspace"]["mode"] == WORKTREE_MODE
     assert plan["workspace"]["source_dirty"] is False
     assert plan["workspace"]["base_ref"] == run_git(repo_root, "rev-parse", "--short", "HEAD").stdout.strip()
+    assert plan["workspace"]["source_head_sha"] == run_git(repo_root, "rev-parse", "HEAD").stdout.strip()
+    assert plan["workspace"]["source_branch"] == run_git(repo_root, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    assert plan["workspace"]["source_remote"] == ""
     assert plan["materialization"]["git_worktree_command"] == [
         "git",
         "-C",
@@ -130,6 +133,9 @@ def test_workspace_json_roundtrip_preserves_workspace_ref(tmp_path: Path) -> Non
         mode=WORKTREE_MODE,
         root_path=str(workspace_root),
         base_ref="abc1234",
+        source_head_sha="abc1234def5678",
+        source_branch="main",
+        source_remote="origin",
         source_dirty=False,
         cleanup_policy="keep_on_failure",
     )

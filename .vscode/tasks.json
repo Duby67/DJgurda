@@ -44,6 +44,20 @@
       "problemMatcher": []
     },
     {
+      "label": "Start supervised swarm run",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "start_supervised_swarm_run",
+        "--prompt",
+        "${input:swarmPrompt}",
+        "--pretty"
+      ],
+      "problemMatcher": []
+    },
+    {
       "label": "Continue swarm run",
       "type": "process",
       "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
@@ -93,6 +107,20 @@
         "-m",
         "scripts.agents.mcp",
         "run_dispatcher",
+        "--run-id",
+        "${input:swarmRunId}",
+        "--pretty"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Run supervisor",
+      "type": "process",
+      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "scripts.agents.mcp",
+        "run_supervisor",
         "--run-id",
         "${input:swarmRunId}",
         "--pretty"

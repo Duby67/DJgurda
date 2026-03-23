@@ -65,6 +65,34 @@ on:
         description: Gzip+base64 encoded git patch for exact workspace replay
         required: false
         type: string
+      workspace_diff_chunk_count:
+        description: Number of chunked gzip+base64 workspace diff segments
+        required: false
+        type: string
+      workspace_diff_gzip_base64_chunk_01:
+        required: false
+        type: string
+      workspace_diff_gzip_base64_chunk_02:
+        required: false
+        type: string
+      workspace_diff_gzip_base64_chunk_03:
+        required: false
+        type: string
+      workspace_diff_gzip_base64_chunk_04:
+        required: false
+        type: string
+      workspace_diff_gzip_base64_chunk_05:
+        required: false
+        type: string
+      workspace_diff_gzip_base64_chunk_06:
+        required: false
+        type: string
+      workspace_diff_gzip_base64_chunk_07:
+        required: false
+        type: string
+      workspace_diff_gzip_base64_chunk_08:
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -134,11 +162,20 @@ jobs:
           PY
 
       - name: Apply workspace diff
-        if: ${{ inputs.workspace_diff_gzip_base64 != '' }}
+        if: ${{ inputs.workspace_diff_gzip_base64 != '' || inputs.workspace_diff_chunk_count != '' }}
         shell: bash
         env:
           SWARM_WORKSPACE_DIFF_GZIP_BASE64: ${{ inputs.workspace_diff_gzip_base64 }}
           SWARM_WORKSPACE_DIFF_SHA256: ${{ inputs.workspace_diff_sha256 }}
+          SWARM_WORKSPACE_DIFF_CHUNK_COUNT: ${{ inputs.workspace_diff_chunk_count }}
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_01: ${{ inputs.workspace_diff_gzip_base64_chunk_01 }}
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_02: ${{ inputs.workspace_diff_gzip_base64_chunk_02 }}
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_03: ${{ inputs.workspace_diff_gzip_base64_chunk_03 }}
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_04: ${{ inputs.workspace_diff_gzip_base64_chunk_04 }}
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_05: ${{ inputs.workspace_diff_gzip_base64_chunk_05 }}
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_06: ${{ inputs.workspace_diff_gzip_base64_chunk_06 }}
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_07: ${{ inputs.workspace_diff_gzip_base64_chunk_07 }}
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_08: ${{ inputs.workspace_diff_gzip_base64_chunk_08 }}
         run: |
           python - <<'PY'
           import base64
@@ -150,7 +187,23 @@ jobs:
 
           root = Path(".swarm-sandbox")
           root.mkdir(parents=True, exist_ok=True)
-          patch_payload = gzip.decompress(base64.b64decode(os.environ["SWARM_WORKSPACE_DIFF_GZIP_BASE64"]))
+          inline_payload = os.environ.get("SWARM_WORKSPACE_DIFF_GZIP_BASE64", "")
+          chunk_count = int((os.environ.get("SWARM_WORKSPACE_DIFF_CHUNK_COUNT") or "0").strip() or "0")
+          if inline_payload:
+              gzip_base64 = inline_payload
+              transfer_mode = "inline_git_patch"
+          else:
+              chunks = []
+              for index in range(1, chunk_count + 1):
+                  env_key = f"SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_{index:02d}"
+                  chunk = os.environ.get(env_key, "")
+                  if not chunk:
+                      raise SystemExit(f"missing workspace diff chunk: {env_key}")
+                  chunks.append(chunk)
+              gzip_base64 = "".join(chunks)
+              transfer_mode = "chunked_inline_git_patch"
+
+          patch_payload = gzip.decompress(base64.b64decode(gzip_base64))
           actual_sha256 = hashlib.sha256(patch_payload).hexdigest()
           expected_sha256 = os.environ.get("SWARM_WORKSPACE_DIFF_SHA256", "")
           if expected_sha256 and actual_sha256 != expected_sha256:
@@ -161,10 +214,11 @@ jobs:
           (root / "workspace-transfer.json").write_text(
               json.dumps(
                   {
-                      "mode": "inline_git_patch",
+                      "mode": transfer_mode,
                       "applied": False,
                       "sha256": actual_sha256,
                       "path": "workspace-diff.patch",
+                      "chunk_count": chunk_count,
                   },
                   ensure_ascii=False,
                   indent=2,

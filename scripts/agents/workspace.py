@@ -27,6 +27,9 @@ class WorkspaceRef:
     mode: str
     root_path: str
     base_ref: str
+    source_head_sha: str
+    source_branch: str
+    source_remote: str
     source_dirty: bool
     cleanup_policy: str = DEFAULT_CLEANUP_POLICY
 
@@ -36,6 +39,9 @@ class WorkspaceRef:
             "mode": self.mode,
             "root_path": self.root_path,
             "base_ref": self.base_ref,
+            "source_head_sha": self.source_head_sha,
+            "source_branch": self.source_branch,
+            "source_remote": self.source_remote,
             "source_dirty": self.source_dirty,
             "cleanup_policy": self.cleanup_policy,
         }
@@ -47,6 +53,9 @@ class WorkspaceRef:
             mode=str(payload.get("mode", "")).strip(),
             root_path=str(payload.get("root_path", "")).strip(),
             base_ref=str(payload.get("base_ref", "")).strip(),
+            source_head_sha=str(payload.get("source_head_sha", "")).strip(),
+            source_branch=str(payload.get("source_branch", "")).strip(),
+            source_remote=str(payload.get("source_remote", "")).strip(),
             source_dirty=bool(payload.get("source_dirty", False)),
             cleanup_policy=str(payload.get("cleanup_policy", DEFAULT_CLEANUP_POLICY)).strip() or DEFAULT_CLEANUP_POLICY,
         )
@@ -91,6 +100,41 @@ def get_git_head_ref(source_root: Path) -> str:
         if ref:
             return ref
     return "HEAD"
+
+
+def get_git_head_sha(source_root: Path) -> str:
+    """Returns the full HEAD SHA when available."""
+    result = _run_git(source_root, "rev-parse", "HEAD")
+    if result.returncode == 0:
+        ref = result.stdout.strip()
+        if ref:
+            return ref
+    return ""
+
+
+def get_git_head_branch(source_root: Path) -> str:
+    """Returns the current source branch when HEAD is attached."""
+    result = _run_git(source_root, "rev-parse", "--abbrev-ref", "HEAD")
+    if result.returncode == 0:
+        branch = result.stdout.strip()
+        if branch and branch != "HEAD":
+            return branch
+    return ""
+
+
+def get_git_default_remote(source_root: Path) -> str:
+    """Returns the preferred remote name for the source repository."""
+    origin = _run_git(source_root, "config", "--get", "remote.origin.url")
+    if origin.returncode == 0 and origin.stdout.strip():
+        return "origin"
+
+    remotes = _run_git(source_root, "remote")
+    if remotes.returncode == 0:
+        for line in remotes.stdout.splitlines():
+            remote = line.strip()
+            if remote:
+                return remote
+    return ""
 
 
 def _is_snapshot_path_allowed(rel_path: str) -> bool:
@@ -151,6 +195,9 @@ def build_workspace_ref(
         mode=mode,
         root_path=str(workspace_root),
         base_ref=get_git_head_ref(source_root),
+        source_head_sha=get_git_head_sha(source_root),
+        source_branch=get_git_head_branch(source_root),
+        source_remote=get_git_default_remote(source_root),
         source_dirty=source_dirty,
         cleanup_policy=cleanup_policy,
     )

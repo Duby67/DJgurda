@@ -6,6 +6,7 @@ from __future__ import annotations
 import difflib
 import json
 import subprocess
+import time
 
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,8 +29,10 @@ from scripts.config import ROOT
 JOB_QUEUE_MARKDOWN_NAME = "job-queue.md"
 DIFF_PREVIEW_MARKDOWN_NAME = "diff-preview.md"
 DISPATCHER_STATE_NAME = "dispatcher-state.json"
+SUPERVISOR_STATE_NAME = "supervisor-state.json"
 TERMINAL_DISPATCH_STATUSES = {"completed", "failed", "blocked"}
 DEFAULT_LOOP_MAX_CYCLES = 8
+DEFAULT_SUPERVISOR_MAX_ITERATIONS = 32
 AUTONOMOUS_TERMINAL_RUN_STATUSES = {
     "instruction_conflict",
     "context_insufficient",
@@ -39,6 +42,7 @@ AUTONOMOUS_TERMINAL_RUN_STATUSES = {
     "sandbox_blocked",
     "review_failed",
     "review_blocked",
+    "external_job_failed",
     "awaiting_commit_approval",
     "awaiting_push_approval",
     "approval_rejected",
@@ -109,6 +113,11 @@ def job_queue_markdown_path(run_dir: Path) -> Path:
 def diff_preview_path(run_dir: Path) -> Path:
     """Returns diff-preview.md path."""
     return run_dir / DIFF_PREVIEW_MARKDOWN_NAME
+
+
+def supervisor_state_path(run_dir: Path) -> Path:
+    """Returns supervisor-state.json path."""
+    return run_dir / SUPERVISOR_STATE_NAME
 
 
 def job_dispatch_path(run_dir: Path, job_id: str) -> Path:
@@ -186,6 +195,47 @@ def update_dispatcher_snapshot(
         "current_job": current_job,
         "job_counts": queue.get("by_status", {}),
         "by_dispatch_status": queue.get("by_dispatch_status", {}),
+    }
+    write_run_summary(run_dir, run_summary)
+    return payload
+
+
+def update_supervisor_snapshot(
+    run_dir: Path,
+    *,
+    supervisor_status: str,
+    runtime_target: str,
+    iterations: int,
+    poll_interval_seconds: float,
+    runtime_command: list[str] | None = None,
+    current_job_id: str = "",
+    last_event: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Writes supervisor-state.json and stores a compact supervisor summary."""
+    payload = {
+        "version": 1,
+        "run_id": run_dir.name,
+        "recorded_at_utc": now_utc(),
+        "status": supervisor_status,
+        "runtime_target": runtime_target,
+        "runtime_command": list(runtime_command or []),
+        "iterations": iterations,
+        "poll_interval_seconds": poll_interval_seconds,
+        "current_job_id": current_job_id,
+        "last_event": last_event or {},
+    }
+    write_json(supervisor_state_path(run_dir), payload)
+    update_run_summary_artifacts(run_dir, "supervisor_state", supervisor_state_path(run_dir))
+
+    run_summary = load_run_summary(run_dir)
+    run_summary["supervisor"] = {
+        "status": supervisor_status,
+        "runtime_target": runtime_target,
+        "runtime_command": list(runtime_command or []),
+        "iterations": iterations,
+        "poll_interval_seconds": poll_interval_seconds,
+        "current_job_id": current_job_id,
+        "last_event": last_event or {},
     }
     write_run_summary(run_dir, run_summary)
     return payload
@@ -917,4 +967,317 @@ def run_autonomous_cycle(
         "queue": queue,
         "run_status": summary.get("status", ""),
         "next_action": summary.get("next_action", ""),
+    }
+
+
+def parse_runtime_response(stdout: str) -> dict[str, Any]:
+    """Parses a runtime worker response from stdout."""
+    payload = stdout.strip()
+    if not payload:
+        raise ValueError("Runtime worker returned empty stdout")
+    lines = [line.strip() for line in payload.splitlines() if line.strip()]
+    candidates = [payload, *(reversed(lines))]
+    for candidate in candidates:
+        try:
+            data = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            return data
+    raise ValueError("Runtime worker stdout did not contain a valid JSON object")
+
+
+def invoke_runtime_worker(
+    run_dir: Path,
+    *,
+    work_item: dict[str, Any],
+    runtime_command: list[str],
+    timeout_seconds: int,
+) -> dict[str, Any]:
+    """Invokes a configured runtime worker over stdio and records execution logs."""
+    if not runtime_command:
+        raise ValueError("Runtime worker command is required")
+
+    job_id = str(work_item.get("job_id", "")).strip() or "external-job"
+    log_path = run_dir / "jobs" / f"{job_id}-runtime.log"
+    response_path = run_dir / "jobs" / f"{job_id}-runtime-response.json"
+    payload_text = json.dumps(work_item, ensure_ascii=False)
+
+    try:
+        process = subprocess.run(
+            runtime_command,
+            input=payload_text,
+            text=True,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=timeout_seconds,
+            cwd=ROOT,
+        )
+        timed_out = False
+    except subprocess.TimeoutExpired as exc:
+        process = subprocess.CompletedProcess(
+            args=list(runtime_command),
+            returncode=124,
+            stdout=exc.stdout or "",
+            stderr=(exc.stderr or "") + f"\nruntime worker timed out after {timeout_seconds}s",
+        )
+        timed_out = True
+
+    log_path.write_text(
+        "\n".join(
+            [
+                "$ " + " ".join(runtime_command),
+                "",
+                "stdin:",
+                payload_text,
+                "",
+                f"returncode: {process.returncode}",
+                "",
+                "stdout:",
+                process.stdout or "",
+                "",
+                "stderr:",
+                process.stderr or "",
+                "",
+            ],
+        ),
+        encoding="utf-8",
+    )
+
+    response: dict[str, Any]
+    if timed_out:
+        response = {
+            "status": "blocked",
+            "summary": f"Runtime worker timed out for {job_id}.",
+            "reason": "runtime_worker_timeout",
+        }
+    elif process.returncode != 0:
+        response = {
+            "status": "failed",
+            "summary": f"Runtime worker failed for {job_id}.",
+            "reason": "runtime_worker_nonzero_exit",
+            "stderr": process.stderr,
+        }
+    else:
+        response = parse_runtime_response(process.stdout)
+        if "status" not in response:
+            response = {
+                "status": "completed",
+                "result": response,
+                "summary": str(response.get("summary", "")).strip(),
+            }
+
+    response.setdefault("job_id", job_id)
+    response.setdefault("runtime_log", rel_to_root(log_path))
+    write_json(response_path, response)
+    update_run_summary_artifacts(run_dir, f"{job_id}_runtime_log", log_path)
+    update_run_summary_artifacts(run_dir, f"{job_id}_runtime_response", response_path)
+    return response
+
+
+def execute_runtime_worker_for_run(
+    run_dir: Path,
+    *,
+    runtime_target: str,
+    runtime_command: list[str],
+    claimed_by: str = "",
+    sandbox_adapter: str = "",
+    timeout_seconds: int = 1200,
+) -> dict[str, Any]:
+    """Dispatches the next external job and executes it through the configured runtime worker."""
+    dispatch = dispatch_next_job(
+        run_dir,
+        runtime_target=runtime_target,
+        claimed_by=claimed_by,
+    )
+    if dispatch.get("dispatch_status") != "dispatched":
+        return {
+            "run_id": run_dir.name,
+            "runtime_status": "idle",
+            "dispatch": dispatch,
+        }
+
+    work_item = dict(dispatch.get("work_item") or {})
+    response = invoke_runtime_worker(
+        run_dir,
+        work_item=work_item,
+        runtime_command=runtime_command,
+        timeout_seconds=timeout_seconds,
+    )
+    status = str(response.get("status", "completed")).strip().casefold() or "completed"
+    submission_payload = dict(response.get("result", {}) if isinstance(response.get("result"), dict) else {})
+    if not submission_payload:
+        submission_payload = {
+            key: value
+            for key, value in response.items()
+            if key not in {"status", "job_id", "runtime_log", "summary", "reason"}
+        }
+    if response.get("summary") and not submission_payload.get("summary"):
+        submission_payload["summary"] = response["summary"]
+    submission_payload["status"] = status
+    if response.get("reason") and not submission_payload.get("reason"):
+        submission_payload["reason"] = response["reason"]
+
+    if status in {"completed", "failed", "blocked"}:
+        submission = submit_role_result(
+            run_dir,
+            job_id=str(work_item.get("job_id", "")).strip(),
+            payload=submission_payload,
+            runtime_target=runtime_target,
+            sandbox_adapter=sandbox_adapter,
+            auto_consume=True,
+        )
+        return {
+            "run_id": run_dir.name,
+            "runtime_status": status,
+            "dispatch": dispatch,
+            "runtime_response": response,
+            "submission": submission,
+        }
+
+    return {
+        "run_id": run_dir.name,
+        "runtime_status": "awaiting_external_result",
+        "dispatch": dispatch,
+        "runtime_response": response,
+    }
+
+
+def run_supervisor(
+    run_dir: Path,
+    *,
+    runtime_target: str,
+    runtime_command: list[str] | None = None,
+    claimed_by: str = "",
+    sandbox_adapter: str = "",
+    poll_interval_seconds: float = 2.0,
+    max_iterations: int = DEFAULT_SUPERVISOR_MAX_ITERATIONS,
+    max_cycles: int = DEFAULT_LOOP_MAX_CYCLES,
+    runtime_timeout_seconds: int = 1200,
+) -> dict[str, Any]:
+    """Runs a persistent orchestration supervisor for a single run."""
+    iterations = 0
+    events: list[dict[str, Any]] = []
+    runtime_command = list(runtime_command or [])
+
+    while iterations < max_iterations:
+        iterations += 1
+        cycle = run_autonomous_cycle(
+            run_dir,
+            runtime_target=runtime_target,
+            claimed_by=claimed_by,
+            sandbox_adapter=sandbox_adapter,
+            max_cycles=max_cycles,
+        )
+        cycle_event = {
+            "type": "cycle",
+            "iteration": iterations,
+            "cycle_status": cycle.get("cycle_status", ""),
+            "run_status": cycle.get("run_status", ""),
+            "next_action": cycle.get("next_action", ""),
+        }
+        events.append(cycle_event)
+
+        if cycle.get("cycle_status") == "human_or_terminal_boundary":
+            supervisor = update_supervisor_snapshot(
+                run_dir,
+                supervisor_status="awaiting_human_or_terminal_boundary",
+                runtime_target=runtime_target,
+                iterations=iterations,
+                poll_interval_seconds=poll_interval_seconds,
+                runtime_command=runtime_command,
+                current_job_id="",
+                last_event=cycle_event,
+            )
+            return {
+                "run_id": run_dir.name,
+                "supervisor_status": "awaiting_human_or_terminal_boundary",
+                "iterations": iterations,
+                "events": events,
+                "cycle": cycle,
+                "supervisor": supervisor,
+            }
+
+        if cycle.get("cycle_status") in {"dispatched_external_job", "awaiting_external_result"}:
+            current_job = (cycle.get("loop") or {}).get("job") or (cycle.get("loop") or {}).get("current_job") or {}
+            current_job_id = str(current_job.get("job_id", "")).strip()
+            if not runtime_command:
+                supervisor = update_supervisor_snapshot(
+                    run_dir,
+                    supervisor_status="awaiting_runtime_worker",
+                    runtime_target=runtime_target,
+                    iterations=iterations,
+                    poll_interval_seconds=poll_interval_seconds,
+                    runtime_command=runtime_command,
+                    current_job_id=current_job_id,
+                    last_event=cycle_event,
+                )
+                return {
+                    "run_id": run_dir.name,
+                    "supervisor_status": "awaiting_runtime_worker",
+                    "iterations": iterations,
+                    "events": events,
+                    "cycle": cycle,
+                    "supervisor": supervisor,
+                }
+
+            runtime_execution = execute_runtime_worker_for_run(
+                run_dir,
+                runtime_target=runtime_target,
+                runtime_command=runtime_command,
+                claimed_by=claimed_by,
+                sandbox_adapter=sandbox_adapter,
+                timeout_seconds=runtime_timeout_seconds,
+            )
+            runtime_event = {
+                "type": "runtime_execution",
+                "iteration": iterations,
+                "runtime_status": runtime_execution.get("runtime_status", ""),
+                "job_id": current_job_id,
+            }
+            events.append(runtime_event)
+            current_summary = load_run_summary(run_dir)
+            if current_summary.get("status") in AUTONOMOUS_TERMINAL_RUN_STATUSES:
+                supervisor = update_supervisor_snapshot(
+                    run_dir,
+                    supervisor_status="awaiting_human_or_terminal_boundary",
+                    runtime_target=runtime_target,
+                    iterations=iterations,
+                    poll_interval_seconds=poll_interval_seconds,
+                    runtime_command=runtime_command,
+                    current_job_id=current_job_id,
+                    last_event=runtime_event,
+                )
+                return {
+                    "run_id": run_dir.name,
+                    "supervisor_status": "awaiting_human_or_terminal_boundary",
+                    "iterations": iterations,
+                    "events": events,
+                    "cycle": cycle,
+                    "runtime_execution": runtime_execution,
+                    "supervisor": supervisor,
+                }
+            continue
+
+        if poll_interval_seconds > 0:
+            time.sleep(poll_interval_seconds)
+
+    supervisor = update_supervisor_snapshot(
+        run_dir,
+        supervisor_status="max_iterations_reached",
+        runtime_target=runtime_target,
+        iterations=iterations,
+        poll_interval_seconds=poll_interval_seconds,
+        runtime_command=runtime_command,
+        current_job_id="",
+        last_event=events[-1] if events else {},
+    )
+    return {
+        "run_id": run_dir.name,
+        "supervisor_status": "max_iterations_reached",
+        "iterations": iterations,
+        "events": events,
+        "supervisor": supervisor,
     }

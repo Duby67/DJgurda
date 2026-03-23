@@ -236,6 +236,9 @@ def build_workspace_for_run(
     if workspace_path.is_file():
         payload = load_json(workspace_path)
         persist_artifact_ref(run_dir, "workspace", workspace_path)
+        run_summary = load_run_summary(run_dir)
+        run_summary["workspace"] = payload.get("workspace", {})
+        write_run_summary(run_dir, run_summary)
         return payload
 
     workspace_root = run_dir / "workspace"
@@ -247,7 +250,11 @@ def build_workspace_for_run(
     workspace = WorkspaceRef.from_dict(plan["workspace"])
     write_workspace_json(workspace_path, workspace=workspace, plan=plan)
     persist_artifact_ref(run_dir, "workspace", workspace_path)
-    return load_json(workspace_path)
+    payload = load_json(workspace_path)
+    run_summary = load_run_summary(run_dir)
+    run_summary["workspace"] = payload.get("workspace", {})
+    write_run_summary(run_dir, run_summary)
+    return payload
 
 
 def build_job_specs(

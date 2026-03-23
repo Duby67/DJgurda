@@ -283,6 +283,9 @@ def summarize_workspace(workspace_payload: dict[str, Any] | None) -> dict[str, A
         "mode": source.get("mode", "unknown"),
         "root_path": source.get("root_path", ""),
         "base_ref": source.get("base_ref", ""),
+        "source_head_sha": source.get("source_head_sha", ""),
+        "source_branch": source.get("source_branch", ""),
+        "source_remote": source.get("source_remote", ""),
         "source_dirty": source.get("source_dirty", None),
         "cleanup_policy": source.get("cleanup_policy", "unknown"),
     }
@@ -900,6 +903,8 @@ def build_status(run_dir: Path) -> dict[str, Any]:
         output["runtime_trace"] = runtime_trace_summary
     if run_summary.get("dispatcher"):
         output["dispatcher"] = run_summary["dispatcher"]
+    if run_summary.get("supervisor"):
+        output["supervisor"] = run_summary["supervisor"]
 
     return output
 
@@ -965,6 +970,12 @@ def render_human_status(status_payload: dict[str, Any]) -> str:
             "Workspace: "
             f"{workspace.get('mode', 'unknown')} @ {workspace.get('root_path', '')}"
         )
+        if workspace.get("source_branch"):
+            lines.append(
+                "Workspace intent: "
+                f"{workspace.get('source_remote', '-')}/{workspace.get('source_branch', '')} "
+                f"({workspace.get('base_ref', '')})"
+            )
 
     jobs = status_payload.get("jobs")
     if jobs:
@@ -986,6 +997,12 @@ def render_human_status(status_payload: dict[str, Any]) -> str:
         lines.append(
             "Dispatcher: "
             f"{dispatcher.get('by_dispatch_status', {})}"
+        )
+    supervisor = status_payload.get("supervisor")
+    if supervisor:
+        lines.append(
+            "Supervisor: "
+            f"{supervisor.get('status', 'unknown')} iterations={supervisor.get('iterations', 0)}"
         )
 
     sandbox = status_payload.get("sandbox")

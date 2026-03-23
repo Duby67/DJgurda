@@ -22,6 +22,7 @@
 - `plan_task`
 - `start_swarm_run`
 - `start_autonomous_swarm_run`
+- `start_supervised_swarm_run`
 - `continue_swarm_run`
 - `show_run_status`
 - `show_job_queue`
@@ -30,6 +31,7 @@
 - `run_dispatcher`
 - `run_dispatcher_loop`
 - `run_autonomous_cycle`
+- `run_supervisor`
 - `approve_run_checks_and_continue`
 - `approve_commit_and_continue`
 - `approve_push_and_continue`
@@ -64,6 +66,7 @@
 Дополнительные runtime artifacts появляются по мере прохождения lifecycle:
 
 - `workspace.json`
+- `supervisor-state.json`
 - `runtime-context-trace.jsonl`
 - `loaded-context.json`
 - `context-brief.json`
@@ -184,6 +187,24 @@ External AI job нельзя завершать напрямую из `queued`:
 - затем сразу же выполняет первый `run_autonomous_cycle`;
 - возвращает уже не только `run_id`, но и первую автономную сводку по boundary или external handoff.
 
+`run_supervisor` добавляет следующий слой зрелости:
+
+- крутит persistent orchestration loop поверх `run_autonomous_cycle`;
+- умеет вызывать встроенный runtime worker command для `coder` и `reviewer`;
+- сам подбирает structured result и продолжает pipeline до следующей human boundary;
+- пишет `supervisor-state.json` и краткую supervisor summary в `run-summary.json`.
+
+Runtime worker command можно передать:
+
+- через `--runtime-command-json`;
+- или через env `SWARM_RUNTIME_COMMAND_JSON`, если нужен более короткий supervisor запуск.
+
+`start_supervised_swarm_run` объединяет это в один вход:
+
+- создает новый run bundle;
+- сразу стартует supervisor loop;
+- может довести run от prompt до `awaiting_commit_approval` без ручного dispatcher-step, если задан runtime worker.
+
 ## Isolated Workspace
 
 Каждый run получает отдельный workspace в `runs/<run-id>/workspace`.
@@ -198,6 +219,15 @@ External AI job нельзя завершать напрямую из `queued`:
   - runtime directories вроде `runs/`, `venv/`, `.pytest_cache/` вычищаются из isolated workspace.
 
 Workspace metadata хранится в `workspace.json`.
+
+Branch intent теперь сохраняется как first-class metadata:
+
+- `base_ref`
+- `source_head_sha`
+- `source_branch`
+- `source_remote`
+
+Это позволяет `push`-boundary опираться на исходный intent run-а, а не вычислять branch заново из текущего состояния корня репозитория.
 
 ## Verification And Sandbox
 
@@ -214,6 +244,7 @@ Workspace metadata хранится в `workspace.json`.
   - explicit remote backend через `dispatch + poll`, не используемый по умолчанию.
   - использует correlation id, workflow artifact download и `swarm-sandbox.yml` как live entrypoint.
   - если в run есть `workspace-diff.patch`, remote workflow пытается воспроизвести exact workspace state через inline git patch перед запуском verification.
+  - large diff больше не блокируются сразу на старом inline-limit: adapter умеет передавать patch chunked-inline payload до более высокого bounded ceiling.
   - после первичного correlation match runtime закрепляется на конкретном `workflow_run_id` и дальше поллит уже его detail endpoint.
 
 Build context для sandbox test image хранится в `test/docker/swarm-test/`.
@@ -235,7 +266,7 @@ Sandbox всегда работает поверх isolated workspace, а не �
 - настроенную auth-сессию с доступом к workflow dispatch и artifact download;
 - workflow `.github/workflows/swarm-sandbox.yml` в целевом репозитории;
 - workflow artifacts, которые возвращают machine-readable `sandbox-result.json`.
-- при наличии `workspace-diff.patch` runtime передает inline patch payload и ждет подтверждение его применения через `workspace-transfer.json`.
+- при наличии `workspace-diff.patch` runtime передает inline или chunked-inline patch payload и ждет подтверждение его применения через `workspace-transfer.json`.
 
 ## Approval Boundaries
 

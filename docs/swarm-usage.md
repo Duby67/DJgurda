@@ -64,6 +64,16 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
   --pretty
 ```
 
+### Start A Supervised Swarm Run
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  start_supervised_swarm_run `
+  --prompt "Исправить удаление исходного сообщения при multi-link routing" `
+  --path src/bot/processing/media_router.py `
+  --pretty
+```
+
 ### Continue A Swarm Run
 
 ```powershell
@@ -120,6 +130,18 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 
 Команда не заменяет executor.
 Она подбирает следующий claimable external job и возвращает work item для Codex-style handoff.
+
+### Run Supervisor
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  run_supervisor `
+  --run-id demo-media-router `
+  --pretty
+```
+
+Supervisor крутит persistent loop и, если задан `--runtime-command-json`, может сам исполнять `coder` и `reviewer` через built-in runtime worker bridge.
+Тот же runtime worker можно задать через env `SWARM_RUNTIME_COMMAND_JSON`.
 
 ### Approval Wrappers
 
@@ -219,9 +241,11 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 - lifecycle-этапы после planning могут менять run artifacts
 - `start_swarm_run` создает `workspace.json`, `jobs/index.json` и другие orchestration artifacts в `runs/<run-id>/`
 - `start_autonomous_swarm_run` делает то же самое, но сразу доводит run до первого external handoff или human boundary
+- `start_supervised_swarm_run` идет дальше и может сам крутить supervisor loop до следующей human boundary
 - `preview_sandbox_plan` и `show_diff_preview` дают CLI-first UX без ручного чтения JSON и patch-файлов
 - `show_run_status --human`, `show_job_queue --human` и `show_diff_preview --human` пишут `run-status.md`, `job-queue.md` и `diff-preview.md` прямо в run bundle
 - `run_dispatcher` помогает снять ручной шов на уровне UX, но опирается на общий executor/job contract
+- `run_supervisor` закрывает следующий слой и может сам запускать built-in runtime worker для внешних AI jobs
 - если verification profile требует реальный sandbox, executor по умолчанию выберет `docker`
 - `local_dry_run` остается явным preview-режимом, а `github_actions` доступен как explicit remote adapter
 - `commit`, `push`, merge и release promotion вверх по веткам выполняются только по явному запросу разработчика
@@ -232,11 +256,11 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 Обычный ежедневный путь работы выглядит так:
 
 1. Сначала спланировать задачу через `scripts.agents.mcp plan_task`.
-2. Запустить orchestration через `scripts.agents.mcp start_autonomous_swarm_run`, а `start_swarm_run` оставить как более низкоуровневый controlled entrypoint.
+2. Запустить orchestration через `scripts.agents.mcp start_supervised_swarm_run` или `start_autonomous_swarm_run`, а `start_swarm_run` оставить как более низкоуровневый controlled entrypoint.
 3. Проверять progress через `show_run_status`, очередь ролей через `show_job_queue`, а изменения через `show_diff_preview`.
 4. Для sandbox intent использовать `preview_sandbox_plan`.
 5. После approval или других ручных шагов возобновлять orchestration через `scripts.agents.mcp continue_swarm_run`.
-6. Для внешних AI-ролей использовать `run_dispatcher` как UX helper или низкоуровневые `claim_role_job` / `complete_role_job` / `fail_role_job`.
+6. Для внешних AI-ролей использовать `run_supervisor` с built-in runtime worker, `run_dispatcher` как UX helper или низкоуровневые `claim_role_job` / `complete_role_job` / `fail_role_job`.
 7. Для approval checkpoints использовать wrappers `approve_run_checks`, `approve_run_checks_and_continue`, `approve_commit`, `approve_commit_and_continue`, `approve_push_and_continue`, `reject_checkpoint` или request-команды, когда нужен полный approval packet.
 8. Для продвижения preview и release использовать `scripts.release.automation.promote`.
 

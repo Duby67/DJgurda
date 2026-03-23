@@ -269,6 +269,21 @@ def test_build_workspace_transfer_payload_inlines_existing_diff(tmp_path: Path) 
     assert payload["blocked_reason"] == ""
 
 
+def test_build_workspace_transfer_payload_chunks_large_diff(tmp_path: Path) -> None:
+    diff_path = tmp_path / "workspace-diff.patch"
+    diff_body = "".join(f"+line-{index:05d}-content-with-entropy-{index * 17}-{index * index}\n" for index in range(12000))
+    diff_path.write_text("diff --git a/file.txt b/file.txt\n" + diff_body, encoding="utf-8")
+
+    payload = build_workspace_transfer_payload({"workspace_diff_path": str(diff_path)})
+
+    assert payload["mode"] == "chunked_inline_git_patch"
+    assert payload["present"] is True
+    assert payload["gzip_base64"] == ""
+    assert payload["chunk_count"] >= 2
+    assert len(payload["gzip_base64_chunks"]) == payload["chunk_count"]
+    assert payload["blocked_reason"] == ""
+
+
 def test_build_github_actions_dispatch_inputs_include_workspace_transfer_fields(tmp_path: Path) -> None:
     diff_path = tmp_path / "workspace-diff.patch"
     diff_path.write_text("diff --git a/file.txt b/file.txt\n", encoding="utf-8")
@@ -287,6 +302,28 @@ def test_build_github_actions_dispatch_inputs_include_workspace_transfer_fields(
     assert inputs["workspace_transfer_mode"] == "inline_git_patch"
     assert inputs["workspace_diff_sha256"] == transfer["sha256"]
     assert inputs["workspace_diff_gzip_base64"] == transfer["gzip_base64"]
+
+
+def test_build_github_actions_dispatch_inputs_include_chunked_transfer_fields(tmp_path: Path) -> None:
+    diff_path = tmp_path / "workspace-diff.patch"
+    diff_body = "".join(f"+line-{index:05d}-content-with-entropy-{index * 17}-{index * index}\n" for index in range(12000))
+    diff_path.write_text("diff --git a/file.txt b/file.txt\n" + diff_body, encoding="utf-8")
+    request = build_request(
+        tmp_path,
+        adapter_id=GITHUB_ACTIONS_ADAPTER,
+        repository="djgurda/example",
+        workflow_name="swarm-sandbox.yml",
+        workspace_diff_path=str(diff_path),
+    )
+    config = build_github_actions_config(request)
+    transfer = build_workspace_transfer_payload(request)
+
+    inputs = build_github_actions_dispatch_inputs(request, config, transfer)
+
+    assert inputs["workspace_transfer_mode"] == "chunked_inline_git_patch"
+    assert int(inputs["workspace_diff_chunk_count"]) == transfer["chunk_count"]
+    assert inputs["workspace_diff_gzip_base64"] == ""
+    assert inputs["workspace_diff_gzip_base64_chunk_01"]
 
 
 def test_select_github_actions_run_uses_correlation_id() -> None:
@@ -851,6 +888,8 @@ def test_swarm_sandbox_workflow_exists() -> None:
     assert "correlation_id" in payload
     assert "artifact_name" in payload
     assert "workspace_diff_gzip_base64" in payload
+    assert "workspace_diff_chunk_count" in payload
+    assert "workspace_diff_gzip_base64_chunk_01" in payload
     assert "workspace-transfer.json" in payload
     assert "git apply --binary --allow-empty" in payload
     assert "actions/upload-artifact@v4" in payload

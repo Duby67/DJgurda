@@ -28,12 +28,18 @@ DEFAULT_GITHUB_ACTIONS_ARTIFACT_PREFIX = "swarm-sandbox"
 DEFAULT_GITHUB_ACTIONS_POLL_INTERVAL_SECONDS = 10.0
 DEFAULT_GITHUB_ACTIONS_TIMEOUT_SECONDS = 900.0
 MAX_GITHUB_ACTIONS_INLINE_WORKSPACE_DIFF_CHARS = 50000
+MAX_GITHUB_ACTIONS_WORKSPACE_DIFF_CHUNKS = 8
 
 SUPPORTED_SANDBOX_ADAPTERS = {
     LOCAL_DRY_RUN_ADAPTER,
     DOCKER_ADAPTER,
     GITHUB_ACTIONS_ADAPTER,
 }
+
+GITHUB_ACTIONS_WORKSPACE_DIFF_CHUNK_KEYS = [
+    f"workspace_diff_gzip_base64_chunk_{index:02d}"
+    for index in range(1, MAX_GITHUB_ACTIONS_WORKSPACE_DIFF_CHUNKS + 1)
+]
 
 
 def write_json(path: Path, payload: Any) -> None:
@@ -258,16 +264,31 @@ def build_workspace_transfer_payload(request: dict[str, Any]) -> dict[str, Any]:
     sha256 = hashlib.sha256(raw).hexdigest()
     gzip_base64 = base64.b64encode(gzip.compress(raw)).decode("ascii")
     encoded_length = len(gzip_base64)
+    chunk_limit = MAX_GITHUB_ACTIONS_INLINE_WORKSPACE_DIFF_CHARS
+    chunk_count = 0
+    chunks: list[str] = []
+    mode = "inline_git_patch"
     blocked_reason = ""
-    if encoded_length > MAX_GITHUB_ACTIONS_INLINE_WORKSPACE_DIFF_CHARS:
-        blocked_reason = "github_actions_workspace_diff_too_large"
+
+    if encoded_length > chunk_limit:
+        chunks = [
+            gzip_base64[index : index + chunk_limit]
+            for index in range(0, encoded_length, chunk_limit)
+        ]
+        chunk_count = len(chunks)
+        if chunk_count > MAX_GITHUB_ACTIONS_WORKSPACE_DIFF_CHUNKS:
+            blocked_reason = "github_actions_workspace_diff_exceeds_chunked_limit"
+        else:
+            mode = "chunked_inline_git_patch"
 
     return {
-        "mode": "inline_git_patch",
+        "mode": mode,
         "present": True,
         "path": display_path(diff_path),
         "sha256": sha256,
-        "gzip_base64": gzip_base64,
+        "gzip_base64": "" if mode == "chunked_inline_git_patch" else gzip_base64,
+        "gzip_base64_chunks": chunks,
+        "chunk_count": chunk_count,
         "encoded_length": encoded_length,
         "blocked_reason": blocked_reason,
     }
@@ -280,7 +301,7 @@ def build_github_actions_dispatch_inputs(
 ) -> dict[str, str]:
     """Builds workflow dispatch inputs for the GitHub Actions adapter."""
     transfer = workspace_transfer or {}
-    return {
+    payload = {
         "run_id": str(request.get("run_id", "")),
         "correlation_id": config["correlation_id"],
         "artifact_name": config["artifact_name"],
@@ -296,7 +317,16 @@ def build_github_actions_dispatch_inputs(
         "workspace_transfer_mode": str(transfer.get("mode", "ref_checkout")),
         "workspace_diff_sha256": str(transfer.get("sha256", "")),
         "workspace_diff_gzip_base64": str(transfer.get("gzip_base64", "")),
+        "workspace_diff_chunk_count": "",
     }
+    chunks = list(transfer.get("gzip_base64_chunks", []))
+    if chunks:
+        payload["workspace_diff_chunk_count"] = str(len(chunks))
+    for key, value in zip(GITHUB_ACTIONS_WORKSPACE_DIFF_CHUNK_KEYS, chunks, strict=False):
+        payload[key] = value
+    for key in GITHUB_ACTIONS_WORKSPACE_DIFF_CHUNK_KEYS[len(chunks) :]:
+        payload[key] = ""
+    return payload
 
 
 def run_gh_api(arguments: list[str]) -> subprocess.CompletedProcess[str]:
@@ -390,6 +420,7 @@ def build_github_actions_dispatch_artifact(
             "path": transfer.get("path", ""),
             "sha256": transfer.get("sha256", ""),
             "encoded_length": transfer.get("encoded_length", 0),
+            "chunk_count": transfer.get("chunk_count", 0),
         },
         "request": {
             "run_id": request.get("run_id", ""),
@@ -1305,6 +1336,7 @@ def execute_github_actions(request: dict[str, Any]) -> dict[str, Any]:
             "path": workspace_transfer.get("path", ""),
             "sha256": workspace_transfer.get("sha256", ""),
             "encoded_length": workspace_transfer.get("encoded_length", 0),
+            "chunk_count": workspace_transfer.get("chunk_count", 0),
         },
         "downloaded_result": remote_result,
         "artifact_downloaded": bool(remote_result),
