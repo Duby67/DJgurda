@@ -4,7 +4,8 @@ local/
 test/handlers/YandexMusic/.env.yandex_music_tests
 *_cookies.txt
 deploy/cookies/*
-!deploy/cookies/.gitkeep
+!deploy/cookies/README.md
+!deploy/cookies/AGENTS.md
 deploy/sync_cookies.env
 
 # Виртуальные окружения Python
@@ -32,7 +33,9 @@ pip-wheel-metadata/
 
 # IDE и редакторы
 .idea/
-.vscode/
+.vscode/*
+!.vscode/tasks.json
+!.vscode/settings.json
 *.iml
 
 # Локальные логи и временные файлы
@@ -51,8 +54,15 @@ Desktop.ini
 
 # Локальные runtime-артефакты проекта
 src/data/db/*
-!src/data/db/.gitkeep
+!src/data/db/README.md
+!src/data/db/AGENTS.md
 src/data/runtime/*
-!src/data/runtime/.gitkeep
+!src/data/runtime/README.md
+!src/data/runtime/AGENTS.md
 src/data/cookies/*
-!src/data/cookies/.gitkeep
+!src/data/cookies/README.md
+!src/data/cookies/AGENTS.md
+
+runs/*
+!runs/README.md
+!runs/AGENTS.md

@@ -17,6 +17,7 @@ from .commit import ensure_commit_allowed
 from .execute import DEFAULT_RUNS_DIR
 from .push import ensure_push_allowed
 from .request_approval import ensure_request_allowed, read_requested_checkpoints
+from scripts.agents.runtime_trace import load_runtime_trace, summarize_runtime_trace
 from scripts.config import ROOT
 
 
@@ -174,10 +175,13 @@ def summarize_sandbox(sandbox_payload: dict[str, Any] | None) -> dict[str, Any] 
         "sandboxed_at_utc": sandbox_payload.get("sandboxed_at_utc"),
         "sandboxed_by": sandbox_payload.get("sandboxed_by"),
         "environment": sandbox_payload.get("environment"),
+        "adapter_id": sandbox_payload.get("adapter_id", ""),
+        "workspace_ref": sandbox_payload.get("workspace_ref", {}),
         "sandbox_ref": sandbox_payload.get("sandbox_ref", ""),
         "conclusion": sandbox_payload.get("conclusion"),
         "summary": sandbox_payload.get("summary", ""),
         "check_summary": sandbox_payload.get("check_summary", {}),
+        "command_summary": sandbox_payload.get("command_summary", {}),
         "failed_checks": failed_checks,
         "blocked_checks": blocked_checks,
         "log_count": len(sandbox_payload.get("logs", [])),
@@ -269,6 +273,75 @@ def summarize_closure(close_payload: dict[str, Any] | None) -> dict[str, Any] | 
     }
 
 
+def summarize_workspace(workspace_payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Сводит workspace metadata к компактному формату."""
+    if workspace_payload is None:
+        return None
+
+    source = workspace_payload.get("workspace", workspace_payload)
+    return {
+        "mode": source.get("mode", "unknown"),
+        "root_path": source.get("root_path", ""),
+        "base_ref": source.get("base_ref", ""),
+        "source_head_sha": source.get("source_head_sha", ""),
+        "source_branch": source.get("source_branch", ""),
+        "source_remote": source.get("source_remote", ""),
+        "source_dirty": source.get("source_dirty", None),
+        "cleanup_policy": source.get("cleanup_policy", "unknown"),
+    }
+
+
+def summarize_jobs(jobs_payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Сводит jobs/index.json к компактному формату."""
+    if jobs_payload is None:
+        return None
+
+    jobs = jobs_payload.get("jobs", [])
+    by_status: dict[str, int] = {}
+    by_dispatch_status: dict[str, int] = {}
+    external_jobs: list[dict[str, Any]] = []
+
+    for job in jobs:
+        status = str(job.get("status", "unknown"))
+        by_status[status] = by_status.get(status, 0) + 1
+        if job.get("backend") == "external_ai":
+            dispatch_status = str(job.get("dispatch_status") or "queued")
+            by_dispatch_status[dispatch_status] = by_dispatch_status.get(dispatch_status, 0) + 1
+            external_jobs.append(
+                {
+                    "job_id": job.get("job_id", ""),
+                    "role": job.get("role", ""),
+                    "status": status,
+                    "dispatch_status": dispatch_status,
+                    "external_ref": job.get("external_ref", ""),
+                    "runtime_target": job.get("runtime_target", ""),
+                    "runtime_ref": job.get("runtime_ref", ""),
+                }
+            )
+
+    current_external_job = next(
+        (
+            {
+                "job_id": job.get("job_id", ""),
+                "role": job.get("role", ""),
+                "status": job.get("status", ""),
+                "dispatch_status": job.get("dispatch_status") or "queued",
+            }
+            for job in jobs
+            if job.get("backend") == "external_ai" and job.get("status") not in {"completed", "failed", "blocked"}
+        ),
+        None,
+    )
+
+    return {
+        "total_jobs": len(jobs),
+        "by_status": by_status,
+        "by_dispatch_status": by_dispatch_status,
+        "external_jobs": external_jobs,
+        "current_external_job": current_external_job,
+    }
+
+
 def step_exists(plan_payload: dict[str, Any], step_id: str) -> bool:
     """Проверяет наличие шага в plan.json."""
     return any(step.get("id") == step_id for step in plan_payload.get("plan", []))
@@ -313,8 +386,13 @@ def auto_requested_checkpoints(approval_payload: dict[str, Any]) -> list[str]:
         return []
 
 
-def explain_run_checks_approval(approval_payload: dict[str, Any]) -> list[str]:
+def explain_run_checks_approval(run_summary: dict[str, Any], approval_payload: dict[str, Any]) -> list[str]:
     """Объясняет, почему run_checks approval доступен или недоступен."""
+    if run_summary.get("status") == "instruction_conflict":
+        return ["instruction_conflict"]
+    if run_summary.get("status") == "context_insufficient":
+        return ["context_insufficient"]
+
     checkpoints = {
         item["id"]: item
         for item in approval_payload.get("checkpoints", [])
@@ -493,7 +571,7 @@ def build_action_blockers(
     auto_checkpoints = auto_requested_checkpoints(approval_payload)
 
     return {
-        "approve_run_checks": explain_run_checks_approval(approval_payload),
+        "approve_run_checks": explain_run_checks_approval(run_summary, approval_payload),
         "implement": implement_blockers,
         "request_approval": explain_request_approval(
             run_summary=run_summary,
@@ -554,6 +632,10 @@ def build_blockers(
         blockers.append("missing_artifacts")
     if run_summary.get("status") == "closed":
         return blockers
+    if run_summary.get("status") == "instruction_conflict":
+        blockers.append("instruction_conflict")
+    if run_summary.get("status") == "context_insufficient":
+        blockers.append("context_insufficient")
     if approval_summary["rejected"]:
         blockers.append("approval_rejected")
     if approval_summary["needs_manual_review"] and "run_checks" in approval_summary["awaiting_approval"]:
@@ -576,6 +658,8 @@ def build_blockers(
         blockers.append("sandbox_failed")
     if run_summary.get("status") == "sandbox_blocked":
         blockers.append("sandbox_blocked")
+    if run_summary.get("status") == "external_job_failed":
+        blockers.append("external_job_failed")
     if run_summary.get("status") == "review_failed":
         blockers.append("review_failed")
     if run_summary.get("status") == "review_blocked":
@@ -609,7 +693,7 @@ def build_readiness(
     approval_summary: dict[str, Any],
 ) -> dict[str, Any]:
     """Показывает, какие действия уже можно выполнять по текущему статусу."""
-    if run_summary.get("status") == "closed":
+    if run_summary.get("status") in {"closed", "instruction_conflict", "context_insufficient"}:
         return {
             "can_approve_run_checks": False,
             "can_implement": False,
@@ -711,6 +795,9 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     commit_result_path = run_dir / "commit-result.json"
     push_result_path = run_dir / "push-result.json"
     close_result_path = run_dir / "close-result.json"
+    workspace_path = run_dir / "workspace.json"
+    jobs_index_path = run_dir / "jobs" / "index.json"
+    runtime_trace_events = load_runtime_trace(run_dir)
 
     if not summary_path.is_file():
         raise FileNotFoundError(f"Не найден файл: {summary_path}")
@@ -731,6 +818,8 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     commit_payload = load_optional_json(commit_result_path)
     push_payload = load_optional_json(push_result_path)
     close_payload = load_optional_json(close_result_path)
+    workspace_payload = load_optional_json(workspace_path)
+    jobs_payload = load_optional_json(jobs_index_path)
 
     artifact_status = collect_artifact_status(run_summary.get("artifacts", {}))
     plan_summary = summarize_plan(plan_payload)
@@ -748,6 +837,9 @@ def build_status(run_dir: Path) -> dict[str, Any]:
     commit_summary = summarize_commit(commit_payload)
     push_summary = summarize_push_execution(push_payload)
     close_summary = summarize_closure(close_payload)
+    workspace_summary = summarize_workspace(workspace_payload)
+    jobs_summary = summarize_jobs(jobs_payload)
+    runtime_trace_summary = summarize_runtime_trace(runtime_trace_events)
     blockers = build_blockers(
         run_summary=run_summary,
         artifact_status=artifact_status,
@@ -768,6 +860,7 @@ def build_status(run_dir: Path) -> dict[str, Any]:
         "task_type": run_summary["task_type"],
         "status": run_summary["status"],
         "next_action": run_summary["next_action"],
+        "selected_sandbox_adapter": run_summary.get("sandbox", {}).get("selected_adapter", ""),
         "recommended_agents": run_summary.get("recommended_agents", []),
         "changed_paths": run_summary.get("changed_paths", []),
         "artifacts": artifact_status,
@@ -802,6 +895,16 @@ def build_status(run_dir: Path) -> dict[str, Any]:
         output["push_execution"] = push_summary
     if close_summary is not None:
         output["closure"] = close_summary
+    if workspace_summary is not None:
+        output["workspace"] = workspace_summary
+    if jobs_summary is not None:
+        output["jobs"] = jobs_summary
+    if runtime_trace_summary["total_events"] > 0:
+        output["runtime_trace"] = runtime_trace_summary
+    if run_summary.get("dispatcher"):
+        output["dispatcher"] = run_summary["dispatcher"]
+    if run_summary.get("supervisor"):
+        output["supervisor"] = run_summary["supervisor"]
 
     return output
 
@@ -819,6 +922,8 @@ def render_human_status(status_payload: dict[str, Any]) -> str:
         f"State: {status_payload.get('status', 'unknown')} -> {status_payload.get('next_action', 'unknown')}",
         f"Task: {status_payload.get('task_type', {}).get('id', 'unknown')}",
     ]
+    if status_payload.get("selected_sandbox_adapter"):
+        lines.append(f"Selected sandbox adapter: {status_payload['selected_sandbox_adapter']}")
 
     next_step = plan.get("next_pending_step")
     if next_step:
@@ -859,6 +964,61 @@ def render_human_status(status_payload: dict[str, Any]) -> str:
     if approval.get("awaiting_approval"):
         lines.append("Awaiting approval: " + ", ".join(approval["awaiting_approval"]))
 
+    workspace = status_payload.get("workspace")
+    if workspace:
+        lines.append(
+            "Workspace: "
+            f"{workspace.get('mode', 'unknown')} @ {workspace.get('root_path', '')}"
+        )
+        if workspace.get("source_branch"):
+            lines.append(
+                "Workspace intent: "
+                f"{workspace.get('source_remote', '-')}/{workspace.get('source_branch', '')} "
+                f"({workspace.get('base_ref', '')})"
+            )
+
+    jobs = status_payload.get("jobs")
+    if jobs:
+        lines.append(
+            "Jobs: "
+            f"{jobs.get('total_jobs', 0)} total, by_status={jobs.get('by_status', {})}, "
+            f"dispatch={jobs.get('by_dispatch_status', {})}"
+        )
+        current_external_job = jobs.get("current_external_job")
+        if current_external_job:
+            lines.append(
+                "Current external job: "
+                f"{current_external_job.get('job_id', 'unknown')} "
+                f"({current_external_job.get('dispatch_status', 'queued')})"
+            )
+
+    dispatcher = status_payload.get("dispatcher")
+    if dispatcher:
+        lines.append(
+            "Dispatcher: "
+            f"{dispatcher.get('by_dispatch_status', {})}"
+        )
+    supervisor = status_payload.get("supervisor")
+    if supervisor:
+        lines.append(
+            "Supervisor: "
+            f"{supervisor.get('status', 'unknown')} iterations={supervisor.get('iterations', 0)}"
+        )
+
+    sandbox = status_payload.get("sandbox")
+    if sandbox:
+        lines.append(
+            "Sandbox: "
+            f"{sandbox.get('adapter_id', 'unknown')} -> {sandbox.get('conclusion', 'unknown')}"
+        )
+
+    runtime_trace = status_payload.get("runtime_trace")
+    if runtime_trace:
+        lines.append(
+            "Runtime trace: "
+            f"{runtime_trace.get('total_events', 0)} events, by_phase={runtime_trace.get('by_phase', {})}"
+        )
+
     if blockers:
         lines.append("Global blockers: " + ", ".join(blockers))
     else:
@@ -895,7 +1055,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--runs-dir",
         default=str(DEFAULT_RUNS_DIR.relative_to(ROOT)).replace("\\", "/"),
-        help="Базовая директория запусков (по умолчанию: local/runs).",
+        help="Базовая директория запусков (по умолчанию: runs).",
     )
     parser.add_argument(
         "--pretty",

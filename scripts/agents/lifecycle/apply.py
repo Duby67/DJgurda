@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .execute import DEFAULT_RUNS_DIR
+from scripts.agents.workspace import resolve_workspace_root
 from scripts.config import ROOT
 
 
@@ -130,13 +131,13 @@ def resolve_applied_files(
     raise ValueError("Не удалось определить applied files: передайте --file или заполните changed_paths")
 
 
-def file_presence_summary(paths: list[str]) -> dict[str, list[str]]:
+def file_presence_summary(paths: list[str], *, repo_root: Path = ROOT) -> dict[str, list[str]]:
     """Показывает, какие из applied files реально существуют в workspace."""
     existing: list[str] = []
     missing: list[str] = []
 
     for rel_path in paths:
-        if (ROOT / rel_path).exists():
+        if (repo_root / rel_path).exists():
             existing.append(rel_path)
         else:
             missing.append(rel_path)
@@ -147,9 +148,9 @@ def file_presence_summary(paths: list[str]) -> dict[str, list[str]]:
     }
 
 
-def run_git_command(args: list[str], paths: list[str]) -> subprocess.CompletedProcess[str]:
+def run_git_command(args: list[str], paths: list[str], *, repo_root: Path = ROOT) -> subprocess.CompletedProcess[str]:
     """Запускает git-команду в корне репозитория."""
-    command = ["git", "-C", str(ROOT), *args]
+    command = ["git", "-C", str(repo_root), *args]
     if paths:
         command.append("--")
         command.extend(paths)
@@ -246,13 +247,13 @@ def merge_numstat_summaries(*summaries: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def collect_git_snapshot(paths: list[str]) -> dict[str, Any]:
+def collect_git_snapshot(paths: list[str], *, repo_root: Path = ROOT) -> dict[str, Any]:
     """Снимает git snapshot по выбранным файлам."""
-    status_proc = run_git_command(["status", "--short"], paths)
-    working_diff_proc = run_git_command(["diff"], paths)
-    staged_diff_proc = run_git_command(["diff", "--cached"], paths)
-    working_numstat_proc = run_git_command(["diff", "--numstat"], paths)
-    staged_numstat_proc = run_git_command(["diff", "--cached", "--numstat"], paths)
+    status_proc = run_git_command(["status", "--short"], paths, repo_root=repo_root)
+    working_diff_proc = run_git_command(["diff"], paths, repo_root=repo_root)
+    staged_diff_proc = run_git_command(["diff", "--cached"], paths, repo_root=repo_root)
+    working_numstat_proc = run_git_command(["diff", "--numstat"], paths, repo_root=repo_root)
+    staged_numstat_proc = run_git_command(["diff", "--cached", "--numstat"], paths, repo_root=repo_root)
 
     warnings: list[str] = []
     if status_proc.returncode != 0:
@@ -369,6 +370,32 @@ def build_apply_result(
     }
 
 
+def build_changed_files_payload(
+    *,
+    run_summary: dict[str, Any],
+    applied_files: list[str],
+    applied_by: str,
+    git_snapshot: dict[str, Any],
+    file_presence: dict[str, list[str]],
+) -> dict[str, Any]:
+    """Строит changed-files.json."""
+    changed_paths = [entry["path"] for entry in git_snapshot["status_entries"]]
+    if not changed_paths:
+        changed_paths = applied_files
+
+    return {
+        "version": 1,
+        "run_id": run_summary["run_id"],
+        "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
+        "applied_by": applied_by,
+        "changed_files": changed_paths,
+        "applied_files": applied_files,
+        "file_presence": file_presence,
+        "diff_summary": git_snapshot["diff_summary"],
+        "warnings": git_snapshot["warnings"],
+    }
+
+
 def update_execution_state(
     execution_state: dict[str, Any] | None,
     *,
@@ -408,6 +435,7 @@ def build_output(
     plan_path = run_dir / "plan.json"
     execution_state_path = run_dir / "execution-state.json"
     apply_result_path = run_dir / "apply-result.json"
+    changed_files_path = run_dir / "changed-files.json"
     diff_artifact_path = run_dir / "workspace-diff.patch"
 
     if not summary_path.is_file():
@@ -421,8 +449,9 @@ def build_output(
 
     ensure_apply_allowed(run_summary, plan_payload)
     applied_files = resolve_applied_files(explicit_paths, run_summary)
-    file_presence = file_presence_summary(applied_files)
-    git_snapshot = collect_git_snapshot(applied_files)
+    repo_root = resolve_workspace_root(run_dir / "workspace.json", fallback=ROOT)
+    file_presence = file_presence_summary(applied_files, repo_root=repo_root)
+    git_snapshot = collect_git_snapshot(applied_files, repo_root=repo_root)
     if not allow_empty_diff and git_snapshot["diff_summary"]["file_count"] == 0:
         raise ValueError(
             "Apply-stage требует непустой git diff по указанным файлам. "
@@ -439,6 +468,13 @@ def build_output(
         file_presence=file_presence,
         diff_artifact_written=diff_artifact_written,
     )
+    changed_files_payload = build_changed_files_payload(
+        run_summary=run_summary,
+        applied_files=applied_files,
+        applied_by=applied_by,
+        git_snapshot=git_snapshot,
+        file_presence=file_presence,
+    )
 
     updated_plan = update_plan_for_apply(plan_payload)
     status, next_action = select_next_stage(updated_plan)
@@ -451,6 +487,7 @@ def build_output(
 
     artifacts = run_summary.setdefault("artifacts", {})
     artifacts["apply_result"] = str(apply_result_path.relative_to(ROOT)).replace("\\", "/")
+    artifacts["changed_files"] = str(changed_files_path.relative_to(ROOT)).replace("\\", "/")
     if diff_artifact_written:
         artifacts["workspace_diff"] = str(diff_artifact_path.relative_to(ROOT)).replace("\\", "/")
     elif "workspace_diff" in artifacts:
@@ -466,8 +503,13 @@ def build_output(
         "git_diff_files": apply_result["git"]["diff_summary"]["file_count"],
         "git_warnings": apply_result["git"]["warnings"],
     }
+    run_summary["changed_files"] = {
+        "changed_files": changed_files_payload["changed_files"],
+        "diff_summary": changed_files_payload["diff_summary"],
+    }
 
     write_json(apply_result_path, apply_result)
+    write_json(changed_files_path, changed_files_payload)
     write_json(plan_path, updated_plan)
     if updated_execution_state is not None:
         write_json(execution_state_path, updated_execution_state)
@@ -483,6 +525,7 @@ def build_output(
         "warnings": apply_result["git"]["warnings"],
         "artifacts": {
             "apply_result": artifacts["apply_result"],
+            "changed_files": artifacts["changed_files"],
             "workspace_diff": artifacts.get("workspace_diff"),
         },
     }
@@ -498,7 +541,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--runs-dir",
         default=str(DEFAULT_RUNS_DIR.relative_to(ROOT)).replace("\\", "/"),
-        help="Базовая директория запусков (по умолчанию: local/runs).",
+        help="Базовая директория запусков (по умолчанию: runs).",
     )
     parser.add_argument(
         "--file",

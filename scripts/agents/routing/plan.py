@@ -11,6 +11,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from scripts.agents.knowledge import (
+    collect_active_initiatives,
+    collect_known_risks,
+    get_verification_profile,
+)
+
 from .route import (
     CLASSIFIER_PATH,
     ROOT,
@@ -46,6 +52,11 @@ class PlanStep:
 
 def infer_agent_roles(route_result: dict[str, Any]) -> list[str]:
     """Определяет рекомендуемые agent roles."""
+    verification_profile = get_verification_profile(route_result["task_type"]["id"])
+    has_profile_checks = bool(
+        verification_profile.get("required_checks") or verification_profile.get("optional_checks")
+    )
+    has_profile_commands = bool(verification_profile.get("allowed_commands"))
     roles = [
         "planner",
         "context_loader",
@@ -53,7 +64,7 @@ def infer_agent_roles(route_result: dict[str, Any]) -> list[str]:
         "reviewer",
     ]
 
-    if route_result["context_pack"]["tests"]:
+    if route_result["context_pack"]["tests"] or has_profile_checks:
         roles.append("tester")
 
     if (
@@ -63,10 +74,10 @@ def infer_agent_roles(route_result: dict[str, Any]) -> list[str]:
     ):
         roles.append("release_manager")
 
-    if (
-        route_result["context_pack"]["tests"]
-        or route_result["task_type"]["id"] in {"deploy_or_infra_change", "test_harness_or_smoke_setup_change"}
-    ):
+    if has_profile_commands or route_result["context_pack"]["tests"] or route_result["task_type"]["id"] in {
+        "deploy_or_infra_change",
+        "test_harness_or_smoke_setup_change",
+    }:
         roles.append("sandbox_runner")
 
     return unique_keep_order(roles)
@@ -77,11 +88,32 @@ def build_step_details_from_list(prefix: str, items: list[str]) -> list[str]:
     return [f"{prefix}: {item}" for item in items]
 
 
-def build_plan_steps(route_result: dict[str, Any]) -> list[PlanStep]:
+def build_planning_context(route_result: dict[str, Any]) -> dict[str, Any]:
+    """Собирает planning inputs из verification policy, plans и backlog."""
+    task_type_id = route_result["task_type"]["id"]
+    changed_paths = route_result["changed_paths"]
+    verification_profile = get_verification_profile(task_type_id)
+    known_risks = collect_known_risks(changed_paths, task_type_id)
+    active_initiatives = collect_active_initiatives(changed_paths, task_type_id)
+    return {
+        "verification_profile": verification_profile,
+        **known_risks,
+        **active_initiatives,
+    }
+
+
+def build_plan_steps(route_result: dict[str, Any], planning_context: dict[str, Any]) -> list[PlanStep]:
     """Строит список шагов swarm-плана."""
     context_pack = route_result["context_pack"]
     tests = context_pack["tests"]
     escalation = route_result["escalation"]
+    verification_profile = planning_context["verification_profile"]
+    known_risks = planning_context.get("known_risks", [])
+    active_initiatives = planning_context.get("active_initiatives", [])
+    has_profile_checks = bool(
+        verification_profile.get("required_checks") or verification_profile.get("optional_checks")
+    )
+    has_profile_commands = bool(verification_profile.get("allowed_commands"))
 
     steps: list[PlanStep] = [
         PlanStep(
@@ -114,23 +146,34 @@ def build_plan_steps(route_result: dict[str, Any]) -> list[PlanStep]:
             status="pending",
             details=[
                 f"work inside task type: {route_result['task_type']['label']}",
+                f"verification risk level: {verification_profile['risk_level']}",
                 *build_step_details_from_list("respect note", context_pack["notes"]),
+                *build_step_details_from_list("known risk", [item["title"] for item in known_risks]),
+                *build_step_details_from_list("active initiative", [item["path"] for item in active_initiatives]),
             ],
         ),
     ]
 
-    if tests:
+    if tests or has_profile_checks:
         steps.append(
             PlanStep(
                 step_id="verify_change",
                 title="Verify Change",
                 owner="tester",
                 status="pending",
-                details=build_step_details_from_list("recommended check", tests),
+                details=(
+                    build_step_details_from_list("recommended check", tests)
+                    + build_step_details_from_list("required profile check", verification_profile["required_checks"])
+                    + build_step_details_from_list("optional profile check", verification_profile["optional_checks"])
+                    + build_step_details_from_list("allowed command", verification_profile["allowed_commands"])
+                ),
             )
         )
 
-    if tests or route_result["task_type"]["id"] in {"deploy_or_infra_change", "test_harness_or_smoke_setup_change"}:
+    if tests or has_profile_commands or route_result["task_type"]["id"] in {
+        "deploy_or_infra_change",
+        "test_harness_or_smoke_setup_change",
+    }:
         steps.append(
             PlanStep(
                 step_id="run_in_sandbox",
@@ -155,6 +198,7 @@ def build_plan_steps(route_result: dict[str, Any]) -> list[PlanStep]:
                 "check scope control",
                 "check docs alignment",
                 "check residual risks",
+                *build_step_details_from_list("known risk", [item["title"] for item in known_risks]),
             ],
         )
     )
@@ -166,7 +210,10 @@ def build_plan_steps(route_result: dict[str, Any]) -> list[PlanStep]:
                 title="Manual Review",
                 owner="release_manager",
                 status="pending",
-                details=build_step_details_from_list("escalation reason", escalation["reasons"]),
+                details=(
+                    build_step_details_from_list("escalation reason", escalation["reasons"])
+                    + build_step_details_from_list("known risk", [item["title"] for item in known_risks])
+                ),
             )
         )
 
@@ -190,7 +237,8 @@ def build_plan_steps(route_result: dict[str, Any]) -> list[PlanStep]:
 def build_plan_output(route_result: dict[str, Any]) -> dict[str, Any]:
     """Собирает итоговый swarm-plan JSON."""
     roles = infer_agent_roles(route_result)
-    steps = build_plan_steps(route_result)
+    planning_context = build_planning_context(route_result)
+    steps = build_plan_steps(route_result, planning_context)
     return {
         "version": 1,
         "task_type": route_result["task_type"],
@@ -198,6 +246,11 @@ def build_plan_output(route_result: dict[str, Any]) -> dict[str, Any]:
         "recommended_agents": roles,
         "context_pack": route_result["context_pack"],
         "escalation": route_result["escalation"],
+        "verification_profile": planning_context["verification_profile"],
+        "known_risks": planning_context.get("known_risks", []),
+        "risk_sources": planning_context.get("risk_sources", []),
+        "active_initiatives": planning_context.get("active_initiatives", []),
+        "active_initiative_sources": planning_context.get("active_initiative_sources", []),
         "plan": [step.to_dict() for step in steps],
     }
 
@@ -206,11 +259,16 @@ def write_artifacts(output_dir: Path, route_result: dict[str, Any], plan_output:
     """Записывает plan/context artifacts на диск."""
     output_dir.mkdir(parents=True, exist_ok=True)
     context_pack_path = output_dir / "context-pack.json"
+    context_trace_path = output_dir / "context-trace.json"
     route_result_path = output_dir / "route-result.json"
     plan_path = output_dir / "plan.json"
 
     context_pack_path.write_text(
         json.dumps(route_result["context_pack"], ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    context_trace_path.write_text(
+        json.dumps(route_result.get("context_trace", []), ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     route_result_path.write_text(
@@ -224,6 +282,7 @@ def write_artifacts(output_dir: Path, route_result: dict[str, Any], plan_output:
 
     return {
         "context_pack": str(context_pack_path.relative_to(ROOT)).replace("\\", "/"),
+        "context_trace": str(context_trace_path.relative_to(ROOT)).replace("\\", "/"),
         "route_result": str(route_result_path.relative_to(ROOT)).replace("\\", "/"),
         "plan": str(plan_path.relative_to(ROOT)).replace("\\", "/"),
     }

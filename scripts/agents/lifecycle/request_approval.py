@@ -204,6 +204,20 @@ def build_artifact_snapshot(run_summary: dict[str, Any]) -> dict[str, str]:
     return snapshot
 
 
+def build_trace_snapshot(run_summary: dict[str, Any]) -> dict[str, str]:
+    """Keeps only available trace artifacts inside a dedicated snapshot."""
+    artifacts = run_summary.get("artifacts", {})
+    snapshot: dict[str, str] = {}
+    for key in ("context_trace", "runtime_context_trace"):
+        rel_path = artifacts.get(key, "")
+        if not rel_path:
+            continue
+        full_path = ROOT / normalize_rel_path(rel_path)
+        if full_path.exists():
+            snapshot[key] = rel_path
+    return snapshot
+
+
 def build_approval_request_packet(
     *,
     run_summary: dict[str, Any],
@@ -232,11 +246,14 @@ def build_approval_request_packet(
         "requested_checkpoints": requested_checkpoints,
         "checkpoint_details": summarize_checkpoints(approval_payload, requested_checkpoints),
         "changed_paths": run_summary.get("changed_paths", []),
+        "context": run_summary.get("context", {}),
+        "changed_files": run_summary.get("changed_files", {}),
         "implementation": implementation,
         "verification": verification,
         "sandbox": sandbox,
         "review": review,
         "artifacts": build_artifact_snapshot(run_summary),
+        "trace_artifacts": build_trace_snapshot(run_summary),
     }
 
 
@@ -256,10 +273,32 @@ def render_markdown_packet(packet: dict[str, Any]) -> str:
     residual_risks = packet.get("review", {}).get("risk_count", 0)
     residual_risk_lines = packet.get("review", {}).get("residual_risks", [])
     risks_block = "\n".join(f"- {item}" for item in residual_risk_lines) or "- none"
+    context_summary = packet.get("context", {}).get("summary", {})
+    context_brief = packet.get("context", {}).get("brief", {})
+    unresolved_items = packet.get("context", {}).get("unresolved_items", [])
+    unresolved_block = "\n".join(
+        f"- `{item.get('category', 'unknown')}` -> `{item.get('item', '')}`"
+        for item in unresolved_items
+    ) or "- none"
+    constraints_block = "\n".join(f"- {item}" for item in context_brief.get("constraints", [])) or "- none"
+    known_risks_block = "\n".join(
+        f"- {item.get('title', '')} [{item.get('priority', 'unknown')}]"
+        for item in context_brief.get("known_risks", [])
+    ) or "- none"
+    policy_conflicts_block = "\n".join(
+        f"- `{item.get('path', 'unknown')}`: {item.get('reason', '')}"
+        for item in context_brief.get("policy_conflicts", [])
+    ) or "- none"
+    changed_files = packet.get("changed_files", {}).get("changed_files", [])
+    changed_files_block = "\n".join(f"- `{item}`" for item in changed_files) or "- none"
 
     artifact_lines = "\n".join(
         f"- `{key}`: `{value}`"
         for key, value in packet.get("artifacts", {}).items()
+    ) or "- none"
+    trace_lines = "\n".join(
+        f"- `{key}`: `{value}`"
+        for key, value in packet.get("trace_artifacts", {}).items()
     ) or "- none"
 
     return (
@@ -274,6 +313,22 @@ def render_markdown_packet(packet: dict[str, Any]) -> str:
         f"{changed_paths_block}\n\n"
         "## Requested Checkpoints\n\n"
         f"{checkpoints_block}\n\n"
+        "## Context\n\n"
+        f"- Resolved Files: {context_summary.get('resolved_files', 0)}\n"
+        f"- Resolved Directories: {context_summary.get('resolved_directories', 0)}\n"
+        f"- Abstract Items: {context_summary.get('abstract_items', 0)}\n"
+        f"- Missing Items: {context_summary.get('missing_items', 0)}\n"
+        f"- Blocking Unresolved: {context_summary.get('blocking_unresolved_items', 0)}\n"
+        f"- Advisory Unresolved: {context_summary.get('advisory_unresolved_items', 0)}\n"
+        "### Constraints\n\n"
+        f"{constraints_block}\n\n"
+        "### Known Risks\n\n"
+        f"{known_risks_block}\n\n"
+        "### Policy Conflicts\n\n"
+        f"{policy_conflicts_block}\n\n"
+        f"{unresolved_block}\n\n"
+        "## Changed Files\n\n"
+        f"{changed_files_block}\n\n"
         "## Implementation\n\n"
         f"- Summary: {packet.get('implementation', {}).get('summary', '') or '-'}\n"
         f"- Applied Files: {packet.get('implementation', {}).get('applied_files', []) or '-'}\n\n"
@@ -289,6 +344,8 @@ def render_markdown_packet(packet: dict[str, Any]) -> str:
         f"- Findings: {packet.get('review', {}).get('finding_count', 0)}\n"
         f"- Residual Risks: {residual_risks}\n"
         f"{risks_block}\n\n"
+        "## Trace Artifacts\n\n"
+        f"{trace_lines}\n\n"
         "## Artifacts\n\n"
         f"{artifact_lines}\n"
     )
@@ -442,7 +499,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--runs-dir",
         default=str(DEFAULT_RUNS_DIR.relative_to(ROOT)).replace("\\", "/"),
-        help="Базовая директория запусков (по умолчанию: local/runs).",
+        help="Базовая директория запусков (по умолчанию: runs).",
     )
     parser.add_argument(
         "--checkpoint",

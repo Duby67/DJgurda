@@ -50,7 +50,12 @@ class YouTubeShorts:
         }
         ydl_opts.update(self._options_provider.build_ytdlp_opts())
 
-        result = await self._media_gateway.download_video(url, ydl_opts, video_id=shorts_id)
+        result = await self._media_gateway.download_video(
+            url,
+            ydl_opts,
+            video_id=shorts_id,
+            size_limit=self._media_gateway.video_limit,
+        )
         if not result:
             return None
 

@@ -1,0 +1,185 @@
+{
+  "version": 1,
+  "description": "Verification profiles for swarm task types.",
+  "profiles": {
+    "swarm_runtime_orchestration_change": {
+      "profile_id": "swarm_runtime_orchestration_change",
+      "risk_level": "high",
+      "required_checks": ["dispatcher_or_mcp_smoke", "executor_flow_regression"],
+      "optional_checks": ["cli_status_regression"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_mcp_smoke.py",
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_executor_smoke.py",
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_cli_smoke.py"
+      ],
+      "sandbox_required_for": [],
+      "notes": ["Keep dispatcher, supervisor, lifecycle transitions and approval wrappers aligned."]
+    },
+    "swarm_sandbox_or_remote_execution_change": {
+      "profile_id": "swarm_sandbox_or_remote_execution_change",
+      "risk_level": "high",
+      "required_checks": ["sandbox_adapter_regression", "workflow_contract_review"],
+      "optional_checks": ["docker_smoke_path"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_sandbox_adapters.py"
+      ],
+      "sandbox_required_for": ["container-backed or remote execution validation"],
+      "notes": ["Keep exact replay, workflow correlation and artifact download semantics visible."]
+    },
+    "swarm_workspace_or_artifact_change": {
+      "profile_id": "swarm_workspace_or_artifact_change",
+      "risk_level": "high",
+      "required_checks": ["workspace_isolation_regression", "artifact_schema_review"],
+      "optional_checks": ["human_status_view_smoke"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_workspace_isolation.py",
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_cli_smoke.py"
+      ],
+      "sandbox_required_for": [],
+      "notes": ["Preserve branch intent, runtime trace and human-readable artifact views."]
+    },
+    "swarm_policy_or_planning_change": {
+      "profile_id": "swarm_policy_or_planning_change",
+      "risk_level": "medium",
+      "required_checks": ["routing_policy_review"],
+      "optional_checks": ["planning_cli_smoke"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_cli_smoke.py"
+      ],
+      "sandbox_required_for": [],
+      "notes": ["Keep routing policy, planning heuristics and verification profiles synchronized."]
+    },
+    "bot_command_change": {
+      "profile_id": "bot_command_change",
+      "risk_level": "medium",
+      "required_checks": ["targeted_bot_tests"],
+      "optional_checks": ["chat_state_regression"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/bot/processing",
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_cli_smoke.py"
+      ],
+      "sandbox_required_for": ["environment-sensitive checks"],
+      "notes": ["Start with bot-level tests for the touched command and related chat-state flow."]
+    },
+    "media_routing_bugfix": {
+      "profile_id": "media_routing_bugfix",
+      "risk_level": "high",
+      "required_checks": ["media_router_regression", "media_processor_error_flow"],
+      "optional_checks": ["cleanup_helper_checks", "targeted_handler_smoke"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/bot/processing/test_media_router_multi_link.py",
+        ".\\venv\\Scripts\\python.exe -m pytest test/bot/processing/test_media_processor_errors.py",
+        ".\\venv\\Scripts\\python.exe -m pytest test/handlers/test_cleanup_helpers.py"
+      ],
+      "sandbox_required_for": ["handler smoke checks with cookies or external services"],
+      "notes": ["Keep multi-link orchestration and cleanup behavior visible in verification."]
+    },
+    "caption_or_error_message_change": {
+      "profile_id": "caption_or_error_message_change",
+      "risk_level": "medium",
+      "required_checks": ["error_message_regression"],
+      "optional_checks": ["cleanup_helper_checks"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/bot/processing/test_media_processor_errors.py",
+        ".\\venv\\Scripts\\python.exe -m pytest test/handlers/test_cleanup_helpers.py"
+      ],
+      "sandbox_required_for": [],
+      "notes": ["Validate user-facing error/caption behavior first."]
+    },
+    "stable_source_handler_fix": {
+      "profile_id": "stable_source_handler_fix",
+      "risk_level": "high",
+      "required_checks": ["targeted_source_handler_smoke"],
+      "optional_checks": ["source_helper_unit_tests", "cleanup_helper_checks"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/handlers",
+        ".\\venv\\Scripts\\python.exe -m pytest test/handlers/test_cleanup_helpers.py"
+      ],
+      "sandbox_required_for": ["source smoke checks requiring cookies, secrets or network"],
+      "notes": ["Prefer source-local verification paths and cleanup checks."]
+    },
+    "vk_research_or_bugfix": {
+      "profile_id": "vk_research_or_bugfix",
+      "risk_level": "high",
+      "required_checks": ["vk_local_smoke_review"],
+      "optional_checks": ["vk_helper_checks"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/handlers/VK"
+      ],
+      "sandbox_required_for": ["VK smoke paths and any network/cookie-sensitive validation"],
+      "notes": ["Do not treat VK checks as stable-runtime certification."]
+    },
+    "db_settings_or_stats_change": {
+      "profile_id": "db_settings_or_stats_change",
+      "risk_level": "high",
+      "required_checks": ["targeted_db_or_bot_tests"],
+      "optional_checks": ["runtime_flow_regression"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/bot/processing",
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_cli_smoke.py"
+      ],
+      "sandbox_required_for": ["checks requiring isolated DB setup or environment-sensitive validation"],
+      "notes": ["Keep DB degradation visibility and runtime impact visible."]
+    },
+    "runtime_contract_or_registry_change": {
+      "profile_id": "runtime_contract_or_registry_change",
+      "risk_level": "high",
+      "required_checks": ["contract_regression", "sender_or_cleanup_regression"],
+      "optional_checks": ["source_specific_handler_checks"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/bot/processing",
+        ".\\venv\\Scripts\\python.exe -m pytest test/handlers/test_cleanup_helpers.py"
+      ],
+      "sandbox_required_for": ["cross-source or environment-sensitive handler verification"],
+      "notes": ["Registry and contract changes should keep sender dispatch and cleanup semantics visible."]
+    },
+    "deploy_or_infra_change": {
+      "profile_id": "deploy_or_infra_change",
+      "risk_level": "high",
+      "required_checks": ["isolated_infra_checks"],
+      "optional_checks": ["release_sync_validation"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_cli_smoke.py",
+        ".\\venv\\Scripts\\python.exe -m scripts.release.automation.sync --tag v1.2.4"
+      ],
+      "sandbox_required_for": ["infra or environment-sensitive validation"],
+      "notes": ["Prefer isolated verification and avoid local environment coupling."]
+    },
+    "docs_only_change": {
+      "profile_id": "docs_only_change",
+      "risk_level": "low",
+      "required_checks": ["docs_code_alignment_review"],
+      "optional_checks": ["swarm_cli_smoke_for_automation_docs"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_cli_smoke.py"
+      ],
+      "sandbox_required_for": [],
+      "notes": ["Tests are often unnecessary; verify code-doc alignment first."]
+    },
+    "release_or_versioning_change": {
+      "profile_id": "release_or_versioning_change",
+      "risk_level": "high",
+      "required_checks": ["release_promote_dry_run", "release_sync_validation"],
+      "optional_checks": ["workflow_alignment_review"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_cli_smoke.py",
+        ".\\venv\\Scripts\\python.exe -m scripts.release.automation.promote --source-branch swarm-dev --target-branch dev --target-kind preview --human",
+        ".\\venv\\Scripts\\python.exe -m scripts.release.automation.sync --tag v1.2.4"
+      ],
+      "sandbox_required_for": ["release or network-sensitive checks"],
+      "notes": ["Keep workflow_dispatch and promotion rules aligned."]
+    },
+    "test_harness_or_smoke_setup_change": {
+      "profile_id": "test_harness_or_smoke_setup_change",
+      "risk_level": "medium",
+      "required_checks": ["affected_smoke_path"],
+      "optional_checks": ["automation_cli_smoke"],
+      "allowed_commands": [
+        ".\\venv\\Scripts\\python.exe -m pytest test/scripts/test_swarm_cli_smoke.py",
+        ".\\venv\\Scripts\\python.exe -m pytest test/handlers"
+      ],
+      "sandbox_required_for": ["checks requiring cookies, secrets or isolated harness setup"],
+      "notes": ["Keep smoke setup lightweight and environment assumptions explicit."]
+    }
+  }
+}

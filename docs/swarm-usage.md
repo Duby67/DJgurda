@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Этот документ кратко описывает, как запускать swarm-oriented automation в репозитории и какие команды являются основными точками входа.
+Этот документ кратко описывает, как использовать swarm-oriented automation в репозитории и какие команды являются основными точками входа в текущем контуре.
 
 ## Prerequisites
 
@@ -11,79 +11,215 @@
 - активный проектный `venv` или явный запуск через `.\venv\Scripts\python.exe`
 - установленные dev-зависимости из `requirements-dev.txt`
 - работа из корня репозитория
+- локальные `pytest`, smoke-checks и verification-команды нельзя запускать вне проектного `venv`
+
+Для VS Code в репозитории рекомендован tracked workspace-файл [.vscode/settings.json](/c:/Work/djgurda/.vscode/settings.json).
+Он фиксирует `venv\Scripts\python.exe` как repo-default interpreter и открывает терминал с активацией `venv` через `activate.bat`, что особенно полезно на Windows-хостах с ограниченным PowerShell `ExecutionPolicy`.
+
+Важно: `python.defaultInterpreterPath` в VS Code работает как начальный default для workspace.
+Если редактор уже сохранил другой interpreter selection, нужно вручную переуказать интерпретатор на `.\venv\Scripts\python.exe`.
+
+Swarm run bundles и lifecycle artifacts сохраняются в корневую папку `runs/`.
+
+## Agent-Driven Flow
+
+Рекомендованный режим работы для этого репозитория - agent-driven swarm orchestration:
+
+- пользователь пишет агенту один prompt обычным языком;
+- агент сам использует swarm contour как operational model для route, plan, orchestration и verification;
+- для нетривиальной задачи агент сам поднимает субагентов там, где это ускоряет работу и не ломает source of truth;
+- в progress updates агент показывает, какие подзадачи сейчас активны и какие субагенты задействованы;
+- если для продолжения нужны clarification, тесты, `commit`, `push` или другая human boundary, агент задает пользователю явный вопрос и ждет ответа вместо молчаливого продолжения.
 
 ## Main Entry Points
 
-Основные module-path команды:
+Основной front door:
+
+- `python -m scripts.agents.mcp`
+
+Нижележащие module-path команды:
 
 - `python -m scripts.agents.routing.route`
 - `python -m scripts.agents.routing.plan`
 - `python -m scripts.agents.routing.run`
 - `python -m scripts.agents.lifecycle.execute`
 - `python -m scripts.agents.lifecycle.status`
-- `python -m scripts.release.automation.promote`
-- `python -m scripts.release.automation.sync`
+
+`scripts.agents.mcp` строит run bundle, создает isolated workspace, инициирует role jobs и служит основным пользовательским входом для swarm orchestration.
 
 ## Common Commands
 
-### Classify A Task
+### Plan A Task
 
 ```powershell
-.\venv\Scripts\python.exe -m scripts.agents.routing.route `
-  --prompt "Исправить release flow документацию" `
-  --path docs/release-flow.md `
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  plan_task `
+  --prompt "Усилить dispatcher loop после completion inbox" `
+  --path scripts/agents/mcp/dispatcher.py `
   --pretty
 ```
 
-### Build A Run Bundle
+### Start A Swarm Run
 
 ```powershell
-.\venv\Scripts\python.exe -m scripts.agents.routing.run `
-  --prompt "Исправить удаление исходного сообщения при multi-link routing" `
-  --path src/bot/processing/media_router.py `
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  start_swarm_run `
+  --prompt "Улучшить статус sandbox blocked state" `
+  --path scripts/agents/lifecycle/status.py `
   --pretty
 ```
 
-### Load Context For An Existing Run
+### Start An Autonomous Swarm Run
 
 ```powershell
-.\venv\Scripts\python.exe -m scripts.agents.lifecycle.execute `
-  --run-id demo-media-router `
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  start_autonomous_swarm_run `
+  --prompt "Усилить runtime context trace для reviewer handoff" `
+  --path scripts/agents/runtime_trace.py `
+  --pretty
+```
+
+### Start A Supervised Swarm Run
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  start_supervised_swarm_run `
+  --prompt "Довести supervisor до следующей human boundary" `
+  --path scripts/agents/mcp/dispatcher.py `
+  --pretty
+```
+
+### Continue A Swarm Run
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  continue_swarm_run `
+  --run-id demo-swarm-run `
   --pretty
 ```
 
 ### Check Run Status
 
 ```powershell
-.\venv\Scripts\python.exe -m scripts.agents.lifecycle.status `
-  --run-id demo-media-router `
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  show_run_status `
+  --run-id demo-swarm-run `
   --human
 ```
 
-### Preview Promotion To Dev
+### Show Job Queue
 
 ```powershell
-.\venv\Scripts\python.exe -m scripts.release.automation.promote `
-  --source-branch swarm-dev `
-  --target-branch dev `
-  --target-kind preview `
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  show_job_queue `
+  --run-id demo-swarm-run `
   --human
 ```
 
-### Stable Promotion To Main
+### Show Diff Preview
 
 ```powershell
-.\venv\Scripts\python.exe -m scripts.release.automation.promote `
-  --source-branch dev `
-  --target-branch main `
-  --target-kind stable `
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  show_diff_preview `
+  --run-id demo-swarm-run `
   --human
 ```
 
-### Validate Release Sync
+### Preview Sandbox Plan
 
 ```powershell
-.\venv\Scripts\python.exe -m scripts.release.automation.sync --tag v1.2.4
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  preview_sandbox_plan `
+  --run-id demo-swarm-run `
+  --human
+```
+
+### Run Dispatcher Helper
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  run_dispatcher `
+  --run-id demo-swarm-run `
+  --pretty
+```
+
+Команда не заменяет executor.
+Она подбирает следующий claimable external job и возвращает work item для Codex-style handoff.
+
+### Run Supervisor
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  run_supervisor `
+  --run-id demo-swarm-run `
+  --pretty
+```
+
+Supervisor крутит persistent loop и, если задан `--runtime-command-json`, может сам исполнять `coder` и `reviewer` через built-in runtime worker bridge.
+Тот же runtime worker можно задать через env `SWARM_RUNTIME_COMMAND_JSON`.
+
+### Approval Wrappers
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  approve_run_checks `
+  --run-id demo-swarm-run `
+  --pretty
+```
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  approve_run_checks_and_continue `
+  --run-id demo-swarm-run `
+  --pretty
+```
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  approve_commit `
+  --run-id demo-swarm-run `
+  --pretty
+```
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  approve_commit_and_continue `
+  --run-id demo-swarm-run `
+  --pretty
+```
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  approve_push_and_continue `
+  --run-id demo-swarm-run `
+  --pretty
+```
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  reject_checkpoint `
+  --run-id demo-swarm-run `
+  --checkpoint run_checks `
+  --note "Нужна доработка контекста" `
+  --pretty
+```
+
+### Claim And Complete An External Role Job
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  claim_role_job `
+  --run-id demo-swarm-run `
+  --job-id coder `
+  --claimed-by external-runtime
+```
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.agents.mcp `
+  complete_role_job `
+  --run-id demo-swarm-run `
+  --job-id coder `
+  --result-json "{\"summary\":\"changes applied\",\"applied_files\":[\"docs/swarm-usage.md\"]}"
 ```
 
 ## Approval Boundaries
@@ -92,20 +228,37 @@
 
 - route/plan/status можно использовать как безопасные read-oriented команды
 - lifecycle-этапы после planning могут менять run artifacts
-- `commit`, `push`, merge и release promotion вверх по веткам выполняются только по явному запросу разработчика
+- `start_swarm_run` создает `workspace.json`, `jobs/index.json` и другие orchestration artifacts в `runs/<run-id>/`
+- `start_autonomous_swarm_run` делает то же самое, но сразу доводит run до первого external handoff или human boundary
+- `start_supervised_swarm_run` идет дальше и может сам крутить supervisor loop до следующей human boundary
+- `preview_sandbox_plan` и `show_diff_preview` дают CLI-first UX без ручного чтения JSON и patch-файлов
+- `show_run_status --human`, `show_job_queue --human` и `show_diff_preview --human` пишут `run-status.md`, `job-queue.md` и `diff-preview.md` прямо в run bundle
+- `run_dispatcher` помогает снять ручной шов на уровне UX, но опирается на общий executor/job contract
+- `run_supervisor` закрывает следующий слой и может сам запускать built-in runtime worker для внешних AI jobs
+- если verification profile требует реальный sandbox, executor по умолчанию выберет `docker`
+- `local_dry_run` остается явным preview-режимом, а `github_actions` доступен как explicit remote adapter
+- `commit` и `push` выполняются только по явному запросу разработчика
 - реальные тесты и smoke-прогоны все еще требуют явного approval пользователя
+- если run уперся в clarification или approval, агент должен показать текущее состояние orchestration и дождаться ответа пользователя, а не закрывать цикл как завершенный
 
 ## Recommended Daily Flow
 
 Обычный ежедневный путь работы выглядит так:
 
-1. Сначала классифицировать задачу через `scripts.agents.routing.route`.
-2. При необходимости собрать run bundle через `scripts.agents.routing.run`.
-3. Проверять progress и blockers через `scripts.agents.lifecycle.status`.
-4. Для продвижения preview и release использовать `scripts.release.automation.promote`.
+1. Пользователь формулирует задачу агенту обычным prompt-ом.
+2. Агент сам проводит route/plan и выбирает, нужен ли supervised swarm-run, autonomous cycle или более локальный orchestrated проход.
+3. Агент показывает progress: активные workstreams, локальные шаги, подключенных субагентов и текущую human boundary, если она есть.
+4. Для sandbox intent, diff review и run status агент при необходимости опирается на `preview_sandbox_plan`, `show_diff_preview`, `show_job_queue` и `show_run_status`.
+5. Если для продолжения нужны clarification, тесты, `commit` или `push`, агент задает пользователю прямой вопрос и ждет решения.
+6. После ответа пользователя агент продолжает тот же swarm-run до следующей boundary или до завершения задачи.
+7. Если нужен ручной CLI-контроль, можно использовать wrappers `approve_run_checks`, `approve_run_checks_and_continue`, `approve_commit`, `approve_commit_and_continue`, `approve_push_and_continue`, `reject_checkpoint` и `continue_swarm_run`.
 
 ## Related Docs
 
 - `scripts/AGENTS.md`
-- `docs/release-flow.md`
 - `docs/agent-context-map.md`
+- `docs/testing-policy.md`
+- `docs/commit-policy.md`
+- `docs/sandbox-execution.md`
+- `docs/swarm-runtime.md`
+- `docs/verification-profiles.json`

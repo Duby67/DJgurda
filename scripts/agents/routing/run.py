@@ -24,7 +24,7 @@ from .route import (
 )
 
 
-DEFAULT_RUNS_DIR = ROOT / "local" / "runs"
+DEFAULT_RUNS_DIR = ROOT / "runs"
 
 
 def sanitize_run_id(value: str) -> str:
@@ -51,7 +51,11 @@ def build_input_payload(prompt: str, paths: list[str]) -> dict[str, Any]:
 
 def build_approval_checkpoints(route_result: dict[str, Any], plan_output: dict[str, Any]) -> dict[str, Any]:
     """Формирует approval checkpoints для run bundle."""
-    tests_required = bool(route_result["context_pack"]["tests"])
+    verification_profile = plan_output.get("verification_profile", {})
+    profile_checks_exist = bool(
+        verification_profile.get("required_checks") or verification_profile.get("optional_checks")
+    )
+    tests_required = bool(route_result["context_pack"]["tests"]) or profile_checks_exist
     escalation_required = route_result["escalation"]["needed"]
     run_checks_required = tests_required or escalation_required
 
@@ -101,8 +105,14 @@ def build_run_summary(
 ) -> dict[str, Any]:
     """Собирает итоговую summary run bundle."""
     approval = build_approval_checkpoints(route_result, plan_output)
-    status = "awaiting_manual_review" if approval["needs_manual_review"] else "planned"
-    next_action = "review_escalation" if approval["needs_manual_review"] else "load_context_and_implement"
+    instruction_conflict = route_result.get("routing_diagnostics", {}).get("instruction_conflict", False)
+
+    if instruction_conflict:
+        status = "instruction_conflict"
+        next_action = "resolve_instruction_conflict"
+    else:
+        status = "awaiting_manual_review" if approval["needs_manual_review"] else "planned"
+        next_action = "review_escalation" if approval["needs_manual_review"] else "load_context_and_implement"
 
     return {
         "run_id": run_id,
@@ -111,6 +121,10 @@ def build_run_summary(
         "task_type": route_result["task_type"],
         "recommended_agents": plan_output["recommended_agents"],
         "changed_paths": route_result["changed_paths"],
+        "routing_diagnostics": route_result.get("routing_diagnostics", {}),
+        "verification_profile": plan_output.get("verification_profile", {}),
+        "known_risks": plan_output.get("known_risks", []),
+        "active_initiatives": plan_output.get("active_initiatives", []),
         "artifacts": artifacts,
         "approval": approval,
     }
@@ -186,7 +200,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--runs-dir",
         default=str(DEFAULT_RUNS_DIR.relative_to(ROOT)).replace("\\", "/"),
-        help="Базовая директория для run bundles (по умолчанию: local/runs).",
+        help="Базовая директория для run bundles (по умолчанию: runs).",
     )
     parser.add_argument("--run-id", help="Явный run_id. Если не указан, будет сгенерирован автоматически.")
     parser.add_argument(

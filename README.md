@@ -8,6 +8,9 @@ DJgurda Bot - асинхронный Telegram-бот для обработки �
 
 Проект ориентирован в первую очередь на использование в мобильном Telegram-клиенте, поэтому приоритет отдается компактным подписям, понятной подаче результата и устойчивому поведению в обычных чатах.
 
+Дополнительно в репозитории есть отдельный swarm automation contour для agent-first работы с кодовой базой.
+Он не заменяет runtime бота, а помогает планировать, исполнять и сопровождать инженерные задачи через run bundle, isolated workspace, sandbox и approval boundaries.
+
 ## Что умеет бот
 
 В стабильном контуре бот работает со следующими источниками:
@@ -31,12 +34,21 @@ DJgurda Bot - асинхронный Telegram-бот для обработки �
 
 Этот файл не является источником истины для агентного контура. Актуальное поведение системы определяется кодом и профильными документами в `docs/`.
 
+Если вас интересует именно swarm contour, смотреть нужно в первую очередь:
+
+- `scripts/AGENTS.md`
+- `docs/swarm-runtime.md`
+- `docs/swarm-usage.md`
+
 ## Как устроен проект
 
 На верхнем уровне:
 
 - `src/` - основной код бота;
-- `deploy/` - файлы деплоя и контейнеризации;
+- `deploy/` - только live deploy assets для `dev` и `main`;
+- `test/docker/` - test-only Docker images для sandbox, smoke и verification;
+- `scripts/agents/` - swarm runtime, orchestration, dispatcher, supervisor и sandbox adapters;
+- `runs/` - run artifacts swarm-контура;
 - `docs/` - поддерживаемая проектная документация;
 - `test/` - локальные smoke-проверки и тестовые материалы;
 - `local/` - локальные и архивные рабочие заметки, не являющиеся канонической документацией проекта.
@@ -49,6 +61,14 @@ DJgurda Bot - асинхронный Telegram-бот для обработки �
 - `src/handlers/` - обработчики внешних источников;
 - `src/middlewares/` - middleware и доступ к данным;
 - `src/utils/` - вспомогательные утилиты.
+
+Ключевые части swarm automation:
+
+- `scripts/agents/mcp/cli.py` - основной front door;
+- `scripts/agents/mcp/dispatcher.py` - dispatcher и supervisor;
+- `scripts/agents/executor.py` - role jobs и orchestration;
+- `scripts/agents/workspace.py` - isolated workspace;
+- `scripts/agents/sandbox_adapters.py` - sandbox backends.
 
 ## Быстрый запуск
 
@@ -67,6 +87,12 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
+Если PowerShell блокирует `Activate.ps1` через `ExecutionPolicy`, можно использовать обычный `cmd`:
+
+```bat
+venv\Scripts\activate.bat
+```
+
 При необходимости dev-инструментов:
 
 ```bash
@@ -83,13 +109,27 @@ python -m pip install -r requirements-dev.txt
 - `BOT_TOKEN`
 - `YANDEX_MUSIC_TOKEN`
 
-Эталонный пример переменных лежит в `env.example`.
+Эталонный пример переменных лежит в `.env.example`.
 
 ### Запуск
 
 ```bash
 python -m src.main
 ```
+
+### Рекомендуемые настройки VS Code
+
+В репозитории хранится tracked workspace-файл [.vscode/settings.json](/c:/Work/djgurda/.vscode/settings.json) с рекомендуемыми настройками для локальной разработки.
+
+Он:
+
+- направляет Python extension на `venv\Scripts\python.exe`;
+- открывает встроенный терминал VS Code с уже активированным `venv` через `activate.bat`;
+- согласован с `.vscode/tasks.json`, который тоже ожидает проектный `venv/`.
+
+Сообщение VS Code про `python.defaultInterpreterPath` является информационным.
+Эта настройка используется как default только при первом выборе интерпретатора для workspace.
+Если VS Code уже запомнил другой Python для этого репозитория, нужно один раз выполнить `Python: Select Interpreter` и выбрать `.\venv\Scripts\python.exe`.
 
 ## Cookies и локальная среда
 
@@ -100,6 +140,11 @@ python -m src.main
 - `local/cookies` - локальные оригиналы для ручных проверок и smoke-сценариев;
 - `src/data/cookies` - runtime-копии, с которыми работает приложение;
 - `deploy/cookies` - deploy-источник, который материализуется из секретов или локальных файлов.
+
+Контейнерная boundary тоже разделена:
+
+- `deploy/Dockerfile` - реальный deploy image для сервера;
+- `test/docker/swarm-test/Dockerfile` - test-only image для swarm verification и smoke.
 
 Если нужны детали по путям, контейнеру и deploy-потоку, смотри профильную документацию, а не этот обзорный файл.
 
@@ -123,6 +168,36 @@ python -m src.main
 - локальная среда разработки - Windows 11;
 - целевая среда выполнения - Ubuntu 24 в контейнере.
 
+## Swarm Automation
+
+Swarm contour нужен для того, чтобы работать с репозиторием через orchestrated automation:
+
+- классифицировать задачу;
+- собирать context pack;
+- создавать run bundle;
+- материализовать isolated workspace;
+- запускать sandbox и review flow;
+- доходить до `commit` и `push` только через явные approval boundaries.
+
+Основной вход:
+
+```bash
+python -m scripts.agents.mcp
+```
+
+Ключевые команды:
+
+- `plan_task`
+- `start_swarm_run`
+- `start_autonomous_swarm_run`
+- `start_supervised_swarm_run`
+- `continue_swarm_run`
+- `show_run_status`
+- `show_job_queue`
+- `show_diff_preview`
+
+Подробное использование и ограничения описаны в `docs/swarm-usage.md` и `docs/swarm-runtime.md`.
+
 ## Где смотреть детали
 
 Если нужен не обзор, а точная информация по конкретной теме:
@@ -134,6 +209,7 @@ python -m src.main
 - безопасность и границы доступа - `docs/SECURITY.md`
 - планы и техдолг - `docs/PLANS.md`
 - swarm automation usage - `docs/swarm-usage.md`
+- swarm runtime contracts - `docs/swarm-runtime.md`
 - release flow - `docs/release-flow.md`
 - release promote examples - `docs/release-promote-examples.md`
 - история релизов - `docs/release_notes.md`

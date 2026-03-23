@@ -116,8 +116,10 @@ def _default_descriptors() -> tuple[HandlerDescriptor, ...]:
             feature_flags=("runtime_enabled",),
             factory=YouTubeHandler,
             supported_content_types=(
+                ContentType.VIDEO,
                 ContentType.SHORTS,
                 ContentType.CHANNEL,
+                ContentType.PLAYLIST,
             ),
         ),
         HandlerDescriptor(

@@ -69,7 +69,7 @@
 
 - Что изменилось:
   - Docker ignore перенесен из корня в `deploy/Dockerfile.dockerignore` рядом с `deploy/Dockerfile`.
-  - Для deploy введен явный staging-каталог `deploy/cookies`; в репозитории хранится только `deploy/cookies/.gitkeep`.
+  - Для deploy введен явный staging-каталог `deploy/cookies`; в текущем tracked-слое там остаются только placeholder docs (`README.md` и `AGENTS.md`), ранее использовался `.gitkeep`.
   - Все `*_cookies.txt` добавлены в `.gitignore`, чтобы исключить случайную утечку cookies из публичного репозитория.
   - GitHub Actions materializes `deploy/cookies` на runner из secrets и перед запуском `deploy/manager.sh` синхронизирует файлы в `$HOME/bot_{env}/data/cookies` с перезаписью.
   - Обновлены `README.md`, `.github/ai-context.md`, `docs/deploy_layout.md` и `docs/repository-root-map.md` под трехуровневую схему `local/cookies -> deploy/cookies -> src/data/cookies`.
@@ -90,7 +90,7 @@
   - Ручная синхронизация cookies перенесена в deploy-контур: добавлены `deploy/sync_cookies.sh` и `deploy/sync_cookies.bat`.
   - Ручные sync-скрипты загружают только локально существующие `*_cookies.txt` и не удаляют cookies, которых нет локально.
 - Важно для деплоя:
-  - Реальные cookies по-прежнему не должны попадать в git; в репозитории хранится только `deploy/cookies/.gitkeep`.
+  - Реальные cookies по-прежнему не должны попадать в git; в tracked-слое `deploy/cookies` остаются только placeholder docs.
   - Для обновления cookies через CI secrets `YOUTUBE_COOKIES_FILE`, `INSTAGRAM_COOKIES_FILE`, `TIKTOK_COOKIES_FILE`, `VK_COOKIES_FILE`, `COUB_COOKIES_FILE` являются опциональными.
 - Breaking changes:
   - Нет.

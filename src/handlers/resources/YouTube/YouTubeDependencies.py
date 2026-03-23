@@ -34,6 +34,7 @@ class YouTubeMediaGatewayProtocol(Protocol):
     """Контракт low-level операций для YouTube-процессоров."""
 
     photo_limit: int
+    video_limit: int
 
     def extract_video_id(self, url: str) -> str:
         """Извлекает video id из URL."""
@@ -110,6 +111,7 @@ class YouTubeMediaGateway:
             option_builder=self._option_builder,
         )
         self._http_service = HttpFileService(delay_policy=self._delay_policy)
+        self.video_limit = self._video_service.video_limit
         self.photo_limit = self._http_service.photo_limit
 
     def extract_video_id(self, url: str) -> str:
@@ -122,9 +124,15 @@ class YouTubeMediaGateway:
         ydl_opts: dict[str, Any],
         *,
         video_id: str,
+        size_limit: Optional[int] = None,
     ) -> Optional[dict[str, Any]]:
         """Скачивает видео через yt-dlp."""
-        return await self._video_service.download_video(url, ydl_opts, video_id=video_id)
+        return await self._video_service.download_video(
+            url,
+            ydl_opts,
+            video_id=video_id,
+            size_limit=size_limit,
+        )
 
     async def extract_metadata(
         self,

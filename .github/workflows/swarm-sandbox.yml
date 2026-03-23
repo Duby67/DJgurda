@@ -1,0 +1,386 @@
+name: Swarm Sandbox
+
+run-name: Swarm Sandbox / ${{ inputs.run_id }} / ${{ inputs.correlation_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Swarm run id
+        required: true
+        type: string
+      correlation_id:
+        description: Unique dispatch correlation id
+        required: true
+        type: string
+      artifact_name:
+        description: Uploaded artifact bundle name
+        required: true
+        type: string
+      adapter_id:
+        description: Sandbox adapter identifier
+        required: true
+        type: string
+      workspace_root:
+        description: Local workspace reference for diagnostics
+        required: false
+        type: string
+      sandbox_plan_path:
+        description: Sandbox plan path from the local run bundle
+        required: false
+        type: string
+      commands_json:
+        description: JSON array of sandbox commands
+        required: true
+        type: string
+      env_allowlist_json:
+        description: JSON object of allowlisted environment variables
+        required: false
+        type: string
+      image:
+        description: Requested sandbox image metadata
+        required: false
+        type: string
+      requested_timeout_seconds:
+        description: Requested per-command timeout
+        required: false
+        type: string
+      poll_interval_seconds:
+        description: Poll interval hint from the caller
+        required: false
+        type: string
+      artifact_download_path:
+        description: Caller-local artifact download target for diagnostics
+        required: false
+        type: string
+      workspace_transfer_mode:
+        description: Workspace handoff mode for remote sandbox replay
+        required: false
+        type: string
+      workspace_diff_sha256:
+        description: Expected SHA256 for inline workspace diff patch
+        required: false
+        type: string
+      workspace_diff_gzip_base64:
+        description: Gzip+base64 encoded git patch for exact workspace replay
+        required: false
+        type: string
+      workspace_diff_chunk_count:
+        description: Number of chunked gzip+base64 workspace diff segments
+        required: false
+        type: string
+      workspace_diff_gzip_base64_chunk_01:
+        required: false
+        type: string
+      workspace_diff_gzip_base64_chunk_02:
+        required: false
+        type: string
+      workspace_diff_gzip_base64_chunk_03:
+        required: false
+        type: string
+      workspace_diff_gzip_base64_chunk_04:
+        required: false
+        type: string
+      workspace_diff_gzip_base64_chunk_05:
+        required: false
+        type: string
+      workspace_diff_gzip_base64_chunk_06:
+        required: false
+        type: string
+      workspace_diff_gzip_base64_chunk_07:
+        required: false
+        type: string
+      workspace_diff_gzip_base64_chunk_08:
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  run-sandbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Prepare sandbox metadata and environment
+        shell: bash
+        env:
+          SWARM_RUN_ID: ${{ inputs.run_id }}
+          SWARM_CORRELATION_ID: ${{ inputs.correlation_id }}
+          SWARM_ADAPTER_ID: ${{ inputs.adapter_id }}
+          SWARM_WORKSPACE_ROOT: ${{ inputs.workspace_root }}
+          SWARM_SANDBOX_PLAN_PATH: ${{ inputs.sandbox_plan_path }}
+          SWARM_COMMANDS_JSON: ${{ inputs.commands_json }}
+          SWARM_ENV_ALLOWLIST_JSON: ${{ inputs.env_allowlist_json }}
+          SWARM_IMAGE: ${{ inputs.image }}
+          SWARM_TIMEOUT_SECONDS: ${{ inputs.requested_timeout_seconds }}
+          SWARM_POLL_INTERVAL_SECONDS: ${{ inputs.poll_interval_seconds }}
+          SWARM_ARTIFACT_DOWNLOAD_PATH: ${{ inputs.artifact_download_path }}
+          SWARM_WORKSPACE_TRANSFER_MODE: ${{ inputs.workspace_transfer_mode }}
+          SWARM_WORKSPACE_DIFF_SHA256: ${{ inputs.workspace_diff_sha256 }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(".swarm-sandbox")
+          logs_dir = root / "logs"
+          logs_dir.mkdir(parents=True, exist_ok=True)
+
+          env_allowlist = json.loads(os.environ.get("SWARM_ENV_ALLOWLIST_JSON") or "{}")
+          metadata = {
+              "run_id": os.environ["SWARM_RUN_ID"],
+              "correlation_id": os.environ["SWARM_CORRELATION_ID"],
+              "adapter_id": os.environ["SWARM_ADAPTER_ID"],
+              "workspace_root": os.environ.get("SWARM_WORKSPACE_ROOT", ""),
+              "sandbox_plan_path": os.environ.get("SWARM_SANDBOX_PLAN_PATH", ""),
+              "image": os.environ.get("SWARM_IMAGE", ""),
+              "requested_timeout_seconds": os.environ.get("SWARM_TIMEOUT_SECONDS", ""),
+              "poll_interval_seconds": os.environ.get("SWARM_POLL_INTERVAL_SECONDS", ""),
+              "artifact_download_path": os.environ.get("SWARM_ARTIFACT_DOWNLOAD_PATH", ""),
+              "workspace_transfer_mode": os.environ.get("SWARM_WORKSPACE_TRANSFER_MODE", ""),
+              "workspace_diff_sha256": os.environ.get("SWARM_WORKSPACE_DIFF_SHA256", ""),
+              "command_count": len(json.loads(os.environ.get("SWARM_COMMANDS_JSON") or "[]")),
+          }
+          (root / "sandbox-metadata.json").write_text(
+              json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
+              for key, value in env_allowlist.items():
+                  env_file.write(f"{key}={value}\n")
+          PY
+
+      - name: Apply workspace diff
+        if: ${{ inputs.workspace_diff_gzip_base64 != '' || inputs.workspace_diff_chunk_count != '' }}
+        shell: bash
+        env:
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64: ${{ inputs.workspace_diff_gzip_base64 }}
+          SWARM_WORKSPACE_DIFF_SHA256: ${{ inputs.workspace_diff_sha256 }}
+          SWARM_WORKSPACE_DIFF_CHUNK_COUNT: ${{ inputs.workspace_diff_chunk_count }}
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_01: ${{ inputs.workspace_diff_gzip_base64_chunk_01 }}
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_02: ${{ inputs.workspace_diff_gzip_base64_chunk_02 }}
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_03: ${{ inputs.workspace_diff_gzip_base64_chunk_03 }}
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_04: ${{ inputs.workspace_diff_gzip_base64_chunk_04 }}
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_05: ${{ inputs.workspace_diff_gzip_base64_chunk_05 }}
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_06: ${{ inputs.workspace_diff_gzip_base64_chunk_06 }}
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_07: ${{ inputs.workspace_diff_gzip_base64_chunk_07 }}
+          SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_08: ${{ inputs.workspace_diff_gzip_base64_chunk_08 }}
+        run: |
+          python - <<'PY'
+          import base64
+          import gzip
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(".swarm-sandbox")
+          root.mkdir(parents=True, exist_ok=True)
+          inline_payload = os.environ.get("SWARM_WORKSPACE_DIFF_GZIP_BASE64", "")
+          chunk_count = int((os.environ.get("SWARM_WORKSPACE_DIFF_CHUNK_COUNT") or "0").strip() or "0")
+          if inline_payload:
+              gzip_base64 = inline_payload
+              transfer_mode = "inline_git_patch"
+          else:
+              chunks = []
+              for index in range(1, chunk_count + 1):
+                  env_key = f"SWARM_WORKSPACE_DIFF_GZIP_BASE64_CHUNK_{index:02d}"
+                  chunk = os.environ.get(env_key, "")
+                  if not chunk:
+                      raise SystemExit(f"missing workspace diff chunk: {env_key}")
+                  chunks.append(chunk)
+              gzip_base64 = "".join(chunks)
+              transfer_mode = "chunked_inline_git_patch"
+
+          patch_payload = gzip.decompress(base64.b64decode(gzip_base64))
+          actual_sha256 = hashlib.sha256(patch_payload).hexdigest()
+          expected_sha256 = os.environ.get("SWARM_WORKSPACE_DIFF_SHA256", "")
+          if expected_sha256 and actual_sha256 != expected_sha256:
+              raise SystemExit(f"workspace diff sha256 mismatch: {actual_sha256} != {expected_sha256}")
+
+          patch_path = root / "workspace-diff.patch"
+          patch_path.write_bytes(patch_payload)
+          (root / "workspace-transfer.json").write_text(
+              json.dumps(
+                  {
+                      "mode": transfer_mode,
+                      "applied": False,
+                      "sha256": actual_sha256,
+                      "path": "workspace-diff.patch",
+                      "chunk_count": chunk_count,
+                  },
+                  ensure_ascii=False,
+                  indent=2,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+          PY
+          git apply --binary --allow-empty .swarm-sandbox/workspace-diff.patch
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path(".swarm-sandbox/workspace-transfer.json")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          payload["applied"] = True
+          path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Execute sandbox commands
+        shell: bash
+        env:
+          SWARM_COMMANDS_JSON: ${{ inputs.commands_json }}
+          SWARM_TIMEOUT_SECONDS: ${{ inputs.requested_timeout_seconds }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          root = Path(".swarm-sandbox")
+          logs_dir = root / "logs"
+          logs_dir.mkdir(parents=True, exist_ok=True)
+
+          commands = json.loads(os.environ.get("SWARM_COMMANDS_JSON") or "[]")
+          timeout_seconds = int(float(os.environ.get("SWARM_TIMEOUT_SECONDS") or "900"))
+          command_results = []
+
+          for item in commands:
+              command_id = str(item.get("id", "command"))
+              command_text = str(item.get("command", "")).strip()
+              log_path = logs_dir / f"{command_id}.log"
+              timed_out = False
+              try:
+                  process = subprocess.run(
+                      ["bash", "-lc", command_text],
+                      text=True,
+                      capture_output=True,
+                      encoding="utf-8",
+                      errors="replace",
+                      check=False,
+                      timeout=timeout_seconds,
+                  )
+                  status = "passed" if process.returncode == 0 else "failed"
+                  stdout = process.stdout
+                  stderr = process.stderr
+                  exit_code = process.returncode
+              except subprocess.TimeoutExpired as exc:
+                  timed_out = True
+                  status = "blocked"
+                  stdout = exc.stdout or ""
+                  stderr = (exc.stderr or "") + f"\ncommand timed out after {timeout_seconds}s"
+                  exit_code = None
+
+              log_path.write_text(
+                  f"$ {command_text}\n\nstdout:\n{stdout}\n\nstderr:\n{stderr}\n",
+                  encoding="utf-8",
+              )
+              command_results.append(
+                  {
+                      "id": command_id,
+                      "command": command_text,
+                      "status": status,
+                      "exit_code": exit_code,
+                      "stdout": stdout,
+                      "stderr": stderr,
+                      "log_path": f"logs/{command_id}.log",
+                      "timed_out": timed_out,
+                  },
+              )
+
+          by_status = {}
+          for result in command_results:
+              status = result.get("status", "unknown")
+              by_status[status] = by_status.get(status, 0) + 1
+
+          statuses = {item.get("status") for item in command_results}
+          conclusion = "skipped"
+          summary = "Sandbox workflow generated a preview without commands."
+          if "failed" in statuses:
+              conclusion = "failed"
+              summary = "GitHub Actions sandbox recorded command failures."
+          elif "blocked" in statuses:
+              conclusion = "blocked"
+              summary = "GitHub Actions sandbox was blocked during command execution."
+          elif statuses == {"passed"}:
+              conclusion = "passed"
+              summary = "GitHub Actions sandbox execution completed."
+          elif "passed" in statuses and "skipped" in statuses:
+              conclusion = "partial"
+              summary = "GitHub Actions sandbox executed commands partially."
+          elif statuses == {"skipped"}:
+              conclusion = "skipped"
+              summary = "GitHub Actions sandbox skipped all commands."
+
+          payload = {
+              "adapter_id": "github_actions",
+              "environment": "github_actions",
+              "conclusion": conclusion,
+              "summary": summary,
+              "blocked_reason": "" if conclusion != "blocked" else "github_actions_workflow_run_incomplete",
+              "command_results": command_results,
+              "command_summary": {
+                  "total_commands": len(command_results),
+                  "by_status": by_status,
+              },
+              "artifacts": [
+                  {
+                      "type": "sandbox_metadata",
+                      "path": "sandbox-metadata.json",
+                  }
+              ],
+          }
+          transfer_path = root / "workspace-transfer.json"
+          if transfer_path.is_file():
+              payload["artifacts"].append(
+                  {
+                      "type": "workspace_transfer",
+                      "path": "workspace-transfer.json",
+                  }
+              )
+          (root / "sandbox-result.json").write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload sandbox artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          if-no-files-found: error
+          path: .swarm-sandbox/
+
+      - name: Enforce sandbox outcome
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          payload = json.loads(Path(".swarm-sandbox/sandbox-result.json").read_text(encoding="utf-8"))
+          if payload.get("conclusion") in {"failed", "blocked"}:
+              sys.exit(1)
+          sys.exit(0)
+          PY

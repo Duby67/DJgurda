@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 
@@ -12,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from scripts.agents.knowledge import get_verification_profile
 from .apply import (
     REQUEST_APPROVAL_STEP_ID,
     REVIEW_STEP_ID,
@@ -150,6 +152,22 @@ def read_log_paths(args: argparse.Namespace) -> list[Path]:
     return paths
 
 
+def read_commands(args: argparse.Namespace) -> list[str]:
+    """Reads executed verification commands."""
+    commands: list[str] = []
+    if args.command:
+        commands.extend(item.strip() for item in args.command if item.strip())
+    if args.commands_file:
+        raw_lines = Path(args.commands_file).read_text(encoding="utf-8").splitlines()
+        commands.extend(line.strip() for line in raw_lines if line.strip())
+    return commands
+
+
+def normalize_command_for_policy(command: str) -> str:
+    """Normalizes a command string for policy matching."""
+    return re.sub(r"\s+", " ", command.strip().replace("\\", "/")).casefold()
+
+
 def step_exists(plan_payload: dict[str, Any], step_id: str) -> bool:
     """Проверяет наличие шага в plan.json."""
     return any(step.get("id") == step_id for step in plan_payload.get("plan", []))
@@ -176,6 +194,74 @@ def ensure_verify_allowed(run_summary: dict[str, Any], plan_payload: dict[str, A
         and run_summary.get("next_action") not in allowed_next_actions
     ):
         raise ValueError("Verification-stage можно запускать только после apply-stage")
+
+
+def validate_against_profile(
+    *,
+    task_type_id: str,
+    conclusion: str,
+    checks: list[dict[str, str]],
+    commands: list[str],
+) -> dict[str, Any]:
+    """Validates checks and commands against a verification profile."""
+    try:
+        profile = get_verification_profile(task_type_id)
+    except KeyError as exc:
+        raise ValueError(str(exc)) from exc
+    required_check_ids = set(profile.get("required_checks", []))
+    allowed_check_ids = required_check_ids | set(profile.get("optional_checks", []))
+    check_statuses = {check["id"]: check["status"] for check in checks}
+    for check in checks:
+        if allowed_check_ids and check["id"] not in allowed_check_ids:
+            raise ValueError(
+                f"Check '{check['id']}' не входит в verification profile '{profile['profile_id']}'",
+            )
+
+    allowed_commands = [normalize_command_for_policy(item) for item in profile.get("allowed_commands", [])]
+    for command in commands:
+        normalized_command = normalize_command_for_policy(command)
+        if allowed_commands and not any(normalized_command.startswith(prefix) for prefix in allowed_commands):
+            raise ValueError(
+                f"Команда '{command}' не разрешена verification profile '{profile['profile_id']}'",
+            )
+
+    missing_required = sorted(required_check_ids - set(check_statuses))
+    failed_checks = sorted(check_id for check_id, status in check_statuses.items() if status == "failed")
+    blocked_checks = sorted(check_id for check_id, status in check_statuses.items() if status == "blocked")
+    skipped_checks = sorted(check_id for check_id, status in check_statuses.items() if status == "skipped")
+    incomplete_required = sorted(
+        check_id
+        for check_id in required_check_ids
+        if check_statuses.get(check_id) != "passed"
+    )
+
+    if conclusion == "passed":
+        if missing_required:
+            raise ValueError(
+                f"Отсутствуют required checks для verification profile '{profile['profile_id']}': {missing_required}",
+            )
+        if failed_checks or blocked_checks:
+            raise ValueError("Нельзя фиксировать conclusion='passed' при failed/blocked checks")
+        if incomplete_required:
+            raise ValueError(
+                f"Все required checks должны иметь status='passed' для profile '{profile['profile_id']}'",
+            )
+    elif conclusion == "failed":
+        if not failed_checks:
+            raise ValueError("Conclusion 'failed' требует хотя бы один failed check")
+    elif conclusion == "blocked":
+        if not blocked_checks:
+            raise ValueError("Conclusion 'blocked' требует хотя бы один blocked check")
+    elif conclusion == "partial":
+        if failed_checks or blocked_checks:
+            raise ValueError("Conclusion 'partial' не должен использоваться для failed/blocked checks")
+        if required_check_ids and not incomplete_required and not skipped_checks:
+            raise ValueError("Conclusion 'partial' ожидает неполный набор required checks или skipped checks")
+    elif conclusion == "skipped":
+        if any(status != "skipped" for status in check_statuses.values()):
+            raise ValueError("Conclusion 'skipped' требует status='skipped' для всех checks")
+
+    return profile
 
 
 def copy_logs_to_run_dir(run_dir: Path, log_paths: list[Path]) -> list[dict[str, str]]:
@@ -278,7 +364,9 @@ def build_verification_result(
     summary_text: str,
     verified_by: str,
     checks: list[dict[str, str]],
+    commands: list[str],
     copied_logs: list[dict[str, str]],
+    verification_profile: dict[str, Any],
 ) -> dict[str, Any]:
     """Строит verification-result.json."""
     return {
@@ -289,8 +377,10 @@ def build_verification_result(
         "conclusion": conclusion,
         "summary": summary_text,
         "checks": checks,
+        "commands": commands,
         "check_summary": summarize_checks(checks),
         "logs": copied_logs,
+        "verification_profile": verification_profile,
     }
 
 
@@ -327,6 +417,7 @@ def build_output(
     summary_text: str,
     verified_by: str,
     checks: list[dict[str, str]],
+    commands: list[str],
     log_paths: list[Path],
 ) -> dict[str, Any]:
     """Фиксирует verification-stage и обновляет run bundle."""
@@ -334,6 +425,7 @@ def build_output(
     plan_path = run_dir / "plan.json"
     execution_state_path = run_dir / "execution-state.json"
     verification_result_path = run_dir / "verification-result.json"
+    test_report_path = run_dir / "test-report.json"
 
     if not summary_path.is_file():
         raise FileNotFoundError(f"Не найден файл: {summary_path}")
@@ -345,6 +437,12 @@ def build_output(
     execution_state = load_json(execution_state_path) if execution_state_path.is_file() else None
 
     ensure_verify_allowed(run_summary, plan_payload)
+    verification_profile = validate_against_profile(
+        task_type_id=run_summary.get("task_type", {}).get("id", ""),
+        conclusion=conclusion,
+        checks=checks,
+        commands=commands,
+    )
     copied_logs = copy_logs_to_run_dir(run_dir, log_paths)
     verification_result = build_verification_result(
         run_summary=run_summary,
@@ -352,7 +450,9 @@ def build_output(
         summary_text=summary_text,
         verified_by=verified_by,
         checks=checks,
+        commands=commands,
         copied_logs=copied_logs,
+        verification_profile=verification_profile,
     )
 
     updated_plan = update_plan_for_verification(plan_payload, conclusion)
@@ -366,6 +466,7 @@ def build_output(
 
     artifacts = run_summary.setdefault("artifacts", {})
     artifacts["verification_result"] = str(verification_result_path.relative_to(ROOT)).replace("\\", "/")
+    artifacts["test_report"] = str(test_report_path.relative_to(ROOT)).replace("\\", "/")
 
     run_summary["status"] = status
     run_summary["next_action"] = next_action
@@ -376,9 +477,11 @@ def build_output(
         "summary": summary_text,
         "check_summary": verification_result["check_summary"],
         "log_count": len(copied_logs),
+        "profile_id": verification_profile["profile_id"],
     }
 
     write_json(verification_result_path, verification_result)
+    write_json(test_report_path, verification_result)
     write_json(plan_path, updated_plan)
     if updated_execution_state is not None:
         write_json(execution_state_path, updated_execution_state)
@@ -394,6 +497,7 @@ def build_output(
         "log_count": len(copied_logs),
         "artifacts": {
             "verification_result": artifacts["verification_result"],
+            "test_report": artifacts["test_report"],
         },
     }
 
@@ -408,7 +512,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--runs-dir",
         default=str(DEFAULT_RUNS_DIR.relative_to(ROOT)).replace("\\", "/"),
-        help="Базовая директория запусков (по умолчанию: local/runs).",
+        help="Базовая директория запусков (по умолчанию: runs).",
     )
     parser.add_argument(
         "--conclusion",
@@ -425,6 +529,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--summary", default="", help="Короткое описание результатов проверки.")
     parser.add_argument("--summary-file", help="Путь к файлу с описанием verification-stage.")
     parser.add_argument("--verified-by", default="tester", help="Кто зафиксировал verification-stage.")
+    parser.add_argument(
+        "--command",
+        action="append",
+        help="Команда проверки, выполненная в рамках verification-stage. Можно передавать несколько раз.",
+    )
+    parser.add_argument("--commands-file", help="Путь к файлу со списком verification-команд, по одной на строку.")
     parser.add_argument(
         "--log-file",
         action="append",
@@ -450,6 +560,7 @@ def main() -> int:
             summary_text=read_summary(args),
             verified_by=args.verified_by.strip() or "tester",
             checks=read_checks(args),
+            commands=read_commands(args),
             log_paths=read_log_paths(args),
         )
     except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
