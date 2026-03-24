@@ -8,22 +8,24 @@
 
 1. Telegram update попадает в `src/bot/`.
 2. Извлечение ссылок и routing происходят в `src/bot/processing/`.
-3. `resolve_url` нормализует или unwrap-ит входящий URL.
-4. `ServiceManager` выбирает source handler.
-5. Handler производит typed `MediaResult`.
+3. `media_router` делает preflight: вызывает `resolve_url`, затем ищет handler сначала по raw URL, затем по resolved URL.
+4. `ServiceManager` делает lookup по уже materialized runtime entries из `HandlerRegistry`.
+5. `process_block` запускает handler и нормализует typed `MediaResult`.
 6. Sender logic превращает этот результат в Telegram API calls.
 7. Статистика и настройки чата сохраняются через DB layer.
 
 ## Boundaries
 
 - `src/bot/` владеет orchestration и Telegram-facing behavior.
-- `src/handlers/` владеет source-specific extraction и transformation.
+- `src/handlers/` владеет runtime catalog, lookup layer и source-specific extraction/transformation.
 - `src/middlewares/db/` владеет persistence concerns.
 - `src/utils/` владеет shared helper logic, а не бизнес-оркестрацией.
 
 ## Stable Contracts
 
-- `ServiceManager` должен возвращать handler, который производит `MediaResult` для активного runtime flow.
+- `HandlerRegistry` является source of truth для active runtime composition: sources, priorities, factories и non-runtime exclusions.
+- `ServiceManager` остается thin lookup-wrapper над runtime entries и не владеет execution orchestration.
+- `media_router` владеет preflight policy вокруг raw/resolved URL и передачей выбранного handler-а в `process_block`.
 - Выбор sender-а должен определяться content type, а не source-specific branching.
 - Состояние включения/выключения бота должно проверяться middleware до основной обработки сообщений.
 

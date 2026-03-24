@@ -6,8 +6,6 @@
 
 ## Current Plans
 
-- `docs/exec-plans/active/runtime-ownership-of-service-manager.md`
-  - medium-priority task по consolidation runtime ownership вокруг `ServiceManager`.
 - `docs/exec-plans/active/external-dependency-resilience.md`
   - medium-priority task по per-source resilience signals, timeout/retry posture и degrade semantics.
 - `docs/exec-plans/active/codex-and-swarm-contour-ergonomics.md`

@@ -20,7 +20,7 @@ Application runtime живет в `src/`.
 
 Основной пользовательский поток:
 
-`Telegram update -> router -> media_router -> resolve_url -> ServiceManager -> handler.process() -> MediaResult -> sender registry -> Telegram API`
+`Telegram update -> router -> media_router preflight -> ServiceManager lookup over HandlerRegistry entries -> process_block -> handler.process() -> MediaResult -> sender registry -> Telegram API`
 
 Основные области:
 

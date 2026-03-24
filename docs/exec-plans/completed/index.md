@@ -10,6 +10,8 @@
 
 ## Current Summaries
 
+- `docs/exec-plans/completed/runtime-ownership-of-service-manager.md`
+  - summary по консолидации handler lookup ownership и выравниванию runtime boundary wording.
 - `docs/exec-plans/completed/chat-settings-read-amplification.md`
   - summary по bounded per-update cache для chat settings reads и write-through invalidation.
 - `docs/exec-plans/completed/url-extraction-and-routing-robustness.md`

@@ -84,9 +84,7 @@ async def _prepare_block(
             )
             resolved_url = raw_url
 
-    handler = manager.get_handler(raw_url)
-    if not handler:
-        handler = manager.get_handler(resolved_url)
+    handler = manager.resolve_handler(raw_url, resolved_url)
 
     return PreparedBlock(
         idx=idx,
