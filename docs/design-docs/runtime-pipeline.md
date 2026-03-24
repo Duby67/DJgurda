@@ -9,7 +9,7 @@
 1. Telegram update попадает в `src/bot/`.
 2. Извлечение ссылок и routing происходят в `src/bot/processing/`.
 3. `resolve_url` нормализует или unwrap-ит входящий URL.
-4. `HandlerRegistry` и `ServiceManager` выбирают source handler.
+4. `ServiceManager` выбирает source handler.
 5. Handler производит typed `MediaResult`.
 6. Sender logic превращает этот результат в Telegram API calls.
 7. Статистика и настройки чата сохраняются через DB layer.
@@ -23,7 +23,7 @@
 
 ## Stable Contracts
 
-- `handler.process()` должен производить `MediaResult` для активного runtime flow.
+- `ServiceManager` должен возвращать handler, который производит `MediaResult` для активного runtime flow.
 - Выбор sender-а должен определяться content type, а не source-specific branching.
 - Состояние включения/выключения бота должно проверяться middleware до основной обработки сообщений.
 

@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from src.config import ADMIN_ID, MAX_AGE_SECONDS
 from src.handlers.manager import get_active_handler_names
 from src.middlewares.db import get_chats_with_notifications_enabled, init_db
+from src.middlewares.db.processing.bot_settings_processor import SettingsReadError
 from src.utils.Emoji import EMOJI_SUCCESS
 from src.utils.runtime_storage import cleanup_expired_temp_files, ensure_runtime_storage
 
@@ -39,7 +40,14 @@ async def on_startup(bot: Bot) -> None:
             logger.error("Failed to send startup notification to admin: %s", exc)
 
         # Рассылка уведомлений
-        chats = await get_chats_with_notifications_enabled()
+        try:
+            chats = await get_chats_with_notifications_enabled()
+        except SettingsReadError:
+            logger.warning(
+                "Notification settings unavailable during startup; sending admin-only notification",
+                exc_info=True,
+            )
+            chats = []
         for chat_id in chats:
             if chat_id == ADMIN_ID:
                 continue

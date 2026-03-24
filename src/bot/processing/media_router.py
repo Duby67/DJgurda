@@ -9,6 +9,7 @@ from aiogram.types import Message, ReplyParameters
 
 from src.handlers.manager import ServiceManager, get_active_handler_names
 from src.middlewares.db import get_errors_enabled
+from src.middlewares.db.processing.bot_settings_processor import SettingsReadError
 from src.utils.url import resolve_url
 from src.utils.Emoji import EMOJI_ERROR
 
@@ -19,6 +20,19 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 service_manager: Optional[ServiceManager] = None
+
+
+async def _get_errors_enabled(chat_id: int) -> bool:
+    """Получает флаг ошибок, явно фиксируя деградацию чтения настроек."""
+    try:
+        return await get_errors_enabled(chat_id)
+    except SettingsReadError:
+        logger.warning(
+            "Error settings unavailable for chat %s; suppressing error reply",
+            chat_id,
+            exc_info=True,
+        )
+        return False
 
 
 class BlockOutcome(StrEnum):
@@ -71,7 +85,7 @@ async def handle_media_message(message: Message) -> None:
             handler = manager.get_handler(resolved_url)
         if not handler:
             logger.warning(f"No handler found for resolved URL: {resolved_url}")
-            if await get_errors_enabled(message.chat.id):
+            if await _get_errors_enabled(message.chat.id):
                 await message.answer(
                     (
                         f"{EMOJI_ERROR} Ссылка не обработана.\n"

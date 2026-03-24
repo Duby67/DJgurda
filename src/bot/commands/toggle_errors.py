@@ -6,6 +6,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 from src.middlewares.db import get_errors_enabled, set_errors_enabled
+from src.middlewares.db.processing.bot_settings_processor import SettingsReadError
 from src.utils.Emoji import EMOJI_SUCCESS, EMOJI_ERROR
 
 router = Router()
@@ -27,7 +28,16 @@ async def cmd_disable_errors(message: Message) -> None:
 @router.message(Command("toggle_errors"))
 async def cmd_toggle_errors(message: Message) -> None:
     """Функция `cmd_toggle_errors`."""
-    current = await get_errors_enabled(message.chat.id)
+    try:
+        current = await get_errors_enabled(message.chat.id)
+    except SettingsReadError:
+        logger.warning(
+            "Cannot toggle errors state for chat %s because settings could not be read",
+            message.chat.id,
+            exc_info=True,
+        )
+        await message.reply(f"{EMOJI_ERROR} Не удалось прочитать текущее состояние ошибок. Попробуйте позже.")
+        return
     new_state = not current
     await _change_errors_enabled(message, "toggle_errors", new_state)
 

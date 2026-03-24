@@ -14,6 +14,15 @@ from src.middlewares.db.models.bot_settings import BotSettings
 logger = logging.getLogger(__name__)
 
 
+class SettingsReadError(RuntimeError):
+    """Ошибка чтения settings из БД."""
+
+    def __init__(self, message: str, *, chat_id: int | None = None, column: str | None = None) -> None:
+        super().__init__(message)
+        self.chat_id = chat_id
+        self.column = column
+
+
 async def _get_setting(chat_id: int, column: str, default: bool) -> bool:
     """
     Получает значение настройки для чата.
@@ -25,6 +34,9 @@ async def _get_setting(chat_id: int, column: str, default: bool) -> bool:
         
     Возвращает:
         Значение настройки или значение по умолчанию
+
+    Raises:
+        SettingsReadError: если БД недоступна или чтение settings сломалось.
     """
     try:
         async with AsyncSessionLocal() as session:
@@ -33,9 +45,13 @@ async def _get_setting(chat_id: int, column: str, default: bool) -> bool:
                 logger.debug(f"{column} for chat {chat_id}: record not found")
                 return default
             return getattr(settings, column)
-    except Exception:
+    except Exception as exc:
         logger.exception(f"Error in _get_setting({column}) for chat {chat_id}")
-        return default
+        raise SettingsReadError(
+            f"Failed to read {column} for chat {chat_id}",
+            chat_id=chat_id,
+            column=column,
+        ) from exc
 
 
 async def _set_setting(chat_id: int, column: str, value: bool) -> None:
@@ -73,6 +89,9 @@ async def get_chats_with_notifications_enabled() -> list[int]:
     
     Возвращает:
         Список ID чатов с уведомлениями
+
+    Raises:
+        SettingsReadError: если список чатов не удалось прочитать из БД.
     """
     try:
         async with AsyncSessionLocal() as session:
@@ -80,9 +99,12 @@ async def get_chats_with_notifications_enabled() -> list[int]:
                 select(BotSettings.chat_id).where(BotSettings.notifications_enabled.is_(True))
             )
             return [row[0] for row in result.all()]
-    except Exception:
+    except Exception as exc:
         logger.exception("Failed to get list of chats with notifications")
-        return []
+        raise SettingsReadError(
+            "Failed to get list of chats with notifications",
+            column="notifications_enabled",
+        ) from exc
 
 
 # Функции для управления состоянием бота

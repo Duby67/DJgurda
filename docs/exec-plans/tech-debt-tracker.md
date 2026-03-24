@@ -18,6 +18,10 @@
   - Telegram send failures даже при корректном результате обработки.
 - Main Area:
   - `src/utils/messages.py`
+- Active Task:
+  - `docs/exec-plans/active/html-safe-captions.md`
+- Current Assessment:
+  - подтверждено как актуальный defect на 2026-03-24.
 
 ### 2. DB Degradation Visibility
 
@@ -28,6 +32,10 @@
 - Main Areas:
   - `src/middlewares/bot_enabled.py`
   - `src/middlewares/db/processing/bot_settings_processor.py`
+- Active Task:
+  - `docs/exec-plans/active/db-degradation-visibility.md`
+- Current Assessment:
+  - подтверждено как актуальный predictability/degrade issue на 2026-03-24.
 
 ### 3. Atomic Stats Updates
 
@@ -38,6 +46,10 @@
 - Main Areas:
   - `src/middlewares/db/processing/stats_processor.py`
   - `src/middlewares/db/models/sources.py`
+- Active Task:
+  - `docs/exec-plans/active/atomic-stats-updates.md`
+- Current Assessment:
+  - подтверждено как актуальный concurrency issue на 2026-03-24.
 
 ### 4. Docs Cleanup After Typed-Runtime Transition
 
@@ -48,6 +60,10 @@
 - Main Areas:
   - tracked docs
   - отдельные code comments и docstrings
+- Active Task:
+  - `docs/exec-plans/active/docs-cleanup-after-typed-runtime-transition.md`
+- Current Assessment:
+  - подтверждено как актуальный, но уже более узкий cleanup-task на 2026-03-24.
 
 ## Medium Priority
 
