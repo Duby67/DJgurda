@@ -24,6 +24,7 @@
 ## Stable Contracts
 
 - `HandlerRegistry` является source of truth для active runtime composition: sources, priorities, factories и non-runtime exclusions.
+- `HandlerRegistry` также хранит per-source resilience posture для stable runtime: dependency surfaces, timeout/retry expectations и degrade signals.
 - `ServiceManager` остается thin lookup-wrapper над runtime entries и не владеет execution orchestration.
 - `media_router` владеет preflight policy вокруг raw/resolved URL и передачей выбранного handler-а в `process_block`.
 - Выбор sender-а должен определяться content type, а не source-specific branching.
