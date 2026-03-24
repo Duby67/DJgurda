@@ -31,7 +31,7 @@
 - `README.md` можно читать как human-facing обзор, но не как source of truth для агента;
 - swarm-задачи должны быстро переходить в `scripts/AGENTS.md`, `docs/swarm-runtime.md` и `docs/swarm-usage.md`;
 - bot runtime-задачи должны быстро переходить в `src/` и профильные product/design docs;
-- `local/` не использовать как основной источник истины без явного запроса пользователя.
+- untracked legacy/archive материалы не использовать как основной источник истины без явного запроса пользователя.
 
 ## Task Routing
 
@@ -212,7 +212,7 @@
 - весь `src/`;
 - весь `scripts/`;
 - весь `test/`;
-- архивы в `local/`;
+- untracked legacy/archive материалы;
 - unrelated source-папки внутри `src/handlers/resources/`.
 
 ## Default Escalation Cases

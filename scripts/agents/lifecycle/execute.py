@@ -296,9 +296,11 @@ def contains_any(text: str, patterns: tuple[str, ...]) -> bool:
     return any(pattern in text for pattern in patterns)
 
 
-def is_local_source_of_truth_conflict(line: str, *, has_negation: bool) -> bool:
-    """Detects permissive local/ source-of-truth statements."""
-    if "source of truth" not in line or "local/" not in line or has_negation:
+def is_legacy_source_of_truth_conflict(line: str, *, has_negation: bool) -> bool:
+    """Detects permissive legacy/archive source-of-truth statements."""
+    if "source of truth" not in line or has_negation:
+        return False
+    if not any(marker in line for marker in ("legacy", "archive", "архив", "устарев")):
         return False
     return contains_any(
         line,
@@ -358,11 +360,11 @@ def detect_loaded_policy_conflicts(documents: list[dict[str, str]]) -> list[dict
         for line in document["text"].splitlines():
             normalized = line.casefold()
             has_negation = line_contains_negation(line)
-            if is_local_source_of_truth_conflict(normalized, has_negation=has_negation):
+            if is_legacy_source_of_truth_conflict(normalized, has_negation=has_negation):
                 conflicts.append(
                     {
                         "path": document["path"],
-                        "reason": "local_marked_as_source_of_truth",
+                        "reason": "legacy_marked_as_source_of_truth",
                     }
                 )
             if is_tests_source_of_truth_conflict(normalized, has_negation=has_negation):

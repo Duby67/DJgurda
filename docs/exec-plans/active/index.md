@@ -6,5 +6,5 @@
 
 ## Current Plans
 
-- `docs/exec-plans/active/agent-first-docs-migration.md`
-  - миграция от mixed legacy context docs к agent-first структуре репозитория.
+Сейчас отдельных active implementation plans в tracked docs нет.
+Открытые workstreams и приоритеты ведутся через `docs/exec-plans/tech-debt-tracker.md`.

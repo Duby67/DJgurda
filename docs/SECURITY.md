@@ -7,7 +7,7 @@
 ## Secret Rules
 
 - Секреты не должны попадать в tracked-файлы.
-- `local/` может содержать чувствительные или устаревшие материалы и не является tracked policy source.
+- Untracked legacy/archive материалы могут содержать чувствительные или устаревшие данные и не являются tracked policy source.
 - Deploy-side materialization секретов должна быть отделена от tracked source files.
 - Cookie-файлы - это operational artifacts, а не knowledge-documents репозитория.
 

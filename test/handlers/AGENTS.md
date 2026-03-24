@@ -10,7 +10,7 @@
 
 - source-level local smoke scripts;
 - source-specific helper/unit tests;
-- общие helper-утилиты вроде `_local_cookie_setup.py` и cleanup checks.
+- общие helper-утилиты вроде `_cookie_setup.py` и cleanup checks.
 
 ## Read First
 
@@ -25,7 +25,7 @@
 
 - Одна source-папка должна оставаться самодостаточной для своих smoke paths.
 - `*_urls.py` является местом для набора тестовых ссылок и ожидаемых типов.
-- `_local_cookie_setup.py` влияет сразу на несколько smoke flows и считается shared high-risk helper.
+- `_cookie_setup.py` влияет сразу на несколько smoke flows и считается shared high-risk helper.
 - Cleanup helpers должны продолжать удалять временные runtime-файлы после прогонов.
 
 ## Change Rules

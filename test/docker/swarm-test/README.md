@@ -20,7 +20,7 @@ docker build -f test/docker/swarm-test/Dockerfile -t djgurda-swarm-test:latest .
 
 Для этого рядом лежит отдельный `Dockerfile.dockerignore`, который:
 
-- вырезает `runs/`, `local/`, `venv/`, `.git/` и другие локальные артефакты;
+- вырезает `runs/`, `venv/`, `.git/` и другие локальные артефакты;
 - не тащит deploy-only слой из `deploy/`;
 - оставляет только то, что нужно для swarm test image.
 

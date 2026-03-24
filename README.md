@@ -50,8 +50,7 @@ DJgurda Bot - асинхронный Telegram-бот для обработки �
 - `scripts/agents/` - swarm runtime, orchestration, dispatcher, supervisor и sandbox adapters;
 - `runs/` - run artifacts swarm-контура;
 - `docs/` - поддерживаемая проектная документация;
-- `test/` - локальные smoke-проверки и тестовые материалы;
-- `local/` - локальные и архивные рабочие заметки, не являющиеся канонической документацией проекта.
+- `test/` - локальные smoke-проверки и тестовые материалы.
 
 Ключевые части кода:
 
@@ -137,9 +136,8 @@ python -m src.main
 
 Общая схема такая:
 
-- `local/cookies` - локальные оригиналы для ручных проверок и smoke-сценариев;
-- `src/data/cookies` - runtime-копии, с которыми работает приложение;
-- `deploy/cookies` - deploy-источник, который материализуется из секретов или локальных файлов.
+- `deploy/cookies` - staging-источник для ручных проверок, локальной подготовки и deploy materialization;
+- `src/data/cookies` - runtime-копии, с которыми работает приложение.
 
 Контейнерная boundary тоже разделена:
 

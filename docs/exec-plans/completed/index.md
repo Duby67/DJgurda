@@ -10,5 +10,7 @@
 
 ## Current Summaries
 
+- `docs/exec-plans/completed/agent-first-docs-migration.md`
+  - summary по переходу от mixed legacy context docs к agent-first структуре репозитория.
 - `docs/exec-plans/completed/runtime-modernization-summary.md`
   - короткое историческое summary по typed runtime и cleanup статусов источников.

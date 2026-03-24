@@ -8,7 +8,6 @@
 
 - Runtime database и cookies монтируются в контейнер.
 - Runtime temp files живут внутри контейнера под `src/data/runtime`.
-- `local/cookies` предназначен только для local smoke и ручных проверок.
 - `deploy/cookies` служит deploy-side materialization area и не должен хранить tracked secrets.
 - В tracked-слое `deploy/cookies` должны оставаться только placeholder docs вроде `README.md` и `AGENTS.md`.
 - Runtime должен сам создавать и очищать temp storage.

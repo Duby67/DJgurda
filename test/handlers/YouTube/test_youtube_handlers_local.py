@@ -25,9 +25,9 @@ HANDLERS_TEST_ROOT = PROJECT_ROOT / "test" / "handlers"
 if str(HANDLERS_TEST_ROOT) not in sys.path:
     sys.path.insert(0, str(HANDLERS_TEST_ROOT))
 
-from _local_cookie_setup import prepare_local_cookies
+from _cookie_setup import prepare_test_cookies
 
-prepare_local_cookies(PROJECT_ROOT)
+prepare_test_cookies(PROJECT_ROOT)
 
 # Фиктивные значения для локального прогона теста.
 os.environ.setdefault("BOT_DB_PATH", str(PROJECT_ROOT / "src" / "data" / "db" / "bot.db"))

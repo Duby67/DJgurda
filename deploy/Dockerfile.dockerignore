@@ -22,7 +22,6 @@ env/
 # Тесты, документация и локальные материалы не должны попадать в runtime-образ.
 test/
 docs/
-local/
 README.md
 ARCHITECTURE.md
 

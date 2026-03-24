@@ -107,5 +107,5 @@
 
 ## Archived Source Notes
 
-- Более глубокие исторические backlog- и migration-notes теперь лежат в `local/legacy-docs/` и `local/REFACTORING.md`.
-- Эти файлы являются archive input, а не основным tracked backlog.
+- Более глубокие исторические backlog- и migration-notes, если они сохраняются локально, должны оставаться вне tracked-слоя.
+- Эти материалы являются archive input, а не основным tracked backlog.
