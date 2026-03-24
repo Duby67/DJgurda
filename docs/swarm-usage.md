@@ -14,10 +14,11 @@
 - локальные `pytest`, smoke-checks и verification-команды нельзя запускать вне проектного `venv`
 
 Для VS Code в репозитории рекомендован tracked workspace-файл [.vscode/settings.json](/c:/Work/djgurda/.vscode/settings.json).
-Он фиксирует `venv\Scripts\python.exe` как repo-default interpreter и открывает терминал с активацией `venv` через `activate.bat`, что особенно полезно на Windows-хостах с ограниченным PowerShell `ExecutionPolicy`.
+Он фиксирует `${workspaceFolder}\venv\Scripts\python.exe` как repo-default interpreter и открывает терминал с активацией `venv` через `activate.bat`, что особенно полезно на Windows-хостах с ограниченным PowerShell `ExecutionPolicy`.
 
-Важно: `python.defaultInterpreterPath` в VS Code работает как начальный default для workspace, и в tracked настройке задан относительным путем без `${workspaceFolder}`, чтобы не появлялось предупреждение про unresolved variables.
-Если редактор уже сохранил другой interpreter selection, нужно вручную переуказать интерпретатор на `.\venv\Scripts\python.exe`.
+Важно: tracked `tasks.json` теперь использует `${config:python.defaultInterpreterPath}`, поэтому swarm tasks берут тот же interpreter path, что и активный workspace setting.
+Для isolated `runs/<run-id>/workspace` materialization автоматически переписывает `.vscode/settings.json` на абсолютный путь к корневому `venv`, чтобы в VS Code не появлялось предупреждение про missing local interpreter внутри run workspace.
+Если редактор уже сохранил другой interpreter selection, нужно вручную переуказать интерпретатор на `.\venv\Scripts\python.exe` в корне репозитория.
 
 Swarm run bundles и lifecycle artifacts сохраняются в корневую папку `runs/`.
 
