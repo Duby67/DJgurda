@@ -16,7 +16,7 @@
 Для VS Code в репозитории рекомендован tracked workspace-файл [.vscode/settings.json](/c:/Work/djgurda/.vscode/settings.json).
 Он фиксирует `venv\Scripts\python.exe` как repo-default interpreter и открывает терминал с активацией `venv` через `activate.bat`, что особенно полезно на Windows-хостах с ограниченным PowerShell `ExecutionPolicy`.
 
-Важно: `python.defaultInterpreterPath` в VS Code работает как начальный default для workspace.
+Важно: `python.defaultInterpreterPath` в VS Code работает как начальный default для workspace, и в tracked настройке задан относительным путем без `${workspaceFolder}`, чтобы не появлялось предупреждение про unresolved variables.
 Если редактор уже сохранил другой interpreter selection, нужно вручную переуказать интерпретатор на `.\venv\Scripts\python.exe`.
 
 Swarm run bundles и lifecycle artifacts сохраняются в корневую папку `runs/`.

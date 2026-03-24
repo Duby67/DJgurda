@@ -127,7 +127,7 @@ python -m src.main
 - открывает встроенный терминал VS Code с уже активированным `venv` через `activate.bat`;
 - согласован с `.vscode/tasks.json`, который тоже ожидает проектный `venv/`.
 
-Сообщение VS Code про `python.defaultInterpreterPath` является информационным.
+`python.defaultInterpreterPath` в tracked workspace-настройке задан относительным путем, чтобы VS Code не показывал предупреждение про unresolved variables.
 Эта настройка используется как default только при первом выборе интерпретатора для workspace.
 Если VS Code уже запомнил другой Python для этого репозитория, нужно один раз выполнить `Python: Select Interpreter` и выбрать `.\venv\Scripts\python.exe`.
 
