@@ -5,6 +5,9 @@
 """
 
 import logging
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, replace
 
 from sqlalchemy import select
 
@@ -14,6 +17,21 @@ from src.middlewares.db.models.bot_settings import BotSettings
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class ChatSettingsSnapshot:
+    """Снимок настроек чата для bounded per-update cache."""
+
+    bot_enabled: bool = True
+    errors_enabled: bool = False
+    notifications_enabled: bool = False
+
+
+_SETTINGS_CACHE: ContextVar[dict[int, ChatSettingsSnapshot] | None] = ContextVar(
+    "bot_settings_cache",
+    default=None,
+)
+
+
 class SettingsReadError(RuntimeError):
     """Ошибка чтения settings из БД."""
 
@@ -21,6 +39,86 @@ class SettingsReadError(RuntimeError):
         super().__init__(message)
         self.chat_id = chat_id
         self.column = column
+
+
+def _build_snapshot(settings: BotSettings | None) -> ChatSettingsSnapshot:
+    """Нормализует ORM-запись в typed settings snapshot."""
+    if settings is None:
+        return ChatSettingsSnapshot()
+
+    return ChatSettingsSnapshot(
+        bot_enabled=settings.bot_enabled,
+        errors_enabled=settings.errors_enabled,
+        notifications_enabled=settings.notifications_enabled,
+    )
+
+
+def _get_cache_store() -> dict[int, ChatSettingsSnapshot] | None:
+    """Возвращает текущий scoped cache store, если он активен."""
+    return _SETTINGS_CACHE.get()
+
+
+def _get_cached_snapshot(chat_id: int) -> ChatSettingsSnapshot | None:
+    """Читает cached settings snapshot для чата из текущего scope."""
+    store = _get_cache_store()
+    if store is None:
+        return None
+    return store.get(chat_id)
+
+
+def _store_snapshot(chat_id: int, snapshot: ChatSettingsSnapshot) -> None:
+    """Сохраняет snapshot в текущий scoped cache."""
+    store = _get_cache_store()
+    if store is not None:
+        store[chat_id] = snapshot
+
+
+def _update_cached_snapshot(chat_id: int, column: str, value: bool) -> None:
+    """Обновляет cached snapshot после write в рамках текущего scope."""
+    store = _get_cache_store()
+    if store is None or chat_id not in store:
+        return
+    store[chat_id] = replace(store[chat_id], **{column: value})
+
+
+@asynccontextmanager
+async def settings_cache_scope():
+    """
+    Открывает bounded cache scope на время одного update flow.
+    """
+    existing_store = _get_cache_store()
+    if existing_store is not None:
+        yield existing_store
+        return
+
+    token = _SETTINGS_CACHE.set({})
+    try:
+        yield _SETTINGS_CACHE.get()
+    finally:
+        _SETTINGS_CACHE.reset(token)
+
+
+async def _get_settings_snapshot(chat_id: int, requested_column: str) -> ChatSettingsSnapshot:
+    """Читает все settings чата одним fetch и использует scoped cache, если он активен."""
+    cached = _get_cached_snapshot(chat_id)
+    if cached is not None:
+        return cached
+
+    try:
+        async with AsyncSessionLocal() as session:
+            settings = await session.get(BotSettings, chat_id)
+            snapshot = _build_snapshot(settings)
+            if settings is None:
+                logger.debug("settings snapshot for chat %s: record not found", chat_id)
+            _store_snapshot(chat_id, snapshot)
+            return snapshot
+    except Exception as exc:
+        logger.exception("Error in _get_settings_snapshot(%s) for chat %s", requested_column, chat_id)
+        raise SettingsReadError(
+            f"Failed to read {requested_column} for chat {chat_id}",
+            chat_id=chat_id,
+            column=requested_column,
+        ) from exc
 
 
 async def _get_setting(chat_id: int, column: str, default: bool) -> bool:
@@ -38,20 +136,8 @@ async def _get_setting(chat_id: int, column: str, default: bool) -> bool:
     Raises:
         SettingsReadError: если БД недоступна или чтение settings сломалось.
     """
-    try:
-        async with AsyncSessionLocal() as session:
-            settings = await session.get(BotSettings, chat_id)
-            if settings is None:
-                logger.debug(f"{column} for chat {chat_id}: record not found")
-                return default
-            return getattr(settings, column)
-    except Exception as exc:
-        logger.exception(f"Error in _get_setting({column}) for chat {chat_id}")
-        raise SettingsReadError(
-            f"Failed to read {column} for chat {chat_id}",
-            chat_id=chat_id,
-            column=column,
-        ) from exc
+    snapshot = await _get_settings_snapshot(chat_id, column)
+    return getattr(snapshot, column, default)
 
 
 async def _set_setting(chat_id: int, column: str, value: bool) -> None:
@@ -78,6 +164,7 @@ async def _set_setting(chat_id: int, column: str, value: bool) -> None:
                 else:
                     setattr(settings, column, value)
                     logger.info(f"Updated {column} for chat {chat_id}: {value}")
+        _update_cached_snapshot(chat_id, column, value)
     except Exception:
         logger.exception(f"Error in _set_setting({column}) for chat {chat_id}")
         raise

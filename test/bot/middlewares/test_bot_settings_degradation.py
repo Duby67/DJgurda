@@ -48,6 +48,47 @@ class FakeMessage:
         self.answers: list[str] = []
 
 
+class SessionContext:
+    """Минимальный async-session context для settings tests."""
+
+    def __init__(self, session: Any) -> None:
+        self.session = session
+
+    async def __aenter__(self) -> Any:
+        return self.session
+
+    async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
+        return False
+
+
+class BeginContext:
+    """Контекст для session.begin()."""
+
+    async def __aenter__(self) -> None:
+        return None
+
+    async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
+        return False
+
+
+class CountingSettingsSession:
+    """Фейковая session с подсчетом чтений BotSettings."""
+
+    def __init__(self) -> None:
+        self.get_calls: list[int] = []
+        self.settings_by_chat: dict[int, Any] = {}
+
+    async def get(self, _model: Any, chat_id: int) -> Any:
+        self.get_calls.append(chat_id)
+        return self.settings_by_chat.get(chat_id)
+
+    def begin(self) -> BeginContext:
+        return BeginContext()
+
+    def add(self, settings: Any) -> None:
+        self.settings_by_chat[settings.chat_id] = settings
+
+
 def test_get_bot_enabled_raises_settings_read_error_on_db_failure(monkeypatch: Any) -> None:
     """DB failures should surface as explicit settings read errors."""
 
@@ -81,3 +122,76 @@ def test_bot_enabled_middleware_allows_message_when_settings_unavailable(monkeyp
 
     assert called is True
     assert result == "handled"
+
+
+def test_settings_cache_scope_reuses_single_db_read_for_multiple_getters(monkeypatch: Any) -> None:
+    """Scoped cache должен схлопывать несколько getter-ов в один DB read."""
+
+    session = CountingSettingsSession()
+    session.settings_by_chat[123] = SimpleNamespace(
+        chat_id=123,
+        bot_enabled=True,
+        errors_enabled=False,
+        notifications_enabled=True,
+    )
+    monkeypatch.setattr(bot_settings_module, "AsyncSessionLocal", lambda: SessionContext(session))
+
+    async def scenario() -> None:
+        async with bot_settings_module.settings_cache_scope():
+            assert await bot_settings_module.get_bot_enabled(123) is True
+            assert await bot_settings_module.get_errors_enabled(123) is False
+            assert await bot_settings_module.get_notifications_enabled(123) is True
+
+    asyncio.run(scenario())
+
+    assert session.get_calls == [123]
+
+
+def test_bot_enabled_middleware_shares_settings_cache_with_handler(monkeypatch: Any) -> None:
+    """Middleware scope должен переиспользоваться внутри downstream handler flow."""
+
+    session = CountingSettingsSession()
+    session.settings_by_chat[123] = SimpleNamespace(
+        chat_id=123,
+        bot_enabled=True,
+        errors_enabled=True,
+        notifications_enabled=False,
+    )
+    monkeypatch.setattr(bot_settings_module, "AsyncSessionLocal", lambda: SessionContext(session))
+    monkeypatch.setattr(bot_enabled_middleware_module, "get_bot_enabled", bot_settings_module.get_bot_enabled)
+
+    async def handler(_event: Any, _data: dict[str, Any]) -> tuple[bool, bool]:
+        return (
+            await bot_settings_module.get_errors_enabled(123),
+            await bot_settings_module.get_notifications_enabled(123),
+        )
+
+    result = asyncio.run(
+        bot_enabled_middleware_module.BotEnabledMiddleware()(handler, FakeMessage(), {})
+    )
+
+    assert result == (True, False)
+    assert session.get_calls == [123]
+
+
+def test_set_setting_updates_cached_snapshot_inside_scope(monkeypatch: Any) -> None:
+    """Write-path должен обновлять scoped cache, а не оставлять stale read."""
+
+    session = CountingSettingsSession()
+    session.settings_by_chat[123] = SimpleNamespace(
+        chat_id=123,
+        bot_enabled=True,
+        errors_enabled=False,
+        notifications_enabled=False,
+    )
+    monkeypatch.setattr(bot_settings_module, "AsyncSessionLocal", lambda: SessionContext(session))
+
+    async def scenario() -> None:
+        async with bot_settings_module.settings_cache_scope():
+            assert await bot_settings_module.get_errors_enabled(123) is False
+            await bot_settings_module.set_errors_enabled(123, True)
+            assert await bot_settings_module.get_errors_enabled(123) is True
+
+    asyncio.run(scenario())
+
+    assert session.get_calls == [123, 123]

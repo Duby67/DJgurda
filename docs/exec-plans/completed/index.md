@@ -10,6 +10,8 @@
 
 ## Current Summaries
 
+- `docs/exec-plans/completed/chat-settings-read-amplification.md`
+  - summary по bounded per-update cache для chat settings reads и write-through invalidation.
 - `docs/exec-plans/completed/url-extraction-and-routing-robustness.md`
   - summary по URL punctuation hardening и bounded multi-link resolve preflight.
 - `docs/exec-plans/completed/agent-first-docs-migration.md`

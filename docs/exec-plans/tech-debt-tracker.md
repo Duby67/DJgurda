@@ -14,35 +14,28 @@
 
 ## Medium Priority
 
-### 1. Chat Settings Read Amplification
-
-- Текущий middleware flow слишком часто читает chat settings.
-- Нужны bounded cache и явная стратегия invalidation.
-- Active Task:
-  - `docs/exec-plans/active/chat-settings-read-amplification.md`
-
-### 2. Runtime Ownership Of Service Manager
+### 1. Runtime Ownership Of Service Manager
 
 - Убрать дублирование runtime ownership для `ServiceManager`.
 - Сдвинуться к одной application-level модели владения.
 - Active Task:
   - `docs/exec-plans/active/runtime-ownership-of-service-manager.md`
 
-### 3. External Dependency Resilience
+### 2. External Dependency Resilience
 
 - Добавить per-source metrics, более явные ожидания по timeout/retry и explicit degrade signals.
 - Держать `VK` отдельным R&D-треком, а не оформлять его как обычную stabilization-задачу.
 - Active Task:
   - `docs/exec-plans/active/external-dependency-resilience.md`
 
-### 4. CODEX And Swarm Contour Ergonomics
+### 3. CODEX And Swarm Contour Ergonomics
 
 - Улучшить взаимодействие `CODEX` со swarm-контуром.
 - Снизить число ручных швов между прямой работой агента в репозитории и repo-local swarm entrypoints.
 - Active Task:
   - `docs/exec-plans/active/codex-and-swarm-contour-ergonomics.md`
 
-### 5. Branch Promotion Reliability
+### 4. Branch Promotion Reliability
 
 - Пофиксить проблемы при повышении ветки.
 - Ужесточить predictability promotion flow для merge/push и связанных approval boundary.
@@ -66,12 +59,11 @@
 
 ## Next Iteration Order
 
-1. Cache для chat settings и снижение read amplification.
-2. Runtime ownership cleanup для `ServiceManager`.
-3. External dependency resilience и explicit operational signals.
-4. Улучшение связки `CODEX` <-> swarm contour и reliability promotion flow.
-5. Продолжение обкатки swarm-контура на `YouTube`.
-6. Helper deduplication и toggle-flow cleanup после более срочных runtime-задач.
+1. Runtime ownership cleanup для `ServiceManager`.
+2. External dependency resilience и explicit operational signals.
+3. Улучшение связки `CODEX` <-> swarm contour и reliability promotion flow.
+4. Продолжение обкатки swarm-контура на `YouTube`.
+5. Helper deduplication и toggle-flow cleanup после более срочных runtime-задач.
 
 ## Archived Source Notes
 
