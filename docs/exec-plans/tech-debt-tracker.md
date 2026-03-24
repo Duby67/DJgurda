@@ -10,116 +10,74 @@
 
 ## High Priority
 
-### 1. HTML-Safe Captions
+Сейчас отдельных open high-priority items в tracked backlog нет.
 
-- Problem:
-  - сборка caption все еще может давать невалидный HTML, если обрезка попадает внутрь разметки.
-- Impact:
-  - Telegram send failures даже при корректном результате обработки.
-- Main Area:
-  - `src/utils/messages.py`
-- Active Task:
-  - `docs/exec-plans/active/html-safe-captions.md`
-- Current Assessment:
-  - подтверждено как актуальный defect на 2026-03-24.
+## Recently Completed
 
-### 2. DB Degradation Visibility
-
-- Problem:
-  - ошибки чтения из БД могут схлопываться в defaults вместо явной деградации.
-- Impact:
-  - поведение в production меняется без понятного operational signal.
-- Main Areas:
-  - `src/middlewares/bot_enabled.py`
-  - `src/middlewares/db/processing/bot_settings_processor.py`
-- Active Task:
-  - `docs/exec-plans/active/db-degradation-visibility.md`
-- Current Assessment:
-  - подтверждено как актуальный predictability/degrade issue на 2026-03-24.
-
-### 3. Atomic Stats Updates
-
-- Problem:
-  - создание `Source` в stats flow не гарантированно атомарно при конкуренции.
-- Impact:
-  - возможны race conditions и потеря части статистики.
-- Main Areas:
-  - `src/middlewares/db/processing/stats_processor.py`
-  - `src/middlewares/db/models/sources.py`
-- Active Task:
-  - `docs/exec-plans/active/atomic-stats-updates.md`
-- Current Assessment:
-  - подтверждено как актуальный concurrency issue на 2026-03-24.
-
-### 4. Docs Cleanup After Typed-Runtime Transition
-
-- Problem:
-  - часть репозитория все еще описывает устаревшие legacy boundaries.
-- Impact:
-  - будущие изменения и выбор агентного контекста становятся менее понятными.
-- Main Areas:
-  - tracked docs
-  - отдельные code comments и docstrings
-- Active Task:
-  - `docs/exec-plans/active/docs-cleanup-after-typed-runtime-transition.md`
-- Current Assessment:
-  - подтверждено как актуальный, но уже более узкий cleanup-task на 2026-03-24.
+- `HTML-Safe Captions`
+  - закрыто 2026-03-24; summary: `docs/exec-plans/completed/html-safe-captions.md`
+- `DB Degradation Visibility`
+  - закрыто 2026-03-24; summary: `docs/exec-plans/completed/db-degradation-visibility.md`
+- `Atomic Stats Updates`
+  - закрыто 2026-03-24; summary: `docs/exec-plans/completed/atomic-stats-updates.md`
+- `Docs Cleanup After Typed-Runtime Transition`
+  - закрыто 2026-03-24; summary: `docs/exec-plans/completed/docs-cleanup-after-typed-runtime-transition.md`
 
 ## Medium Priority
 
-### 5. URL Extraction And Routing Robustness
+### 1. URL Extraction And Routing Robustness
 
 - Улучшить извлечение URL, чтобы не ловить false negative из-за хвостовой пунктуации.
 - Рассмотреть parallelized `resolve_url` с ограниченной конкурентностью для multi-link batches.
 
-### 6. Chat Settings Read Amplification
+### 2. Chat Settings Read Amplification
 
 - Текущий middleware flow слишком часто читает chat settings.
 - Нужны bounded cache и явная стратегия invalidation.
 
-### 7. Runtime Ownership Of Service Manager
+### 3. Runtime Ownership Of Service Manager
 
 - Убрать дублирование runtime ownership для `ServiceManager`.
 - Сдвинуться к одной application-level модели владения.
 
-### 8. External Dependency Resilience
+### 4. External Dependency Resilience
 
 - Добавить per-source metrics, более явные ожидания по timeout/retry и explicit degrade signals.
 - Держать `VK` отдельным R&D-треком, а не оформлять его как обычную stabilization-задачу.
 
-### 9. CODEX And Swarm Contour Ergonomics
+### 5. CODEX And Swarm Contour Ergonomics
 
 - Улучшить взаимодействие `CODEX` со swarm-контуром.
 - Снизить число ручных швов между прямой работой агента в репозитории и repo-local swarm entrypoints.
 
-### 10. Branch Promotion Reliability
+### 6. Branch Promotion Reliability
 
 - Пофиксить проблемы при повышении ветки.
 - Ужесточить predictability promotion flow для merge/push и связанных approval boundary.
 
 ## Low Priority
 
-### 11. YouTube Swarm Rollout
+### 7. YouTube Swarm Rollout
 
 - Продолжать обкатывать swarm-контур на `YouTube`.
 - Использовать `YouTube` как практический stability-track для orchestration, verification и approval UX.
 
-### 12. Helper Deduplication
+### 8. Helper Deduplication
 
 - Выносить повторяющиеся lightweight helpers только после закрытия более важных задач по correctness и resilience.
 
-### 13. Toggle Command Cleanup
+### 9. Toggle Command Cleanup
 
 - Сокращать повтор шаблонов toggle-flow уже после более срочных runtime-задач.
 
 ## Next Iteration Order
 
-1. HTML-safe captions и routing correctness.
-2. DB resilience и atomic stats behavior.
-3. Оставшийся docs cleanup после архитектурного перехода.
+1. URL extraction, resolve performance и cache для chat settings.
+2. Runtime ownership cleanup для `ServiceManager`.
+3. External dependency resilience и explicit operational signals.
 4. Улучшение связки `CODEX` <-> swarm contour и reliability promotion flow.
 5. Продолжение обкатки swarm-контура на `YouTube`.
-6. URL extraction, resolve performance и cache для chat settings.
+6. Helper deduplication и toggle-flow cleanup после более срочных runtime-задач.
 
 ## Archived Source Notes
 
