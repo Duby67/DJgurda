@@ -44,9 +44,9 @@
   - `scripts/agents/`
   - `docs/swarm-runtime.md`
   - связанные tracked policy/docs
-- Основной источник истины по правилам работы: tracked-документы, а не архив в `local/`.
+- Основной источник истины по правилам работы: tracked-документы, а не untracked legacy/scratch материалы.
 - `README.md` считать обзорным human-facing документом, а не source of truth для агента.
-- `local/` считать legacy/scratch/archive-слоем, если пользователь явно не попросил опереться на него.
+- Не использовать untracked legacy/scratch/archive материалы без явного запроса пользователя.
 - При расхождении между кодом и устаревшим markdown приоритет у кода.
 
 ## Context Loading Rules

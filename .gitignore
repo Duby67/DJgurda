@@ -1,6 +1,5 @@
 # Локальные секреты и окружение
 .env
-local/
 test/handlers/YandexMusic/.env.yandex_music_tests
 *_cookies.txt
 deploy/cookies/*

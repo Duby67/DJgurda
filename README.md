@@ -50,8 +50,7 @@ DJgurda Bot - асинхронный Telegram-бот для обработки �
 - `scripts/agents/` - swarm runtime, orchestration, dispatcher, supervisor и sandbox adapters;
 - `runs/` - run artifacts swarm-контура;
 - `docs/` - поддерживаемая проектная документация;
-- `test/` - локальные smoke-проверки и тестовые материалы;
-- `local/` - локальные и архивные рабочие заметки, не являющиеся канонической документацией проекта.
+- `test/` - локальные smoke-проверки и тестовые материалы.
 
 Ключевые части кода:
 
@@ -127,7 +126,7 @@ python -m src.main
 - открывает встроенный терминал VS Code с уже активированным `venv` через `activate.bat`;
 - согласован с `.vscode/tasks.json`, который тоже ожидает проектный `venv/`.
 
-Сообщение VS Code про `python.defaultInterpreterPath` является информационным.
+`python.defaultInterpreterPath` в tracked workspace-настройке задан относительным путем, чтобы VS Code не показывал предупреждение про unresolved variables.
 Эта настройка используется как default только при первом выборе интерпретатора для workspace.
 Если VS Code уже запомнил другой Python для этого репозитория, нужно один раз выполнить `Python: Select Interpreter` и выбрать `.\venv\Scripts\python.exe`.
 
@@ -137,9 +136,8 @@ python -m src.main
 
 Общая схема такая:
 
-- `local/cookies` - локальные оригиналы для ручных проверок и smoke-сценариев;
-- `src/data/cookies` - runtime-копии, с которыми работает приложение;
-- `deploy/cookies` - deploy-источник, который материализуется из секретов или локальных файлов.
+- `deploy/cookies` - staging-источник для ручных проверок, локальной подготовки и deploy materialization;
+- `src/data/cookies` - runtime-копии, с которыми работает приложение.
 
 Контейнерная boundary тоже разделена:
 

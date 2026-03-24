@@ -340,15 +340,6 @@ def detect_policy_conflicts(
     prompt_text = normalize_text(prompt)
     normalized_paths = [normalize_path(item) for item in paths]
 
-    referenced_local = any(
-        item.startswith("local/")
-        for category in ("agents", "docs", "code", "tests")
-        for item in context_pack.get(category, [])
-    )
-    explicit_local_scope = "local/" in prompt_text or any(path.startswith("local/") for path in normalized_paths)
-    if referenced_local and not explicit_local_scope:
-        conflicts.append("local_context_selected_without_explicit_request")
-
     if selected_task_id == "stable_source_handler_fix" and any(path.startswith("src/handlers/resources/VK/") for path in normalized_paths):
         conflicts.append("vk_selected_inside_stable_runtime_task")
 

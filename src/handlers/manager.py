@@ -34,3 +34,22 @@ class ServiceManager:
 
         logger.debug("No handler found for URL: %s", url)
         return None
+
+    def resolve_handler(
+        self,
+        raw_url: str,
+        resolved_url: str | None = None,
+    ) -> Optional[BaseHandler]:
+        """
+        Ищет handler для runtime-flow, сохраняя ownership lookup policy внутри manager.
+
+        Сначала пробует исходный URL пользователя, затем fallback на resolved URL.
+        """
+        handler = self.get_handler(raw_url)
+        if handler is not None:
+            return handler
+
+        if resolved_url and resolved_url != raw_url:
+            return self.get_handler(resolved_url)
+
+        return None

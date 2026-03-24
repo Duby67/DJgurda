@@ -6,6 +6,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 from src.middlewares.db import get_bot_enabled, set_bot_enabled
+from src.middlewares.db.processing.bot_settings_processor import SettingsReadError
 from src.utils.Emoji import EMOJI_SUCCESS, EMOJI_ERROR
 
 router = Router()
@@ -27,7 +28,16 @@ async def cmd_stop_bot(message: Message) -> None:
 @router.message(Command("toggle_bot"))
 async def cmd_toggle_bot(message: Message) -> None:
     """Функция `cmd_toggle_bot`."""
-    current = await get_bot_enabled(message.chat.id)
+    try:
+        current = await get_bot_enabled(message.chat.id)
+    except SettingsReadError:
+        logger.warning(
+            "Cannot toggle bot state for chat %s because settings could not be read",
+            message.chat.id,
+            exc_info=True,
+        )
+        await message.reply(f"{EMOJI_ERROR} Не удалось прочитать текущее состояние бота. Попробуйте позже.")
+        return
     new_state = not current
     await _change_bot_state(message, "toggle_bot", new_state)
 

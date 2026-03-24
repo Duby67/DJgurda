@@ -210,6 +210,9 @@ Runtime worker command можно передать:
 
 Каждый run получает отдельный workspace в `runs/<run-id>/workspace`.
 
+При materialization run workspace сохраняет tracked `.vscode` файлы, но interpreter/activation paths в `.vscode/settings.json` переписываются на корневой `venv` исходного репозитория.
+Это позволяет открывать `runs/<run-id>/workspace` в VSCode без warning о missing local `venv`.
+
 Стратегии:
 
 - `git_worktree`

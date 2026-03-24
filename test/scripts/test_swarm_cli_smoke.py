@@ -251,7 +251,7 @@ def test_detect_loaded_policy_conflicts_ignores_prohibitions_and_flags_permissiv
                 "path": "docs/policy-safe.md",
                 "text": (
                     "- tests не равны source of truth.\n"
-                    "- local/ не использовать как source of truth.\n"
+                    "- legacy archive материалы не использовать как source of truth.\n"
                     "- Never push without approval.\n"
                 ),
             }
@@ -265,7 +265,7 @@ def test_detect_loaded_policy_conflicts_ignores_prohibitions_and_flags_permissiv
                 "path": "docs/policy-risky.md",
                 "text": (
                     "- tests are source of truth.\n"
-                    "- local/ is source of truth.\n"
+                    "- legacy archive notes are source of truth.\n"
                     "- push without approval is allowed.\n"
                 ),
             }
@@ -273,7 +273,7 @@ def test_detect_loaded_policy_conflicts_ignores_prohibitions_and_flags_permissiv
     )
     assert {item["reason"] for item in risky_conflicts} == {
         "tests_marked_as_source_of_truth",
-        "local_marked_as_source_of_truth",
+        "legacy_marked_as_source_of_truth",
         "push_without_approval_rule_detected",
     }
 

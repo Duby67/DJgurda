@@ -4,7 +4,7 @@
     {
       "label": "Plan task",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -18,7 +18,7 @@
     {
       "label": "Start swarm run",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -32,7 +32,7 @@
     {
       "label": "Start autonomous swarm run",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -46,7 +46,7 @@
     {
       "label": "Start supervised swarm run",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -60,7 +60,7 @@
     {
       "label": "Continue swarm run",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -74,7 +74,7 @@
     {
       "label": "Preview sandbox plan",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -102,7 +102,7 @@
     {
       "label": "Run dispatcher",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -116,7 +116,7 @@
     {
       "label": "Run supervisor",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -130,7 +130,7 @@
     {
       "label": "Show run status",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -144,7 +144,7 @@
     {
       "label": "Show job queue",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -158,7 +158,7 @@
     {
       "label": "Show diff preview",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -172,7 +172,7 @@
     {
       "label": "Approve run checks",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -186,7 +186,7 @@
     {
       "label": "Approve run checks and continue",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -200,7 +200,7 @@
     {
       "label": "Approve commit",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -214,7 +214,7 @@
     {
       "label": "Approve commit and continue",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -228,7 +228,7 @@
     {
       "label": "Approve push and continue",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -242,7 +242,7 @@
     {
       "label": "Reject checkpoint",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -260,7 +260,7 @@
     {
       "label": "Request commit approval",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",
@@ -274,7 +274,7 @@
     {
       "label": "Request push approval",
       "type": "process",
-      "command": "${workspaceFolder}\\venv\\Scripts\\python.exe",
+      "command": "${config:python.defaultInterpreterPath}",
       "args": [
         "-m",
         "scripts.agents.mcp",

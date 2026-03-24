@@ -10,12 +10,26 @@ from aiogram.types import Message, ReplyParameters
 from src.bot.processing.senders import DEFAULT_SENDER_REGISTRY
 from src.handlers.contracts import MediaResult
 from src.middlewares.db import get_errors_enabled, update_stats
+from src.middlewares.db.processing.bot_settings_processor import SettingsReadError
 from src.utils.messages import build_caption, build_error
 
 logger = logging.getLogger(__name__)
 
 # Ограничение параллельных загрузок
 DOWNLOAD_SEMAPHORE = asyncio.Semaphore(3)
+
+
+async def _get_errors_enabled(chat_id: int) -> bool:
+    """Получает флаг ошибок с явной обработкой деградации чтения настроек."""
+    try:
+        return await get_errors_enabled(chat_id)
+    except SettingsReadError:
+        logger.warning(
+            "Error settings unavailable for chat %s; suppressing error reply",
+            chat_id,
+            exc_info=True,
+        )
+        return False
 
 
 def _cleanup_media_result(media_result: MediaResult | None) -> None:
@@ -79,7 +93,7 @@ async def process_block(
     """
     media_result: MediaResult | None = None
     chat_id = message.chat.id
-    errors_enabled = await get_errors_enabled(chat_id)
+    errors_enabled = await _get_errors_enabled(chat_id)
 
     try:
         async with DOWNLOAD_SEMAPHORE:

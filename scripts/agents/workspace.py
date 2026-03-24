@@ -18,6 +18,7 @@ WORKSPACE_JSON_NAME = "workspace.json"
 DEFAULT_CLEANUP_POLICY = "remove_after_run"
 SNAPSHOT_EXCLUDED_DIRS = {".git", "runs", "venv", ".pytest_cache", "__pycache__"}
 RUNTIME_DIRS_TO_PRUNE = SNAPSHOT_EXCLUDED_DIRS - {".git"}
+VSCODE_SETTINGS_PATH = Path(".vscode/settings.json")
 
 
 @dataclass(frozen=True)
@@ -281,6 +282,65 @@ def prune_runtime_dirs(workspace_root: Path) -> dict[str, Any]:
     }
 
 
+def sync_workspace_vscode_settings(source_root: Path, workspace_root: Path) -> dict[str, Any]:
+    """Points isolated VSCode workspace settings at the source-root venv."""
+    source_settings_path = source_root / VSCODE_SETTINGS_PATH
+    workspace_settings_path = workspace_root / VSCODE_SETTINGS_PATH
+    interpreter_path = source_root / "venv" / "Scripts" / "python.exe"
+    activate_path = source_root / "venv" / "Scripts" / "activate.bat"
+
+    if not source_settings_path.is_file() or not workspace_settings_path.is_file():
+        return {
+            "updated": False,
+            "reason": "settings_file_missing",
+        }
+
+    if not interpreter_path.is_file() or not activate_path.is_file():
+        return {
+            "updated": False,
+            "reason": "source_venv_missing",
+        }
+
+    try:
+        settings = json.loads(workspace_settings_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {
+            "updated": False,
+            "reason": "settings_json_invalid",
+        }
+
+    if not isinstance(settings, dict):
+        return {
+            "updated": False,
+            "reason": "settings_payload_invalid",
+        }
+
+    settings["python.defaultInterpreterPath"] = str(interpreter_path)
+    settings["terminal.integrated.defaultProfile.windows"] = "Command Prompt (venv)"
+    profiles = settings.setdefault("terminal.integrated.profiles.windows", {})
+    if not isinstance(profiles, dict):
+        profiles = {}
+        settings["terminal.integrated.profiles.windows"] = profiles
+    profiles["Command Prompt (venv)"] = {
+        "path": "${env:ComSpec}",
+        "args": [
+            "/k",
+            str(activate_path),
+        ],
+    }
+
+    workspace_settings_path.write_text(
+        json.dumps(settings, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return {
+        "updated": True,
+        "settings_path": str(workspace_settings_path),
+        "interpreter_path": str(interpreter_path),
+        "activate_path": str(activate_path),
+    }
+
+
 def build_workspace_plan(
     *,
     source_root: Path,
@@ -354,6 +414,7 @@ def prepare_workspace(
         }
     else:
         plan["materialized"] = git_worktree
+    plan["editor_support"] = sync_workspace_vscode_settings(source_root, workspace_root)
     return plan
 
 

@@ -25,6 +25,35 @@
   - VK
 - `VK` должен оставаться отдельным R&D-треком, а не восприниматься как стабильный runtime-контракт.
 
+## Stable Source Resilience Posture
+
+- `TikTok`
+  - Основные зависимости: `yt-dlp`, `TikWM API`, profile fetch path.
+  - Явные ожидания: `TikWM` bounded to `20s`, profile fetch bounded to `15s`, shared thumbnail/audio downloads stay on the `10s` posture.
+  - Допустимый degrade path: один bounded fallback `TikWM -> yt-dlp`, затем явный `failed` outcome без бесконечных повторов.
+- `YouTube`
+  - Основные зависимости: `yt-dlp`, cookies, shared thumbnail/audio downloads.
+  - Явные ожидания: extraction latency доминируется `yt-dlp`, а direct HTTP media helpers остаются на shared `10s` posture.
+  - Допустимый degrade path: один format fallback до `best`, дальше cookie/anti-bot failures не маскируются повторными retry loops.
+- `Instagram`
+  - Основные зависимости: `yt-dlp`, `web_profile_info` fallback, cookie-sensitive web requests.
+  - Явные ожидания: `web_profile_info` bounded to `12s`, shared thumbnail/audio downloads stay on the `10s` posture.
+  - Допустимый degrade path: profile metadata может один раз перейти на web fallback, затем ошибка должна оставаться наблюдаемой.
+- `COUB`
+  - Основные зависимости: COUB JSON APIs, direct media downloads, `ffmpeg`, ytdlp-style fallback.
+  - Явные ожидания: metadata API bounded to `15s`, direct media downloads bounded to `90s`.
+  - Допустимый degrade path: bounded source switching across segments/share/ytdlp, но без бесконечных mux attempts и без молчаливого partial output.
+- `Yandex.Music`
+  - Основные зависимости: Yandex Music API client, direct track links, shared HTTP audio/cover downloads.
+  - Явные ожидания: shared HTTP downloads stay on the `10s` posture, auth/metadata gaps должны завершаться быстро и явно.
+  - Допустимый degrade path: один fallback при извлечении `track_id` из `resolved_url`; отсутствие token/direct link не должно превращаться в blind retry.
+
+## Observability Signals
+
+- Stable runtime должен держать per-source resilience posture в tracked contract, а не в неявном tribal knowledge.
+- Для каждого stable source нужно сохранять именованные degrade signals, которые совпадают с documented fallback path и могут использоваться в логах, review и future metrics.
+- Registry metadata является главным tracked слоем для этого posture; markdown-документы должны лишь объяснять его human-readable версию.
+
 ## Handler Smoke Tests
 
 - Один source должен соответствовать одной папке в `test/handlers/<Source>/`.

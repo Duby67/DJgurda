@@ -4,6 +4,7 @@ import logging
 from aiogram import Bot, Dispatcher
 
 from src.middlewares.db import get_chats_with_notifications_enabled, close_db
+from src.middlewares.db.processing.bot_settings_processor import SettingsReadError
 from src.config import ADMIN_ID
 from src.utils.Emoji import EMOJI_WARNING
 from src.utils.runtime_storage import cleanup_all_temp_files
@@ -19,6 +20,12 @@ async def on_shutdown(bot: Bot, dispatcher: Dispatcher) -> None:
     chats: list[int] = []
     try:
         chats = await get_chats_with_notifications_enabled()
+    except SettingsReadError:
+        # Даже при проблеме с БД пытаемся уведомить администратора о завершении.
+        logger.warning(
+            "Notification settings unavailable during shutdown; sending admin-only notification",
+            exc_info=True,
+        )
     except Exception:
         # Даже при проблеме с БД пытаемся уведомить администратора о завершении.
         logger.exception("Failed to load notification chats during shutdown")

@@ -6,6 +6,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 from src.middlewares.db import get_notifications_enabled, set_notifications_enabled
+from src.middlewares.db.processing.bot_settings_processor import SettingsReadError
 from src.utils.Emoji import EMOJI_SUCCESS, EMOJI_ERROR
 
 router = Router()
@@ -27,7 +28,16 @@ async def cmd_disable_notifications(message: Message) -> None:
 @router.message(Command("toggle_notifications"))
 async def cmd_toggle_notifications(message: Message) -> None:
     """Функция `cmd_toggle_notifications`."""
-    current = await get_notifications_enabled(message.chat.id)
+    try:
+        current = await get_notifications_enabled(message.chat.id)
+    except SettingsReadError:
+        logger.warning(
+            "Cannot toggle notifications state for chat %s because settings could not be read",
+            message.chat.id,
+            exc_info=True,
+        )
+        await message.reply(f"{EMOJI_ERROR} Не удалось прочитать текущее состояние уведомлений. Попробуйте позже.")
+        return
     new_state = not current
     await _change_notifications_enabled(message, "toggle_notifications", new_state)
 

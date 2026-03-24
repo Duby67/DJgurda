@@ -72,14 +72,14 @@
   - Для deploy введен явный staging-каталог `deploy/cookies`; в текущем tracked-слое там остаются только placeholder docs (`README.md` и `AGENTS.md`), ранее использовался `.gitkeep`.
   - Все `*_cookies.txt` добавлены в `.gitignore`, чтобы исключить случайную утечку cookies из публичного репозитория.
   - GitHub Actions materializes `deploy/cookies` на runner из secrets и перед запуском `deploy/manager.sh` синхронизирует файлы в `$HOME/bot_{env}/data/cookies` с перезаписью.
-  - Обновлены `README.md`, `.github/ai-context.md`, `docs/deploy_layout.md` и `docs/repository-root-map.md` под трехуровневую схему `local/cookies -> deploy/cookies -> src/data/cookies`.
+  - Обновлены `README.md`, `.github/ai-context.md`, `docs/deploy_layout.md` и `docs/repository-root-map.md` под схему `deploy/cookies -> src/data/cookies` с отдельным legacy staging outside tracked docs.
 - Важно для деплоя:
   - Для deploy должны быть заданы secrets `YOUTUBE_COOKIES_FILE`, `INSTAGRAM_COOKIES_FILE`, `TIKTOK_COOKIES_FILE`, `VK_COOKIES_FILE`, `COUB_COOKIES_FILE` хотя бы для одного актуального `*_cookies.txt`.
   - Если после materialize в `deploy/cookies` нет ни одного `*_cookies.txt`, workflow завершится ошибкой.
 - Breaking changes:
   - Нет.
 - Ручные действия после релиза:
-  - При локальной ручной загрузке cookies на сервер использовать `deploy/cookies`, а не `local/cookies`.
+  - При ручной загрузке cookies на сервер использовать `deploy/cookies`.
 
 ## 2026-03-10 | version/tag: infra-deploy-cookie-sync | env: both
 

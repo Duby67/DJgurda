@@ -10,5 +10,23 @@
 
 ## Current Summaries
 
+- `docs/exec-plans/completed/external-dependency-resilience.md`
+  - summary по явному resilience contract для stable sources и observable degrade signals.
+- `docs/exec-plans/completed/runtime-ownership-of-service-manager.md`
+  - summary по консолидации handler lookup ownership и выравниванию runtime boundary wording.
+- `docs/exec-plans/completed/chat-settings-read-amplification.md`
+  - summary по bounded per-update cache для chat settings reads и write-through invalidation.
+- `docs/exec-plans/completed/url-extraction-and-routing-robustness.md`
+  - summary по URL punctuation hardening и bounded multi-link resolve preflight.
+- `docs/exec-plans/completed/agent-first-docs-migration.md`
+  - summary по переходу от mixed legacy context docs к agent-first структуре репозитория.
+- `docs/exec-plans/completed/html-safe-captions.md`
+  - summary по исправлению unsafe HTML truncation в caption flow.
+- `docs/exec-plans/completed/db-degradation-visibility.md`
+  - summary по explicit degrade semantics для chat settings reads.
+- `docs/exec-plans/completed/atomic-stats-updates.md`
+  - summary по atomic upsert flow для stats updates.
+- `docs/exec-plans/completed/docs-cleanup-after-typed-runtime-transition.md`
+  - summary по финальному cleanup runtime ownership wording и typed-contract shim.
 - `docs/exec-plans/completed/runtime-modernization-summary.md`
   - короткое историческое summary по typed runtime и cleanup статусов источников.

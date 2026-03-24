@@ -4,11 +4,14 @@
 Содержит функции для обновления и получения статистики по пользователям и источникам.
 """
 
+from datetime import datetime
 import logging
 
 from typing import Dict, List, Tuple
 
-from sqlalchemy import select, and_
+from sqlalchemy import select
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.orm import joinedload
 
 from src.middlewares.db.core import AsyncSessionLocal
@@ -18,12 +21,50 @@ from src.middlewares.db.models.sources import Source
 logger = logging.getLogger(__name__)
 
 
+async def _get_or_create_source_id(session, source: str) -> int:
+    """Возвращает ID источника, создавая строку атомарно при первом использовании."""
+    await session.execute(
+        sqlite_insert(Source)
+        .values(name=source)
+        .on_conflict_do_nothing(index_elements=[Source.name])
+    )
+
+    result = await session.execute(
+        select(Source.id).where(Source.name == source)
+    )
+    source_id = result.scalar_one_or_none()
+    if source_id is None:
+        raise RuntimeError(f"Failed to resolve source id for {source!r}")
+    return source_id
+
+
+async def _upsert_stats_row(session, *, chat_id: int, user_id: int, source_id: int) -> None:
+    """Атомарно создает или увеличивает счетчик статистики."""
+    now = datetime.utcnow()
+    insert_stmt = sqlite_insert(Stats).values(
+        chat_id=chat_id,
+        user_id=user_id,
+        source_id=source_id,
+        count=1,
+        created_at=now,
+        updated_at=now,
+    )
+    upsert_stmt = insert_stmt.on_conflict_do_update(
+        index_elements=[Stats.chat_id, Stats.user_id, Stats.source_id],
+        set_={
+            "count": Stats.count + insert_stmt.excluded.count,
+            "updated_at": now,
+        },
+    )
+    await session.execute(upsert_stmt)
+
+
 async def update_stats(chat_id: int, user_id: int, source: str) -> None:
     """
     Обновляет статистику для пользователя в чате.
-    
+
     Создает или увеличивает счетчик для конкретного источника.
-    
+
     Аргументы:
         chat_id: ID чата
         user_id: ID пользователя
@@ -32,44 +73,48 @@ async def update_stats(chat_id: int, user_id: int, source: str) -> None:
     try:
         async with AsyncSessionLocal() as session:
             async with session.begin():
-                # Находим или создаем источник
-                source_obj = await session.execute(
-                    select(Source).where(Source.name == source)
+                source_id = await _get_or_create_source_id(session, source)
+                await _upsert_stats_row(
+                    session,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    source_id=source_id,
                 )
-                source_obj = source_obj.scalar_one_or_none()
-                if source_obj is None:
-                    source_obj = Source(name=source)
-                    session.add(source_obj)
-                    await session.flush()  # Получаем ID для новой записи
-
-                # Находим существующую статистику
-                stats = await session.execute(
-                    select(Stats).where(
-                        and_(
-                            Stats.chat_id == chat_id,
-                            Stats.user_id == user_id,
-                            Stats.source_id == source_obj.id
-                        )
-                    )
+                logger.debug(
+                    "Updated stats atomically: chat %s, user %s, source %s (source_id=%s)",
+                    chat_id,
+                    user_id,
+                    source,
+                    source_id,
                 )
-                stats = stats.scalar_one_or_none()
-                
-                # Создаем или обновляем запись
-                if stats is None:
-                    stats = Stats(
-                        chat_id=chat_id,
-                        user_id=user_id,
-                        source_id=source_obj.id,
-                        count=1
-                    )
-                    session.add(stats)
-                    logger.debug(f"Created stats record: chat {chat_id}, user {user_id}, source {source}")
-                else:
-                    stats.count += 1
-                    logger.debug(f"Updated stats: chat {chat_id}, user {user_id}, source {source}")
-                    
+    except IntegrityError:
+        logger.exception(
+            "Integrity error while updating stats for chat %s, user %s, source %s",
+            chat_id,
+            user_id,
+            source,
+        )
+    except OperationalError:
+        logger.exception(
+            "Operational error while updating stats for chat %s, user %s, source %s",
+            chat_id,
+            user_id,
+            source,
+        )
+    except SQLAlchemyError:
+        logger.exception(
+            "Failed to update stats for chat %s, user %s, source %s",
+            chat_id,
+            user_id,
+            source,
+        )
     except Exception:
-        logger.exception(f"Failed to update stats for chat {chat_id}, user {user_id}, source {source}")
+        logger.exception(
+            "Unexpected failure while updating stats for chat %s, user %s, source %s",
+            chat_id,
+            user_id,
+            source,
+        )
 
 
 async def get_chat_stats(chat_id: int, limit: int | None = 10) -> List[Tuple[int, int, Dict[str, int]]]:

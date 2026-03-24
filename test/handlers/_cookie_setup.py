@@ -1,6 +1,6 @@
 """
 Утилита для локальных smoke-тестов handlers:
-копирует cookies из local/cookies в src/data/cookies перед запуском проверок.
+копирует cookies из deploy/cookies в src/data/cookies перед запуском проверок.
 """
 
 from __future__ import annotations
@@ -16,17 +16,17 @@ COOKIE_FILENAMES = (
 )
 
 
-def prepare_local_cookies(project_root: Path) -> None:
+def prepare_test_cookies(project_root: Path) -> None:
     """
     Подготавливает рабочие cookies для локальных smoke-тестов.
 
     Источник:
-    - <project_root>/local/cookies
+    - <project_root>/deploy/cookies
 
     Приемник:
     - <project_root>/src/data/cookies
     """
-    source_dir = project_root / "local" / "cookies"
+    source_dir = project_root / "deploy" / "cookies"
     target_dir = project_root / "src" / "data" / "cookies"
     target_dir.mkdir(parents=True, exist_ok=True)
 

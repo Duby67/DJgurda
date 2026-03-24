@@ -26,22 +26,12 @@ class ContentType(str, Enum):
     CHANNEL = "channel"
     PLAYLIST = "playlist"
 
-    @classmethod
-    def from_raw(cls, value: str) -> "ContentType":
-        """Преобразует строковое значение legacy-типа в enum."""
-        return cls(value)
-
 
 class AttachmentKind(str, Enum):
     """Тип вложения внутри media_group/stories."""
 
     PHOTO = "photo"
     VIDEO = "video"
-
-    @classmethod
-    def from_raw(cls, value: str) -> "AttachmentKind":
-        """Преобразует строковое значение в enum типа вложения."""
-        return cls(value)
 
 
 @dataclass(slots=True, frozen=True)

@@ -12,7 +12,7 @@
     ],
     "notes": [
       "README.md is human-facing and not a source of truth for agents.",
-      "Do not use local/ as a primary source of truth without an explicit user request.",
+      "Do not use untracked legacy or archive materials as a primary source of truth without an explicit user request.",
       "If the task touches scripts/agents/, approvals, sandbox, MCP/CLI or run artifacts, move into the swarm contour docs early."
     ]
   },
@@ -254,7 +254,7 @@
       "src/",
       "scripts/",
       "test/",
-      "local/",
+      "legacy-archive-materials",
       "unrelated source folders inside src/handlers/resources/"
     ]
   },

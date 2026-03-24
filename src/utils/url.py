@@ -14,6 +14,41 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
+TRAILING_URL_PUNCTUATION = frozenset(".,!?;:")
+BALANCED_URL_CLOSERS = {
+    ")": "(",
+    "]": "[",
+    "}": "{",
+    ">": "<",
+}
+
+
+def split_trailing_url_suffix(candidate: str) -> tuple[str, str]:
+    """
+    Отделяет хвостовую пунктуацию от URL-кандидата.
+    """
+    if not candidate:
+        return "", ""
+
+    normalized = candidate
+    suffix = ""
+    while normalized:
+        last_char = normalized[-1]
+        if last_char in TRAILING_URL_PUNCTUATION:
+            normalized = normalized[:-1]
+            suffix = last_char + suffix
+            continue
+
+        opener = BALANCED_URL_CLOSERS.get(last_char)
+        if opener and normalized.count(last_char) > normalized.count(opener):
+            normalized = normalized[:-1]
+            suffix = last_char + suffix
+            continue
+
+        break
+
+    return normalized, suffix
+
 
 def _normalize_unwrapped_candidate(candidate: str, fallback_origin: str | None = None) -> str:
     """
@@ -23,6 +58,7 @@ def _normalize_unwrapped_candidate(candidate: str, fallback_origin: str | None =
         return ""
 
     decoded = unquote(candidate).strip()
+    decoded, _ = split_trailing_url_suffix(decoded)
     if not decoded:
         return ""
 
@@ -101,6 +137,7 @@ def _extract_yandex_retpath_url(url: str) -> str | None:
         except Exception:
             continue
 
+        unwrapped, _ = split_trailing_url_suffix(unwrapped)
         if unwrapped.startswith(("http://", "https://")):
             return unwrapped
     return None
@@ -137,34 +174,39 @@ async def resolve_url(initial_url: str, timeout: int = 10) -> str:
     Возвращает:
         Конечный URL после всех редиректов или исходный URL при ошибке
     """
+    normalized_initial_url, _ = split_trailing_url_suffix(initial_url)
     try:
         async with aiohttp.ClientSession() as session:
             try:
                 # Пробуем HEAD запрос (быстрее, не загружает тело)
                 async with session.head(
-                    initial_url, 
+                    normalized_initial_url,
                     allow_redirects=True, 
                     timeout=aiohttp.ClientTimeout(total=timeout)
                 ) as resp:
                     final_url = _unwrap_interstitial_chain(str(resp.url))
-                    final_url = _restore_url_from_known_challenges(initial_url, final_url)
-                    logger.debug(f"URL resolved via HEAD: {initial_url} -> {final_url}")
+                    final_url = _restore_url_from_known_challenges(normalized_initial_url, final_url)
+                    final_url, _ = split_trailing_url_suffix(final_url)
+                    logger.debug(f"URL resolved via HEAD: {normalized_initial_url} -> {final_url}")
                     return final_url
                 
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
                 # Если HEAD не сработал, пробуем GET
-                logger.debug(f"HEAD failed for {initial_url}: {e}. Trying GET...")
+                logger.debug(f"HEAD failed for {normalized_initial_url}: {e}. Trying GET...")
                 async with session.get(
-                    initial_url, 
+                    normalized_initial_url,
                     allow_redirects=True, 
                     timeout=aiohttp.ClientTimeout(total=timeout)
                 ) as resp:
                     final_url = _unwrap_interstitial_chain(str(resp.url))
-                    final_url = _restore_url_from_known_challenges(initial_url, final_url)
-                    logger.debug(f"URL resolved via GET: {initial_url} -> {final_url}")
+                    final_url = _restore_url_from_known_challenges(normalized_initial_url, final_url)
+                    final_url, _ = split_trailing_url_suffix(final_url)
+                    logger.debug(f"URL resolved via GET: {normalized_initial_url} -> {final_url}")
                     return final_url
                 
     except Exception as e:
-        logger.warning(f"Failed to resolve final URL {initial_url}: {e}")
+        logger.warning(f"Failed to resolve final URL {normalized_initial_url}: {e}")
         # Возвращаем исходный URL как резервный вариант
-        return _unwrap_interstitial_chain(initial_url)
+        fallback_url = _unwrap_interstitial_chain(normalized_initial_url)
+        fallback_url, _ = split_trailing_url_suffix(fallback_url)
+        return fallback_url
