@@ -6,7 +6,7 @@
 
 ## Backlog Metadata
 
-- Последняя ревизия backlog: 2026-03-11 | version/tag: v1.2.4
+- Последняя ревизия backlog: 2026-03-24 | version/tag: v1.2.5_b
 
 ## High Priority
 
@@ -71,13 +71,28 @@
 - Добавить per-source metrics, более явные ожидания по timeout/retry и explicit degrade signals.
 - Держать `VK` отдельным R&D-треком, а не оформлять его как обычную stabilization-задачу.
 
+### 9. CODEX And Swarm Contour Ergonomics
+
+- Улучшить взаимодействие `CODEX` со swarm-контуром.
+- Снизить число ручных швов между прямой работой агента в репозитории и repo-local swarm entrypoints.
+
+### 10. Branch Promotion Reliability
+
+- Пофиксить проблемы при повышении ветки.
+- Ужесточить predictability promotion flow для merge/push и связанных approval boundary.
+
 ## Low Priority
 
-### 9. Helper Deduplication
+### 11. YouTube Swarm Rollout
+
+- Продолжать обкатывать swarm-контур на `YouTube`.
+- Использовать `YouTube` как практический stability-track для orchestration, verification и approval UX.
+
+### 12. Helper Deduplication
 
 - Выносить повторяющиеся lightweight helpers только после закрытия более важных задач по correctness и resilience.
 
-### 10. Toggle Command Cleanup
+### 13. Toggle Command Cleanup
 
 - Сокращать повтор шаблонов toggle-flow уже после более срочных runtime-задач.
 
@@ -86,7 +101,9 @@
 1. HTML-safe captions и routing correctness.
 2. DB resilience и atomic stats behavior.
 3. Оставшийся docs cleanup после архитектурного перехода.
-4. URL extraction, resolve performance и cache для chat settings.
+4. Улучшение связки `CODEX` <-> swarm contour и reliability promotion flow.
+5. Продолжение обкатки swarm-контура на `YouTube`.
+6. URL extraction, resolve performance и cache для chat settings.
 
 ## Archived Source Notes
 
