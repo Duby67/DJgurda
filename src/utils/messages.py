@@ -208,8 +208,10 @@ def _fit_caption_sections(
                 current_context = None
                 continue
 
-            current_context = _truncate_plain_text(html.unescape(current_context), limit)
-            continue
+            candidate_context = _truncate_plain_text(html.unescape(current_context), limit)
+            if candidate_context != current_context:
+                current_context = candidate_context
+                continue
 
         if current_title:
             other_sections = _render_sections(
@@ -223,8 +225,10 @@ def _fit_caption_sections(
                 current_title = None
                 continue
 
-            current_title = _truncate_plain_text(html.unescape(current_title), limit)
-            continue
+            candidate_title = _truncate_plain_text(html.unescape(current_title), limit)
+            if candidate_title != current_title:
+                current_title = candidate_title
+                continue
 
         user_link_limit = len(current_user_link) - overflow
         truncated_user_link = _truncate_html_anchor(current_user_link, user_link_limit)
@@ -251,6 +255,7 @@ def _fit_caption_sections(
     if len(caption) <= MAX_CAPTION:
         return caption
     return caption[:MAX_CAPTION - 3] + "..."
+
 
 def build_caption(
     user_context: str,
