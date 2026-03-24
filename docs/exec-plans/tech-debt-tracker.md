@@ -14,21 +14,14 @@
 
 ## Medium Priority
 
-### 1. External Dependency Resilience
-
-- Добавить per-source metrics, более явные ожидания по timeout/retry и explicit degrade signals.
-- Держать `VK` отдельным R&D-треком, а не оформлять его как обычную stabilization-задачу.
-- Active Task:
-  - `docs/exec-plans/active/external-dependency-resilience.md`
-
-### 2. CODEX And Swarm Contour Ergonomics
+### 1. CODEX And Swarm Contour Ergonomics
 
 - Улучшить взаимодействие `CODEX` со swarm-контуром.
 - Снизить число ручных швов между прямой работой агента в репозитории и repo-local swarm entrypoints.
 - Active Task:
   - `docs/exec-plans/active/codex-and-swarm-contour-ergonomics.md`
 
-### 3. Branch Promotion Reliability
+### 2. Branch Promotion Reliability
 
 - Пофиксить проблемы при повышении ветки.
 - Ужесточить predictability promotion flow для merge/push и связанных approval boundary.
@@ -37,25 +30,24 @@
 
 ## Low Priority
 
-### 4. YouTube Swarm Rollout
+### 3. YouTube Swarm Rollout
 
 - Продолжать обкатывать swarm-контур на `YouTube`.
 - Использовать `YouTube` как практический stability-track для orchestration, verification и approval UX.
 
-### 5. Helper Deduplication
+### 4. Helper Deduplication
 
 - Выносить повторяющиеся lightweight helpers только после закрытия более важных задач по correctness и resilience.
 
-### 6. Toggle Command Cleanup
+### 5. Toggle Command Cleanup
 
 - Сокращать повтор шаблонов toggle-flow уже после более срочных runtime-задач.
 
 ## Next Iteration Order
 
-1. External dependency resilience и explicit operational signals.
-2. Улучшение связки `CODEX` <-> swarm contour и reliability promotion flow.
-3. Продолжение обкатки swarm-контура на `YouTube`.
-4. Helper deduplication и toggle-flow cleanup после более срочных runtime-задач.
+1. Улучшение связки `CODEX` <-> swarm contour и reliability promotion flow.
+2. Продолжение обкатки swarm-контура на `YouTube`.
+3. Helper deduplication и toggle-flow cleanup после более срочных runtime-задач.
 
 ## Archived Source Notes
 

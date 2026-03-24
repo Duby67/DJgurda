@@ -6,8 +6,6 @@
 
 ## Current Plans
 
-- `docs/exec-plans/active/external-dependency-resilience.md`
-  - medium-priority task по per-source resilience signals, timeout/retry posture и degrade semantics.
 - `docs/exec-plans/active/codex-and-swarm-contour-ergonomics.md`
   - medium-priority task по снижению ручных швов между direct agent flow и swarm contour.
 - `docs/exec-plans/active/branch-promotion-reliability.md`

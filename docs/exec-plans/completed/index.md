@@ -10,6 +10,8 @@
 
 ## Current Summaries
 
+- `docs/exec-plans/completed/external-dependency-resilience.md`
+  - summary по явному resilience contract для stable sources и observable degrade signals.
 - `docs/exec-plans/completed/runtime-ownership-of-service-manager.md`
   - summary по консолидации handler lookup ownership и выравниванию runtime boundary wording.
 - `docs/exec-plans/completed/chat-settings-read-amplification.md`
