@@ -56,6 +56,23 @@ class FakeMessage:
         self.deleted = True
 
 
+def test_split_into_blocks_strips_trailing_punctuation_from_urls() -> None:
+    """
+    Trailing punctuation не должна попадать в URL и ломать routing.
+    """
+    blocks = media_router_module.split_into_blocks(
+        "Before https://one.example/a, middle https://two.example/b)."
+    )
+
+    assert [url for url, _ in blocks] == [
+        "https://one.example/a",
+        "https://two.example/b",
+    ]
+    assert blocks[0][1] == "Before"
+    assert blocks[1][1].startswith(", middle")
+    assert blocks[1][1].endswith(").")
+
+
 def test_delete_original_message_when_all_blocks_success(monkeypatch: Any) -> None:
     """
     Исходное сообщение удаляется, если каждый link-block завершился успешно.
@@ -263,3 +280,90 @@ def test_multilink_with_requested_urls_keeps_message_on_unsupported(monkeypatch:
     assert len(message.answers) == 1
     assert "Причина: неподдерживаемый источник" in message.answers[0]["text"]
     assert message.answers[0]["reply_parameters"].quote == yandex_url
+
+
+def test_unsupported_reply_uses_cleaned_url_without_trailing_punctuation(monkeypatch: Any) -> None:
+    """
+    Unsupported-reply должен цитировать URL без хвостовой пунктуации.
+    """
+    supported_raw = "https://ok.example/1"
+    unsupported_raw = "https://unknown.example/2"
+    message = FakeMessage(f"{supported_raw}, {unsupported_raw}).")
+    process_calls: list[str] = []
+    handler = FakeHandler()
+
+    class FakeManager:
+        def get_handler(self, url: str) -> FakeHandler | None:
+            if url == supported_raw:
+                return handler
+            return None
+
+    async def fake_resolve_url(url: str) -> str:
+        return url
+
+    async def fake_process_block(_idx: int, raw_url: str, *_args: Any, **_kwargs: Any) -> bool:
+        process_calls.append(raw_url)
+        return True
+
+    async def fake_errors_enabled(_chat_id: int) -> bool:
+        return True
+
+    monkeypatch.setattr(media_router_module, "get_user_link", lambda _user: "user-link")
+    monkeypatch.setattr(media_router_module, "resolve_url", fake_resolve_url)
+    monkeypatch.setattr(media_router_module, "process_block", fake_process_block)
+    monkeypatch.setattr(media_router_module, "get_errors_enabled", fake_errors_enabled)
+    monkeypatch.setattr(media_router_module, "_get_service_manager", lambda: FakeManager())
+
+    asyncio.run(media_router_module.handle_media_message(message))
+
+    assert process_calls == [supported_raw]
+    assert message.deleted is False
+    assert len(message.answers) == 1
+    assert message.answers[0]["reply_parameters"].quote == unsupported_raw
+
+
+def test_multilink_preflight_resolves_with_bounded_parallelism(monkeypatch: Any) -> None:
+    """
+    resolve_url должен идти ограниченно-параллельно и не ломать порядок блоков.
+    """
+    blocks = [
+        ("https://ok.example/1", "ctx-1"),
+        ("https://ok.example/2", "ctx-2"),
+        ("https://ok.example/3", "ctx-3"),
+    ]
+    message = FakeMessage("parallel links")
+    process_calls: list[str] = []
+    active_resolves = 0
+    max_active_resolves = 0
+    handler = FakeHandler()
+
+    class FakeManager:
+        def get_handler(self, _url: str) -> FakeHandler:
+            return handler
+
+    async def fake_resolve_url(url: str) -> str:
+        nonlocal active_resolves, max_active_resolves
+        active_resolves += 1
+        max_active_resolves = max(max_active_resolves, active_resolves)
+        await asyncio.sleep(0.01)
+        active_resolves -= 1
+        if url.endswith("/2"):
+            raise RuntimeError("resolver exploded")
+        return url
+
+    async def fake_process_block(_idx: int, raw_url: str, *_args: Any, **_kwargs: Any) -> bool:
+        process_calls.append(raw_url)
+        return True
+
+    monkeypatch.setattr(media_router_module, "split_into_blocks", lambda _text: blocks)
+    monkeypatch.setattr(media_router_module, "get_user_link", lambda _user: "user-link")
+    monkeypatch.setattr(media_router_module, "resolve_url", fake_resolve_url)
+    monkeypatch.setattr(media_router_module, "process_block", fake_process_block)
+    monkeypatch.setattr(media_router_module, "_get_service_manager", lambda: FakeManager())
+
+    asyncio.run(media_router_module.handle_media_message(message))
+
+    assert process_calls == [raw_url for raw_url, _ in blocks]
+    assert max_active_resolves > 1
+    assert max_active_resolves <= media_router_module.MAX_CONCURRENT_URL_RESOLVES
+    assert message.deleted is True

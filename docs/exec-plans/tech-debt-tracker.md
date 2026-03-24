@@ -14,42 +14,35 @@
 
 ## Medium Priority
 
-### 1. URL Extraction And Routing Robustness
-
-- Улучшить извлечение URL, чтобы не ловить false negative из-за хвостовой пунктуации.
-- Рассмотреть parallelized `resolve_url` с ограниченной конкурентностью для multi-link batches.
-- Active Task:
-  - `docs/exec-plans/active/url-extraction-and-routing-robustness.md`
-
-### 2. Chat Settings Read Amplification
+### 1. Chat Settings Read Amplification
 
 - Текущий middleware flow слишком часто читает chat settings.
 - Нужны bounded cache и явная стратегия invalidation.
 - Active Task:
   - `docs/exec-plans/active/chat-settings-read-amplification.md`
 
-### 3. Runtime Ownership Of Service Manager
+### 2. Runtime Ownership Of Service Manager
 
 - Убрать дублирование runtime ownership для `ServiceManager`.
 - Сдвинуться к одной application-level модели владения.
 - Active Task:
   - `docs/exec-plans/active/runtime-ownership-of-service-manager.md`
 
-### 4. External Dependency Resilience
+### 3. External Dependency Resilience
 
 - Добавить per-source metrics, более явные ожидания по timeout/retry и explicit degrade signals.
 - Держать `VK` отдельным R&D-треком, а не оформлять его как обычную stabilization-задачу.
 - Active Task:
   - `docs/exec-plans/active/external-dependency-resilience.md`
 
-### 5. CODEX And Swarm Contour Ergonomics
+### 4. CODEX And Swarm Contour Ergonomics
 
 - Улучшить взаимодействие `CODEX` со swarm-контуром.
 - Снизить число ручных швов между прямой работой агента в репозитории и repo-local swarm entrypoints.
 - Active Task:
   - `docs/exec-plans/active/codex-and-swarm-contour-ergonomics.md`
 
-### 6. Branch Promotion Reliability
+### 5. Branch Promotion Reliability
 
 - Пофиксить проблемы при повышении ветки.
 - Ужесточить predictability promotion flow для merge/push и связанных approval boundary.
@@ -73,7 +66,7 @@
 
 ## Next Iteration Order
 
-1. URL extraction, resolve performance и cache для chat settings.
+1. Cache для chat settings и снижение read amplification.
 2. Runtime ownership cleanup для `ServiceManager`.
 3. External dependency resilience и explicit operational signals.
 4. Улучшение связки `CODEX` <-> swarm contour и reliability promotion flow.

@@ -1,8 +1,9 @@
 """Модуль `media_router`."""
 import logging
 import asyncio
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Awaitable, Optional
+from typing import Any, Awaitable, Optional
 
 from aiogram import Router, F
 from aiogram.types import Message, ReplyParameters
@@ -20,6 +21,18 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 service_manager: Optional[ServiceManager] = None
+MAX_CONCURRENT_URL_RESOLVES = 4
+
+
+@dataclass(slots=True)
+class PreparedBlock:
+    """Результат preflight-подготовки блока до запуска process_block."""
+
+    idx: int
+    raw_url: str
+    resolved_url: str
+    context: str
+    handler: Any | None
 
 
 async def _get_errors_enabled(chat_id: int) -> bool:
@@ -51,6 +64,56 @@ def _get_service_manager() -> ServiceManager:
     return service_manager
 
 
+async def _prepare_block(
+    idx: int,
+    raw_url: str,
+    context: str,
+    manager: ServiceManager,
+    semaphore: asyncio.Semaphore,
+) -> PreparedBlock:
+    """Готовит routing-данные для одного блока с bounded resolve concurrency."""
+    async with semaphore:
+        try:
+            resolved_url = await resolve_url(raw_url)
+        except Exception:
+            logger.warning(
+                "Failed to resolve URL for block %s (%s); using raw URL fallback",
+                idx,
+                raw_url,
+                exc_info=True,
+            )
+            resolved_url = raw_url
+
+    handler = manager.get_handler(raw_url)
+    if not handler:
+        handler = manager.get_handler(resolved_url)
+
+    return PreparedBlock(
+        idx=idx,
+        raw_url=raw_url,
+        resolved_url=resolved_url,
+        context=context,
+        handler=handler,
+    )
+
+
+async def _prepare_blocks_for_routing(
+    blocks: list[tuple[str, str]],
+    manager: ServiceManager,
+) -> list[PreparedBlock]:
+    """Готовит multi-link batch до process_block, сохраняя исходный порядок."""
+    if not blocks:
+        return []
+
+    semaphore = asyncio.Semaphore(min(MAX_CONCURRENT_URL_RESOLVES, len(blocks)))
+    return await asyncio.gather(
+        *(
+            _prepare_block(idx, raw_url, context, manager, semaphore)
+            for idx, (raw_url, context) in enumerate(blocks, start=1)
+        )
+    )
+
+
 @router.message(F.text | F.caption)
 async def handle_media_message(message: Message) -> None:
     """Функция `handle_media_message`."""
@@ -76,15 +139,13 @@ async def handle_media_message(message: Message) -> None:
     block_outcomes: dict[int, BlockOutcome] = {}
     manager = _get_service_manager()
     supported_sources = ", ".join(get_active_handler_names())
-    for idx, (raw_url, context) in enumerate(blocks, start=1):
-        resolved_url = await resolve_url(raw_url)
+    prepared_blocks = await _prepare_blocks_for_routing(blocks, manager)
+    for prepared in prepared_blocks:
         # Сначала пытаемся подобрать handler по исходному URL пользователя.
         # Это снижает риск потери классификации на anti-bot redirect-страницах.
-        handler = manager.get_handler(raw_url)
+        handler = prepared.handler
         if not handler:
-            handler = manager.get_handler(resolved_url)
-        if not handler:
-            logger.warning(f"No handler found for resolved URL: {resolved_url}")
+            logger.warning("No handler found for resolved URL: %s", prepared.resolved_url)
             if await _get_errors_enabled(message.chat.id):
                 await message.answer(
                     (
@@ -92,20 +153,20 @@ async def handle_media_message(message: Message) -> None:
                         "Причина: неподдерживаемый источник или формат ссылки.\n"
                         f"Поддерживаемые источники: {supported_sources}."
                     ),
-                    reply_parameters=ReplyParameters(message_id=message.message_id, quote=raw_url)
+                    reply_parameters=ReplyParameters(message_id=message.message_id, quote=prepared.raw_url)
                 )
-            block_outcomes[idx] = BlockOutcome.UNSUPPORTED
+            block_outcomes[prepared.idx] = BlockOutcome.UNSUPPORTED
             continue
 
         pending_blocks.append(
             (
-                idx,
-                raw_url,
+                prepared.idx,
+                prepared.raw_url,
                 process_block(
-                    idx,
-                    raw_url,
-                    resolved_url,
-                    context,
+                    prepared.idx,
+                    prepared.raw_url,
+                    prepared.resolved_url,
+                    prepared.context,
                     handler,
                     user_link,
                     message,

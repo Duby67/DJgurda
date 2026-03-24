@@ -10,6 +10,8 @@
 
 ## Current Summaries
 
+- `docs/exec-plans/completed/url-extraction-and-routing-robustness.md`
+  - summary по URL punctuation hardening и bounded multi-link resolve preflight.
 - `docs/exec-plans/completed/agent-first-docs-migration.md`
   - summary по переходу от mixed legacy context docs к agent-first структуре репозитория.
 - `docs/exec-plans/completed/html-safe-captions.md`

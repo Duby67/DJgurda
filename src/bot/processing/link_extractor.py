@@ -5,6 +5,8 @@ import html
 from typing import List, Tuple
 from aiogram.types import User
 
+from src.utils.url import split_trailing_url_suffix
+
 URL_PATTERN = re.compile(r'https?://\S+')
 
 def get_user_link(user: User) -> str:
@@ -32,19 +34,26 @@ def split_into_blocks(text: str) -> List[Tuple[str, str]]:
     Возвращает:
         Список кортежей (url, context)
     """
-    urls = URL_PATTERN.findall(text)
-    if not urls:
+    matches = list(URL_PATTERN.finditer(text))
+    if not matches:
         return []
-    
-    parts = re.split(URL_PATTERN, text)
+
     blocks = []
-    
-    for i, url in enumerate(urls):
-        context_before = parts[i].strip()
-        
+    previous_end = 0
+
+    for i, match in enumerate(matches):
+        raw_url = match.group(0)
+        url, trailing_suffix = split_trailing_url_suffix(raw_url)
+        if not url:
+            previous_end = match.end()
+            continue
+
+        context_before = text[previous_end:match.start()].strip()
+        adjusted_end = match.end() - len(trailing_suffix)
+
         # Обрабатываем контекст после последней ссылки
-        if i == len(urls) - 1:
-            context_after = parts[-1].strip()
+        if i == len(matches) - 1:
+            context_after = text[adjusted_end:].strip()
             if context_after:
                 context = context_before + '\n' + context_after if context_before else context_after
             else:
@@ -53,5 +62,6 @@ def split_into_blocks(text: str) -> List[Tuple[str, str]]:
             context = context_before
 
         blocks.append((url, context))
-    
+        previous_end = adjusted_end
+
     return blocks
