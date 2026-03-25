@@ -23,6 +23,7 @@
 ## Deploy Notes
 
 - GitHub Actions может materialize `deploy/cookies` из optional secrets.
+- GitHub Actions использует временный server-side staging path под `/tmp/djgurda-deploy-<env>-<run>`, а не постоянную папку `~/deploy`.
 - Ручной cookie sync использует тот же staging-каталог `deploy/cookies` и локальный `deploy/sync_cookies.env`.
 - Ручные sync-скрипты копируют только `deploy/cookies/*_cookies.txt` в `/home/<REMOTE_USER>/bot_{dev|prod}/data/cookies`.
 - Если secrets отсутствуют, deploy должен продолжаться с reuse уже существующих server-side cookies.

@@ -40,7 +40,7 @@ class VKClip:
 
     async def _download_clip(
         self,
-        canonical_url: str,
+        clip_url: str,
         clip_token: str,
     ) -> tuple[Optional[Path], dict[str, Any] | None]:
         """Скачивает клип через yt-dlp с cookies и bounded opts."""
@@ -50,8 +50,11 @@ class VKClip:
                 "noplaylist": True,
                 "format": "mp4/bestvideo+bestaudio/best",
                 "outtmpl": output_template,
-                "retries": 1,
-                "fragment_retries": 1,
+                "retries": 2,
+                "fragment_retries": 2,
+                "geo_bypass": True,
+                "user_agent": self.DEFAULT_USER_AGENT,
+                "http_headers": self.build_browser_headers(referer=clip_url),
                 "quiet": True,
                 "no_warnings": True,
             }
@@ -62,7 +65,7 @@ class VKClip:
         def _download() -> tuple[Optional[Path], dict[str, Any] | None]:
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(canonical_url, download=True)
+                    info = ydl.extract_info(clip_url, download=True)
                     if not isinstance(info, dict):
                         return None, None
                     prepared = Path(ydl.prepare_filename(info))
@@ -73,7 +76,7 @@ class VKClip:
         try:
             downloaded_path, info = await asyncio.to_thread(_download)
         except Exception as exc:
-            logger.warning("VK clip download failed for %s: %s", canonical_url, exc)
+            logger.warning("VK clip download failed for %s: %s", clip_url, exc)
             return None, None
 
         if isinstance(downloaded_path, Path) and downloaded_path.exists() and downloaded_path.stat().st_size > 0:
@@ -96,9 +99,26 @@ class VKClip:
         clip_id: str,
     ) -> Optional[MediaResult]:
         """Скачивает clip и возвращает video MediaResult."""
-        canonical_url = f"https://vkvideo.ru/clip{owner_id}_{clip_id}"
+        canonical_vkvideo_url = f"https://vkvideo.ru/clip{owner_id}_{clip_id}"
+        canonical_vkcom_url = f"https://vk.com/clip{owner_id}_{clip_id}"
         clip_token = f"clip{owner_id}_{clip_id}"
-        file_path, info = await self._download_clip(canonical_url, clip_token=clip_token)
+        download_candidates = tuple(
+            dict.fromkeys(
+                [
+                    canonical_vkvideo_url,
+                    canonical_vkcom_url,
+                    self._normalize_vk_url(original_url),
+                ]
+            )
+        )
+
+        file_path: Optional[Path] = None
+        info: dict[str, Any] | None = None
+        for candidate_url in download_candidates:
+            file_path, info = await self._download_clip(candidate_url, clip_token=clip_token)
+            if file_path:
+                break
+
         if not file_path:
             return None
 

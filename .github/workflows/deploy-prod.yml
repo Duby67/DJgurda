@@ -112,8 +112,9 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 228
           script: |
-            mkdir -p "/home/${{ secrets.SSH_USER }}/deploy/cookies"
-            find "/home/${{ secrets.SSH_USER }}/deploy/cookies" -maxdepth 1 -type f -name '*_cookies.txt' -delete
+            STAGING_ROOT="/tmp/djgurda-deploy-prod-${{ github.run_id }}-${{ github.run_attempt }}"
+            rm -rf "$STAGING_ROOT"
+            mkdir -p "$STAGING_ROOT/deploy/cookies"
 
       - name: Copy deploy/manager.sh to server
         uses: appleboy/scp-action@v0.1.7
@@ -123,7 +124,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 228
           source: "deploy/manager.sh"
-          target: "/home/${{ secrets.SSH_USER }}/"
+          target: "/tmp/djgurda-deploy-prod-${{ github.run_id }}-${{ github.run_attempt }}"
           overwrite: true
           strip_components: 0
 
@@ -135,7 +136,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 228
           source: "deploy/cookies"
-          target: "/home/${{ secrets.SSH_USER }}/"
+          target: "/tmp/djgurda-deploy-prod-${{ github.run_id }}-${{ github.run_attempt }}"
           overwrite: true
           strip_components: 0
 
@@ -148,8 +149,14 @@ jobs:
           port: 228
           script: |
             BOT_ROOT="/home/${{ secrets.SSH_USER }}/bot_prod"
-            DEPLOY_COOKIES_DIR="/home/${{ secrets.SSH_USER }}/deploy/cookies"
+            STAGING_ROOT="/tmp/djgurda-deploy-prod-${{ github.run_id }}-${{ github.run_attempt }}"
+            DEPLOY_MANAGER_PATH="${STAGING_ROOT}/deploy/manager.sh"
+            DEPLOY_COOKIES_DIR="${STAGING_ROOT}/deploy/cookies"
             TARGET_COOKIES_DIR="${BOT_ROOT}/data/cookies"
+            cleanup_staging() {
+              rm -rf "$STAGING_ROOT"
+            }
+            trap cleanup_staging EXIT
             mkdir -p "$BOT_ROOT"
             mkdir -p "$TARGET_COOKIES_DIR"
 
@@ -172,5 +179,5 @@ jobs:
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ steps.repo_meta.outputs.owner_lc }} --password-stdin
             docker pull ghcr.io/${{ steps.repo_meta.outputs.repo_lc }}:latest
 
-            chmod +x /home/${{ secrets.SSH_USER }}/deploy/manager.sh
-            /home/${{ secrets.SSH_USER }}/deploy/manager.sh prod
+            chmod +x "$DEPLOY_MANAGER_PATH"
+            "$DEPLOY_MANAGER_PATH" prod

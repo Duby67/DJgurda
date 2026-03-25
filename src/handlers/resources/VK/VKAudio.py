@@ -470,15 +470,10 @@ class VKAudio:
             "fragment_retries": 2,
             "concurrent_fragment_downloads": 4,
             "outtmpl": output_template,
-            "http_headers": {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                ),
-                "Accept-Language": "ru,en-US;q=0.9,en;q=0.8",
-            },
+            "user_agent": self.DEFAULT_USER_AGENT,
+            "http_headers": self.build_browser_headers(referer=hls_url),
         })
+        ydl_opts.update(self._build_vk_cookie_opts())
         cookiefile_path = ydl_opts.get("cookiefile")
 
         def _download() -> Optional[Path]:
@@ -524,11 +519,8 @@ class VKAudio:
         ydl_opts: dict[str, Any] = self._build_ytdlp_opts({
             "skip_download": True,
             "geo_bypass": True,
-            "user_agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
+            "user_agent": self.DEFAULT_USER_AGENT,
+            "http_headers": self.build_browser_headers(referer=url),
         })
         ydl_opts.update(self._build_vk_cookie_opts())
         cookiefile_path = ydl_opts.get("cookiefile")
