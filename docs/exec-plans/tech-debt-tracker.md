@@ -46,8 +46,7 @@
 ## Next Iteration Order
 
 1. Улучшение связки `CODEX` <-> swarm contour и reliability promotion flow.
-2. Продолжение обкатки swarm-контура на `YouTube`.
-3. Helper deduplication и toggle-flow cleanup после более срочных runtime-задач.
+2. Helper deduplication и toggle-flow cleanup после более срочных runtime-задач.
 
 ## Archived Source Notes
 
