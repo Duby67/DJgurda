@@ -243,6 +243,7 @@ def build_plan_output(route_result: dict[str, Any]) -> dict[str, Any]:
         "version": 1,
         "task_type": route_result["task_type"],
         "changed_paths": route_result["changed_paths"],
+        "context_expansion": route_result.get("context_expansion", {}),
         "recommended_agents": roles,
         "context_pack": route_result["context_pack"],
         "escalation": route_result["escalation"],

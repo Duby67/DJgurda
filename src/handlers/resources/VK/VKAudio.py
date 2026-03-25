@@ -570,6 +570,8 @@ class VKAudio:
             hls_path = await self._download_audio_hls_with_ytdlp(audio_url, track_token=track_token)
             if hls_path:
                 return hls_path
+            logger.warning("VK HLS download failed, direct manifest download is skipped: %s", audio_url)
+            return None
 
         self._ensure_vk_runtime_dirs()
         path_suffix = Path(urlsplit(audio_url).path).suffix.lower()
@@ -582,8 +584,12 @@ class VKAudio:
                 allow_redirects=True,
                 cookies=self._request_cookies or None,
             ) as response:
-                if response.status != 200:
+                if response.status < 200 or response.status >= 300:
                     logger.warning("VK audio download failed (%s): %s", response.status, audio_url)
+                    return None
+                content_type = str(response.headers.get("Content-Type", "")).lower()
+                if "mpegurl" in content_type:
+                    logger.warning("VK audio URL returned playlist manifest content-type: %s", audio_url)
                     return None
 
                 content_length = self._safe_int(response.headers.get("Content-Length"))
@@ -796,6 +802,16 @@ class VKAudio:
             return None
 
         file_path = await self._download_audio_stream(session, best_audio_url, track_token=track_token)
+        if not file_path:
+            fallback_audio_url = await self._extract_audio_url_with_ytdlp_fallback(canonical_url)
+            if isinstance(fallback_audio_url, str):
+                fallback_audio_url = self._vk_decode_audio_url(
+                    self._decode_escaped_url(fallback_audio_url),
+                    vk_user_id=tuple_vk_user_id,
+                )
+                if self._is_audio_media_url(fallback_audio_url) and fallback_audio_url != best_audio_url:
+                    logger.warning("VK audio download retry with yt-dlp fallback URL for %s", canonical_url)
+                    file_path = await self._download_audio_stream(session, fallback_audio_url, track_token=track_token)
         if not file_path:
             logger.error("VK audio download failed for %s", canonical_url)
             return None

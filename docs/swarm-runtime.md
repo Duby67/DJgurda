@@ -340,6 +340,7 @@ UX wrappers для approval:
 
 - пользователь отправляет один prompt;
 - orchestrator сам проводит задачу через swarm stages;
+- если planning/doc entrypoint вроде `docs/exec-plans/*` совпадает с близким swarm runtime candidate, route-stage может расширить context pack runtime-контекстом вместо немедленного `instruction_conflict`;
 - progress updates показывают активные workstreams, локальные шаги и подключенных субагентов;
 - на clarification и approval boundary агент задает вопрос пользователю и ждет ответа;
 - после ответа пользователя orchestrator продолжает тот же run, а не начинает новый с нуля.

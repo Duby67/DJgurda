@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Optional, Sequence
 
 from src.handlers.base import BaseHandler
-from src.handlers.registry import HandlerRegistry, RuntimeHandlerEntry, get_default_handler_registry
+from src.handlers.registry import (
+    HandlerRegistry,
+    RuntimeHandlerEntry,
+    get_default_handler_registry,
+    get_handler_registry_with_non_runtime_sources,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +24,18 @@ def get_active_handler_names() -> tuple[str, ...]:
 class ServiceManager:
     """Thin-wrapper над `HandlerRegistry` для поиска handler-а по URL."""
 
-    def __init__(self, registry: HandlerRegistry | None = None) -> None:
-        self.registry = registry or get_default_handler_registry()
+    def __init__(
+        self,
+        registry: HandlerRegistry | None = None,
+        *,
+        non_runtime_sources: Sequence[str] | None = None,
+    ) -> None:
+        if registry is not None:
+            self.registry = registry
+        elif non_runtime_sources:
+            self.registry = get_handler_registry_with_non_runtime_sources(non_runtime_sources)
+        else:
+            self.registry = get_default_handler_registry()
         self._entries: list[RuntimeHandlerEntry] = self.registry.create_runtime_entries()
         self.handlers: list[BaseHandler] = [entry.handler for entry in self._entries]
         logger.info("Registered handlers: %s", len(self.handlers))

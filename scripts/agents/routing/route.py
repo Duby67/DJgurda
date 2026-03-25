@@ -254,36 +254,57 @@ def select_task_type(
     return candidates[0].task_id, candidates
 
 
+def get_task_config_map(routing: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Строит map task_id -> routing config."""
+    return {
+        item["id"]: item
+        for item in routing.get("task_types") or []
+    }
+
+
 def build_context_pack(
     routing: dict[str, Any],
     task_id: str,
+    *,
+    expanded_task_ids: list[str] | None = None,
 ) -> dict[str, list[str]]:
     """Собирает context pack для выбранного task type."""
     base = routing["base_context_pack"]
-    task_cfg = next(item for item in routing["task_types"] if item["id"] == task_id)
+    task_cfg_map = get_task_config_map(routing)
+    task_ids = unique_keep_order([task_id, *(expanded_task_ids or [])])
 
-    agents = unique_keep_order(base.get("agents", []) + task_cfg.get("read_agents", []))
-    docs = unique_keep_order(base.get("docs", []) + task_cfg.get("read_docs", []))
-    code = unique_keep_order(task_cfg.get("read_code", []))
-    tests = unique_keep_order(task_cfg.get("check_tests", []))
-    notes = unique_keep_order(base.get("notes", []) + task_cfg.get("notes", []))
+    agents = list(base.get("agents", []))
+    docs = list(base.get("docs", []))
+    code: list[str] = []
+    tests: list[str] = []
+    notes = list(base.get("notes", []))
+
+    for current_task_id in task_ids:
+        task_cfg = task_cfg_map[current_task_id]
+        agents.extend(task_cfg.get("read_agents", []))
+        docs.extend(task_cfg.get("read_docs", []))
+        code.extend(task_cfg.get("read_code", []))
+        tests.extend(task_cfg.get("check_tests", []))
+        notes.extend(task_cfg.get("notes", []))
 
     return {
-        "agents": agents,
-        "docs": docs,
-        "code": code,
-        "tests": tests,
-        "notes": notes,
+        "agents": unique_keep_order(agents),
+        "docs": unique_keep_order(docs),
+        "code": unique_keep_order(code),
+        "tests": unique_keep_order(tests),
+        "notes": unique_keep_order(notes),
     }
 
 
 def build_context_trace(
     routing: dict[str, Any],
     task_id: str,
+    *,
+    expanded_task_ids: list[str] | None = None,
 ) -> list[dict[str, str]]:
     """Строит machine-readable trace для выбранного context pack."""
     base = routing["base_context_pack"]
-    task_cfg = next(item for item in routing["task_types"] if item["id"] == task_id)
+    task_cfg_map = get_task_config_map(routing)
     seen: set[tuple[str, str]] = set()
     trace: list[dict[str, str]] = []
 
@@ -308,24 +329,82 @@ def build_context_trace(
         )
     )
 
-    for category, key in (
-        ("agents", "read_agents"),
-        ("docs", "read_docs"),
-        ("code", "read_code"),
-        ("tests", "check_tests"),
-    ):
-        trace.extend(
-            build_trace_entries(
-                items=task_cfg.get(key, []),
-                category=category,
-                selection_source="escalation",
-                reason=f"task_type:{task_id}",
-                requested_by="planner",
-                seen=seen,
+    for current_task_id in unique_keep_order([task_id, *(expanded_task_ids or [])]):
+        task_cfg = task_cfg_map[current_task_id]
+        selection_source = "escalation" if current_task_id == task_id else "context_expansion"
+        reason = f"task_type:{current_task_id}" if current_task_id == task_id else f"context_expansion:{current_task_id}"
+        for category, key in (
+            ("agents", "read_agents"),
+            ("docs", "read_docs"),
+            ("code", "read_code"),
+            ("tests", "check_tests"),
+        ):
+            trace.extend(
+                build_trace_entries(
+                    items=task_cfg.get(key, []),
+                    category=category,
+                    selection_source=selection_source,
+                    reason=reason,
+                    requested_by="planner",
+                    seen=seen,
+                )
             )
-        )
+        
 
     return trace
+
+
+def resolve_context_expansion(
+    classifier: dict[str, Any],
+    routing: dict[str, Any],
+    *,
+    selected_task_id: str,
+    paths: list[str],
+    candidates: list[MatchResult],
+) -> dict[str, Any]:
+    """Определяет, нужно ли расширить context pack дополнительным task type."""
+    normalized_paths = [normalize_path(item) for item in paths]
+    task_cfg_map = get_task_config_map(routing)
+    matched_by_id = {
+        item.task_id: item
+        for item in candidates
+    }
+
+    for rule in classifier.get("context_expansion_rules") or []:
+        if rule.get("primary_task_type") != selected_task_id:
+            continue
+        if not match_path_prefixes(normalized_paths, rule.get("path_prefixes_any") or []):
+            continue
+
+        expanded_task_ids = [
+            task_id
+            for task_id in unique_keep_order(rule.get("secondary_task_types") or [])
+            if task_id in matched_by_id and task_id in task_cfg_map
+        ]
+        if not expanded_task_ids:
+            continue
+
+        return {
+            "applied": True,
+            "rule_id": str(rule.get("id", "")).strip(),
+            "expanded_task_types": [
+                {
+                    "id": task_id,
+                    "label": task_cfg_map[task_id]["label"],
+                    "score": matched_by_id[task_id].score,
+                    "evidence": matched_by_id[task_id].evidence,
+                }
+                for task_id in expanded_task_ids
+            ],
+            "suppressed_escalation_reasons": unique_keep_order(rule.get("suppress_escalation_reasons") or []),
+        }
+
+    return {
+        "applied": False,
+        "rule_id": "",
+        "expanded_task_types": [],
+        "suppressed_escalation_reasons": [],
+    }
 
 
 def detect_policy_conflicts(
@@ -418,8 +497,27 @@ def build_output(
 ) -> dict[str, Any]:
     """Собирает итоговый JSON-результат."""
     selected_task_id, candidates = select_task_type(classifier, prompt, paths)
-    context_pack = build_context_pack(routing, selected_task_id)
-    context_trace = build_context_trace(routing, selected_task_id)
+    context_expansion = resolve_context_expansion(
+        classifier,
+        routing,
+        selected_task_id=selected_task_id,
+        paths=paths,
+        candidates=candidates,
+    )
+    expanded_task_ids = [
+        item["id"]
+        for item in context_expansion["expanded_task_types"]
+    ]
+    context_pack = build_context_pack(
+        routing,
+        selected_task_id,
+        expanded_task_ids=expanded_task_ids,
+    )
+    context_trace = build_context_trace(
+        routing,
+        selected_task_id,
+        expanded_task_ids=expanded_task_ids,
+    )
     policy_conflicts = detect_policy_conflicts(
         selected_task_id=selected_task_id,
         prompt=prompt,
@@ -433,8 +531,15 @@ def build_output(
         paths=paths,
         candidates=candidates,
     )
+    suppressed_escalation_reasons = set(context_expansion["suppressed_escalation_reasons"])
+    filtered_escalation_reasons = [
+        reason
+        for reason in escalation_reasons
+        if reason not in suppressed_escalation_reasons
+    ]
+    needs_escalation = bool(filtered_escalation_reasons)
 
-    task_cfg = next(item for item in routing["task_types"] if item["id"] == selected_task_id)
+    task_cfg = get_task_config_map(routing)[selected_task_id]
     return {
         "task_type": {
             "id": selected_task_id,
@@ -451,21 +556,22 @@ def build_output(
         "changed_paths": paths,
         "context_pack": context_pack,
         "context_trace": context_trace,
+        "context_expansion": context_expansion,
         "routing_diagnostics": {
             "instruction_conflict": (
-                "multiple_task_types_match_with_similar_confidence" in escalation_reasons
+                "multiple_task_types_match_with_similar_confidence" in filtered_escalation_reasons
                 or bool(policy_conflicts)
             ),
             "conflict_reason": (
                 "multiple_task_types_match_with_similar_confidence"
-                if "multiple_task_types_match_with_similar_confidence" in escalation_reasons
+                if "multiple_task_types_match_with_similar_confidence" in filtered_escalation_reasons
                 else (policy_conflicts[0] if policy_conflicts else "")
             ),
             "policy_conflicts": policy_conflicts,
         },
         "escalation": {
             "needed": needs_escalation,
-            "reasons": escalation_reasons,
+            "reasons": filtered_escalation_reasons,
         },
     }
 

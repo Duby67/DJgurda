@@ -28,6 +28,7 @@ Swarm run bundles и lifecycle artifacts сохраняются в корнев�
 
 - пользователь пишет агенту один prompt обычным языком;
 - агент сам использует swarm contour как operational model для route, plan, orchestration и verification;
+- planning/doc entrypoint вроде `docs/exec-plans/*` не должен автоматически сужать scope до docs-only: при близком overlap с swarm runtime route может расширить context pack кодом и тестами orchestration-слоя;
 - для нетривиальной задачи агент сам поднимает субагентов там, где это ускоряет работу и не ломает source of truth;
 - в progress updates агент показывает, какие подзадачи сейчас активны и какие субагенты задействованы;
 - если для продолжения нужны clarification, тесты, `commit`, `push` или другая human boundary, агент задает пользователю явный вопрос и ждет ответа вместо молчаливого продолжения.

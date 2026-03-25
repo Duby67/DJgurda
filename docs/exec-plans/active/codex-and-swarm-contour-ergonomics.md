@@ -4,7 +4,7 @@
 
 - Active.
 - Initial planning started on 2026-03-24.
-- Current phase: scoped task formation.
+- Current phase: first implementation slice in progress.
 
 ## Goal
 
@@ -38,3 +38,9 @@
    - Отдельно описать, где frontier general-purpose model полезнее оставить для planning/review/docs-heavy phases.
 5. Сформировать bounded ergonomics roadmap без расползания в unrelated swarm refactors.
 6. Подготовить implementation plan и targeted verification set.
+
+## Progress Snapshot
+
+- Первый bounded slice взят в route-stage.
+- Для planning/doc entrypoint в `docs/exec-plans/*` начат переход от false-positive `instruction_conflict` к context expansion в swarm runtime orchestration context.
+- В первую очередь расширяется кодовый и test context для `swarm_runtime_orchestration_change`, чтобы direct Codex flow не требовал ручного шва сразу после planning anchor.

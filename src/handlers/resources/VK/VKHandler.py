@@ -1,5 +1,5 @@
 """
-Главный обработчик VK Music (audio + playlist).
+Главный обработчик VK (audio + playlist + clip + post + profile/community).
 """
 
 from __future__ import annotations
@@ -15,8 +15,11 @@ from src.handlers.base import BaseHandler
 from src.handlers.contracts import MediaResult
 
 from .VKAudio import VKAudio
+from .VKClip import VKClip
 from .VKDependencies import VKMediaGateway, VKRequestContext
 from .VKPlaylist import VKPlaylist
+from .VKPost import VKPost
+from .VKProfile import VKProfile
 from .VKUrlService import VKUrlService
 
 logger = logging.getLogger(__name__)
@@ -24,14 +27,24 @@ logger = logging.getLogger(__name__)
 
 class VKHandler(BaseHandler):
     """
-    Асинхронный обработчик VK Music:
+    Асинхронный обработчик VK:
     - одиночный трек (`audio`);
     - плейлист (`playlist`).
+    - clip (`video`);
+    - wall post (`media_group`);
+    - account/community (`profile`).
     """
 
     PATTERN = re.compile(
-        r"https?://(?:www\.|m\.)?(?:vk\.com|vk\.ru)/"
-        r"(?:audio-?\d+_\d+(?:_[A-Za-z0-9]+)?|music/playlist/-?\d+_\d+(?:_[A-Za-z0-9]+)?)"
+        r"https?://(?:www\.|m\.)?(?:vk\.com|vk\.ru|vkvideo\.ru)/"
+        r"(?:"
+        r"audio-?\d+_\d+(?:_[A-Za-z0-9]+)?|"
+        r"music/playlist/-?\d+_\d+(?:_[A-Za-z0-9]+)?|"
+        r"clip-?\d+_\d+|"
+        r"wall-?\d+_\d+|"
+        r"id\d+|"
+        r"[A-Za-z0-9_.-]+"
+        r")"
         r"(?:/?(?:\?.*)?)?$",
         re.IGNORECASE,
     )
@@ -48,7 +61,19 @@ class VKHandler(BaseHandler):
             request_context=self._request_context,
             media_gateway=self._media_gateway,
         )
+        self._clip_processor = VKClip(
+            request_context=self._request_context,
+            media_gateway=self._media_gateway,
+        )
         self._playlist_processor = VKPlaylist(
+            request_context=self._request_context,
+            media_gateway=self._media_gateway,
+        )
+        self._post_processor = VKPost(
+            request_context=self._request_context,
+            media_gateway=self._media_gateway,
+        )
+        self._profile_processor = VKProfile(
             request_context=self._request_context,
             media_gateway=self._media_gateway,
         )
@@ -108,6 +133,38 @@ class VKHandler(BaseHandler):
                     owner_id=content_match.group("owner"),
                     playlist_id=content_match.group("playlist"),
                     access_hash=content_match.group("access_hash"),
+                )
+
+            if content_type == "clip":
+                return await self._clip_processor.process(
+                    session=session,
+                    original_url=url,
+                    context=context,
+                    owner_id=content_match.group("owner"),
+                    clip_id=content_match.group("clip"),
+                )
+
+            if content_type == "post":
+                return await self._post_processor.process(
+                    session=session,
+                    original_url=url,
+                    context=context,
+                    owner_id=content_match.group("owner"),
+                    post_id=content_match.group("post"),
+                )
+
+            if content_type == "profile":
+                screen_name = (
+                    content_match.groupdict().get("screen_name")
+                    or content_match.groupdict().get("profile_id")
+                    or target_url.rsplit("/", 1)[-1]
+                )
+                return await self._profile_processor.process(
+                    session=session,
+                    original_url=url,
+                    context=context,
+                    canonical_url=target_url,
+                    screen_name=screen_name,
                 )
 
         logger.warning("VK content type is not supported by process() branch: %s", content_type)

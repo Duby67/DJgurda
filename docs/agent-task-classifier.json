@@ -330,6 +330,21 @@
       "reason": "Routing and verification policy changes should not collapse into plain docs-only work."
     }
   ],
+  "context_expansion_rules": [
+    {
+      "id": "planning_doc_anchor_expands_runtime_context",
+      "path_prefixes_any": [
+        "docs/exec-plans/"
+      ],
+      "primary_task_type": "swarm_policy_or_planning_change",
+      "secondary_task_types": [
+        "swarm_runtime_orchestration_change"
+      ],
+      "suppress_escalation_reasons": [
+        "multiple_task_types_match_with_similar_confidence"
+      ]
+    }
+  ],
   "manual_review_cases": [
     "Multiple high-risk task types match with similar confidence.",
     "The task touches both swarm orchestration and sandbox execution.",
