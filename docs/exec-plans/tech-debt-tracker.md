@@ -6,7 +6,7 @@
 
 ## Backlog Metadata
 
-- Последняя ревизия backlog: 2026-03-25 | version/tag: v1.2.5_c
+- Последняя ревизия backlog: 2026-03-25 | version/tag: v1.2.5_d
 
 ## High Priority
 
