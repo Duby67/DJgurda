@@ -74,17 +74,25 @@ if errorlevel 1 (
 
 REM Синхронизация идет только по локально существующим файлам без удаления server-side остатков.
 set /a FILES_COPIED=0
-for %%F in ("%SOURCE_DIR%\*_cookies.txt") do (
+pushd "%SOURCE_DIR%" >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] Failed to enter deploy cookies directory: "%SOURCE_DIR%"
+    exit /b 1
+)
+
+for %%F in (*_cookies.txt) do (
     if exist "%%~fF" (
         echo [INFO] Uploading %%~nxF
         scp -P %REMOTE_PORT% "%%~fF" %REMOTE_USER%@%REMOTE_HOST%:%REMOTE_DIR%/
         if errorlevel 1 (
+            popd >nul
             echo [ERROR] Upload failed: %%~nxF
             exit /b 1
         )
         set /a FILES_COPIED+=1
     )
 )
+popd >nul
 
 if !FILES_COPIED! EQU 0 (
     echo [WARN] No cookie files found to upload in "%SOURCE_DIR%".

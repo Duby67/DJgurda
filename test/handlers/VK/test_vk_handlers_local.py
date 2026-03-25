@@ -122,8 +122,8 @@ PROFILE_CASES = tuple(
 
 
 def _build_vk_service_manager() -> ServiceManager:
-    """Создает ServiceManager с явным opt-in на non-runtime VK handler."""
-    return ServiceManager(non_runtime_sources=("VK",))
+    """Создает ServiceManager c VK в default active runtime."""
+    return ServiceManager()
 
 
 def _cleanup_media_result(result: MediaResult) -> None:

@@ -19,15 +19,14 @@
 
 ## Local Invariants
 
-- `VK` не является частью stable runtime.
+- `VK` входит в active runtime, но остается elevated-risk и cookie-sensitive source.
 - Наличие кода и локальных smoke checks не означает production readiness.
 - `yt-dlp` не должен считаться надежной базовой технологией для `VK`.
 - Любое текущее решение здесь нужно рассматривать как исследовательское и легко деградирующее.
 
 ## Change Rules
 
-- Не продвигать `VK` в stable runtime через локальные точечные правки.
-- Не оформлять изменения в `VK` как обычную stabilization-задачу без отдельного архитектурного решения.
+- Любые изменения в `VK` нужно рассматривать как active-runtime changes с повышенным риском, а не как обычную routine fix.
 - При правках extraction logic отдельно фиксировать, что именно стало лучше:
   - классификация URL;
   - cookies usage;
@@ -44,5 +43,4 @@
 ## Escalate When
 
 - нужно менять source-status policy;
-- хочется включить `VK` в registry stable runtime;
 - изменение затрагивает общий handler contract или shared infra ради поддержки `VK`.

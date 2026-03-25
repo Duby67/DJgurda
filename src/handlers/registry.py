@@ -10,21 +10,20 @@ from src.handlers.contracts import ContentType
 from src.handlers.resources.Coub import CoubHandler
 from src.handlers.resources.Instagram import InstagramHandler
 from src.handlers.resources.TikTok import TikTokHandler
+from src.handlers.resources.VK import VKHandler
 from src.handlers.resources.YandexMusic import YandexMusicHandler
 from src.handlers.resources.YouTube import YouTubeHandler
 
 HandlerFactory = Callable[[], BaseHandler]
 
-# Явная фиксация source-статусов вне stable runtime-контура.
-_NON_RUNTIME_SOURCE_STATUSES: dict[str, str] = {
-    "VK": "in_development",
-}
+# Каталог non-runtime sources оставлен для будущих opt-in кейсов.
+_NON_RUNTIME_SOURCE_STATUSES: dict[str, str] = {}
 
 
 @dataclass(frozen=True, slots=True)
 class SourceResilienceProfile:
     """
-    Явное описание resilience posture для stable runtime source.
+    Явное описание resilience posture для active runtime source.
 
     Поля описывают не SLA, а ожидаемую operational модель:
     какие внешние зависимости участвуют, где находятся основные timeout-budget'ы,
@@ -111,8 +110,7 @@ def _default_descriptors() -> tuple[HandlerDescriptor, ...]:
 
     Важно: новые handlers добавляются декларативно через этот список.
 
-    В intentionally excluded non-runtime зоне:
-    - `VK` остается в статусе in_development.
+    Источники в этом списке считаются active runtime.
     """
     return (
         HandlerDescriptor(
@@ -292,52 +290,47 @@ def _default_descriptors() -> tuple[HandlerDescriptor, ...]:
                 ),
             ),
         ),
-    )
-
-
-def _vk_non_runtime_descriptor() -> HandlerDescriptor:
-    """Возвращает descriptor VK для явного non-runtime opt-in."""
-    from src.handlers.resources.VK import VKHandler
-
-    return HandlerDescriptor(
-        source_name="VK",
-        pattern=VKHandler.PATTERN,
-        priority=50,
-        feature_flags=("non_runtime_opt_in", "in_development"),
-        factory=VKHandler,
-        supported_content_types=(
-            ContentType.AUDIO,
-            ContentType.PLAYLIST,
-        ),
-        resilience_profile=SourceResilienceProfile(
-            dependency_surfaces=(
-                "VK web audio metadata via al_audio endpoints",
-                "cookie-sensitive HTML and JSON extraction",
-                "direct/HLS audio download with bounded yt-dlp fallback",
+        HandlerDescriptor(
+            source_name="VK",
+            pattern=VKHandler.PATTERN,
+            priority=50,
+            feature_flags=("runtime_enabled", "cookie_sensitive", "elevated_risk"),
+            factory=VKHandler,
+            supported_content_types=(
+                ContentType.AUDIO,
+                ContentType.PLAYLIST,
+                ContentType.VIDEO,
+                ContentType.MEDIA_GROUP,
+                ContentType.PROFILE,
             ),
-            timeout_expectations=(
-                "handler-level network timeouts stay bounded for local smoke workflows",
-                "audio download path remains limited by shared HttpFileService size posture",
-            ),
-            retry_expectations=(
-                "best-effort extraction fallbacks are allowed only inside VK module",
-                "no unbounded retries after anti-bot/interstitial responses",
-            ),
-            degrade_signals=(
-                "vk_audio_stream_url_not_found",
-                "vk_audio_download_failed",
-                "vk_badbrowser_interstitial",
-            ),
-            degrade_behavior=(
-                "Remain opt-in and fail closed for unstable extraction paths without promoting VK to stable runtime."
+            resilience_profile=SourceResilienceProfile(
+                dependency_surfaces=(
+                    "VK web metadata via audio/profile/post endpoints",
+                    "cookie-sensitive HTML and JSON extraction",
+                    "direct/HLS media download with bounded yt-dlp fallback",
+                ),
+                timeout_expectations=(
+                    "handler-level network timeouts stay bounded for local smoke workflows",
+                    "media download paths remain limited by shared HttpFileService size posture",
+                ),
+                retry_expectations=(
+                    "best-effort extraction fallbacks are allowed only inside VK module",
+                    "no unbounded retries after anti-bot/interstitial responses",
+                ),
+                degrade_signals=(
+                    "vk_audio_stream_url_not_found",
+                    "vk_audio_download_failed",
+                    "vk_badbrowser_interstitial",
+                ),
+                degrade_behavior=(
+                    "Fail closed for unstable extraction paths while keeping degraded outcomes explicit."
+                ),
             ),
         ),
     )
 
 
-_NON_RUNTIME_DESCRIPTOR_BUILDERS: dict[str, Callable[[], HandlerDescriptor]] = {
-    "VK": _vk_non_runtime_descriptor,
-}
+_NON_RUNTIME_DESCRIPTOR_BUILDERS: dict[str, Callable[[], HandlerDescriptor]] = {}
 
 
 _DEFAULT_HANDLER_REGISTRY: HandlerRegistry | None = None
@@ -373,5 +366,5 @@ def get_handler_registry_with_non_runtime_sources(source_names: Sequence[str]) -
 
 
 def get_non_runtime_source_statuses() -> dict[str, str]:
-    """Возвращает статусы источников, исключенных из stable runtime."""
+    """Возвращает статусы источников, исключенных из active runtime."""
     return dict(_NON_RUNTIME_SOURCE_STATUSES)

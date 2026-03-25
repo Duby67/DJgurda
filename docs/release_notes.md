@@ -56,6 +56,20 @@
   - Нет / Да (описание)
 ```
 
+## 2026-03-25 | version/tag: vk-runtime-reactivation | env: both
+
+- Что изменилось:
+  - `VKHandler` снова включен в active runtime и попадает в default `ServiceManager` без dev-only opt-in.
+  - Runtime registry, VK smoke checks и user-facing docs синхронизированы под новый active source list.
+  - Ручной cookie-sync path зафиксирован как `deploy/cookies/*_cookies.txt -> /home/<REMOTE_USER>/bot_{dev|prod}/data/cookies` через локальный `deploy/sync_cookies.env`.
+- Важно для деплоя:
+  - Для надежной работы VK в runtime нужно поддерживать актуальный `vk.com_cookies.txt` в `deploy/cookies` и на сервере.
+  - `deploy/sync_cookies.env` остается локальным файлом и не должен попадать в git.
+- Breaking changes:
+  - Нет.
+- Ручные действия после релиза:
+  - При ручном обновлении cookies использовать `deploy/sync_cookies.sh` или `deploy/sync_cookies.bat`.
+
 ## 2026-03-11 | version/tag: v1.2.4 | env: prod
 
 - Что изменилось:

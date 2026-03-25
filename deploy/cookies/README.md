@@ -5,7 +5,8 @@
 Что здесь происходит:
 
 - GitHub Actions или ручной deploy materialize cookies в `deploy/cookies/`;
-- затем файлы копируются на сервер и синхронизируются в runtime cookies directory;
+- затем `deploy/sync_cookies.sh` или `deploy/sync_cookies.bat` копируют только локально существующие `*_cookies.txt` на сервер;
+- на сервере файлы синхронизируются в `/home/<REMOTE_USER>/bot_{dev|prod}/data/cookies`;
 - сами секреты не должны храниться в git.
 
 Правила:

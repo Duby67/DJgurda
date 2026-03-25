@@ -107,7 +107,7 @@
         ".\\venv\\Scripts\\python.exe -m pytest test/handlers/VK"
       ],
       "sandbox_required_for": ["VK smoke paths and any network/cookie-sensitive validation"],
-      "notes": ["Do not treat VK checks as stable-runtime certification."]
+      "notes": ["VK checks remain cookie-sensitive and do not replace broader active-runtime verification."]
     },
     "db_settings_or_stats_change": {
       "profile_id": "db_settings_or_stats_change",
