@@ -23,6 +23,7 @@ from src.handlers.infrastructure import (
     DelayPolicyService,
     HttpFileService,
     RuntimePathService,
+    YtdlpMediaGroupService,
     YtdlpOptionBuilder,
 )
 from src.utils.cookies import CookieFile
@@ -82,6 +83,16 @@ class VKMediaGatewayProtocol(Protocol):
         size_limit: Optional[int] = None,
     ) -> bool:
         """Скачивает thumbnail."""
+
+    async def _download_media_group(
+        self,
+        url: str,
+        ydl_opts: dict[str, Any],
+        *,
+        group_id: Optional[str] = None,
+        size_limit: Optional[int] = None,
+    ) -> Optional[list[dict[str, Any]]]:
+        """Скачивает media-group через yt-dlp."""
 
 
 class VKRequestContext:
@@ -321,6 +332,37 @@ class VKRequestContext:
             response_url,
         )
 
+    @staticmethod
+    def _decode_html_response(raw_bytes: bytes, response: aiohttp.ClientResponse) -> str:
+        """Декодирует HTML с уважением к charset из VK-ответа."""
+        encoding_candidates: list[str] = []
+
+        response_charset = getattr(response, "charset", None)
+        if isinstance(response_charset, str) and response_charset.strip():
+            encoding_candidates.append(response_charset.strip())
+
+        try:
+            detected_encoding = response.get_encoding()
+        except Exception:
+            detected_encoding = None
+        if isinstance(detected_encoding, str) and detected_encoding.strip():
+            encoding_candidates.append(detected_encoding.strip())
+
+        encoding_candidates.extend(["windows-1251", "cp1251", "utf-8"])
+
+        seen: set[str] = set()
+        for encoding in encoding_candidates:
+            normalized = encoding.lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            try:
+                return raw_bytes.decode(encoding, errors="ignore")
+            except LookupError:
+                continue
+
+        return raw_bytes.decode("utf-8", errors="ignore")
+
     async def _fetch_html(self, session: aiohttp.ClientSession, url: str) -> Optional[str]:
         """Загружает HTML-страницу."""
         try:
@@ -336,7 +378,8 @@ class VKRequestContext:
                 if response.status != 200:
                     logger.warning("VK HTML request failed (%s): %s", response.status, url)
                     return None
-                return await response.text(errors="ignore")
+                raw_bytes = await response.read()
+                return self._decode_html_response(raw_bytes, response)
         except Exception as exc:
             logger.warning("VK HTML request failed for %s: %s", url, exc)
             return None
@@ -480,6 +523,11 @@ class VKMediaGateway:
         self._delay_policy = DelayPolicyService()
         self._http_service = HttpFileService(delay_policy=self._delay_policy)
         self._option_builder = YtdlpOptionBuilder(scope=self.__class__.__name__)
+        self._media_group_service = YtdlpMediaGroupService(
+            runtime_paths=self._runtime_paths,
+            delay_policy=self._delay_policy,
+            option_builder=self._option_builder,
+        )
         self.audio_limit = self._http_service.audio_limit
         self.photo_limit = self._http_service.photo_limit
 
@@ -503,3 +551,19 @@ class VKMediaGateway:
     ) -> bool:
         """Скачивает thumbnail с проверкой лимита размера."""
         return await self._http_service.download_thumbnail(url, dest_path, size_limit=size_limit)
+
+    async def _download_media_group(
+        self,
+        url: str,
+        ydl_opts: dict[str, Any],
+        *,
+        group_id: Optional[str] = None,
+        size_limit: Optional[int] = None,
+    ) -> Optional[list[dict[str, Any]]]:
+        """Скачивает media-group через yt-dlp с текущими runtime/policy сервисами."""
+        return await self._media_group_service.download_media_group(
+            url,
+            ydl_opts,
+            group_id=group_id,
+            size_limit=size_limit,
+        )

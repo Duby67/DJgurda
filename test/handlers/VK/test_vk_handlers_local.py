@@ -220,8 +220,20 @@ def validate_media_file(handler_output: MediaResult) -> tuple[bool, str]:
 
 def validate_media_group(handler_output: MediaResult) -> tuple[bool, str]:
     """Проверяет media_group поста."""
+    lead_text = str(handler_output.lead_text or "").strip()
+    if not lead_text:
+        return False, "post typed-результат не содержит lead_text"
+
     if not handler_output.media_group:
-        return False, "post typed-результат не содержит media_group"
+        if not handler_output.audios:
+            return False, "post typed-результат не содержит media_group/audios"
+        for audio_item in handler_output.audios:
+            if not audio_item.file_path.exists():
+                return False, f"audio вложение не найдено: {audio_item.file_path}"
+            if audio_item.file_path.stat().st_size <= 0:
+                return False, f"пустое audio вложение: {audio_item.file_path}"
+        return True, f"audio-only post ok ({len(handler_output.audios)} files)"
+
     for attachment in handler_output.media_group:
         if attachment.kind not in {AttachmentKind.PHOTO, AttachmentKind.VIDEO}:
             return False, f"неподдерживаемый тип вложения: {attachment.kind}"
@@ -229,7 +241,14 @@ def validate_media_group(handler_output: MediaResult) -> tuple[bool, str]:
             return False, f"вложение не найдено: {attachment.file_path}"
         if attachment.file_path.stat().st_size <= 0:
             return False, f"пустое вложение: {attachment.file_path}"
-    return True, f"media_group ok ({len(handler_output.media_group)} files)"
+
+    for audio_item in handler_output.audios:
+        if not audio_item.file_path.exists():
+            return False, f"audio вложение не найдено: {audio_item.file_path}"
+        if audio_item.file_path.stat().st_size <= 0:
+            return False, f"пустое audio вложение: {audio_item.file_path}"
+
+    return True, f"media_group ok ({len(handler_output.media_group)} files, audios={len(handler_output.audios)})"
 
 
 def validate_profile_result(handler_output: MediaResult) -> tuple[bool, str]:
@@ -237,7 +256,13 @@ def validate_profile_result(handler_output: MediaResult) -> tuple[bool, str]:
     caption_text = str(handler_output.caption_text or "").strip()
     if not caption_text:
         return False, "profile typed-результат не содержит caption_text"
-    return True, "profile caption сформирован"
+    if "<a href=" not in caption_text:
+        return False, "profile caption не содержит hyperlink"
+    if handler_output.main_file_path is None:
+        return False, "profile typed-результат не содержит avatar file"
+    if not handler_output.main_file_path.exists():
+        return False, f"avatar file не найден: {handler_output.main_file_path}"
+    return True, "profile card сформирован"
 
 
 async def run_playlist_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
