@@ -1,4 +1,4 @@
-"""Локальный smoke-тест для проверки VKHandler (playlist + audio tracks).
+"""Локальный smoke-тест для проверки VKHandler (playlist + audio + clip + post + profile).
 
 Сценарий:
 1. Разрешает URL через resolve_url.
@@ -49,10 +49,16 @@ os.environ.setdefault(
 )
 
 from src.handlers.manager import ServiceManager
-from src.handlers.contracts import MediaResult
+from src.handlers.contracts import AttachmentKind, MediaResult
 from src.handlers.resources import VKHandler
 from src.utils.url import resolve_url
-from VK_urls import VK_PLAYLIST_TEST_CASE, VK_TRACK_TEST_CASES
+from VK_urls import (
+    VK_CLIP_TEST_CASE,
+    VK_PLAYLIST_TEST_CASE,
+    VK_POST_TEST_CASE,
+    VK_PROFILE_TEST_CASES,
+    VK_TRACK_TEST_CASES,
+)
 
 
 @dataclass(frozen=True)
@@ -91,6 +97,27 @@ TRACK_CASES = tuple(
         description=case["description"],
     )
     for case in VK_TRACK_TEST_CASES
+)
+CLIP_CASE = SmokeCase(
+    name=VK_CLIP_TEST_CASE["name"],
+    url=VK_CLIP_TEST_CASE["url"],
+    expected_type=VK_CLIP_TEST_CASE["expected_type"],
+    description=VK_CLIP_TEST_CASE["description"],
+)
+POST_CASE = SmokeCase(
+    name=VK_POST_TEST_CASE["name"],
+    url=VK_POST_TEST_CASE["url"],
+    expected_type=VK_POST_TEST_CASE["expected_type"],
+    description=VK_POST_TEST_CASE["description"],
+)
+PROFILE_CASES = tuple(
+    SmokeCase(
+        name=case["name"],
+        url=case["url"],
+        expected_type=case["expected_type"],
+        description=case["description"],
+    )
+    for case in VK_PROFILE_TEST_CASES
 )
 
 
@@ -176,6 +203,41 @@ def validate_audio_file(handler_output: MediaResult) -> tuple[bool, str]:
         return False, "в итоговом файле не найден аудио-поток"
 
     return True, f"валидный аудиофайл ({file_size} bytes)"
+
+
+def validate_media_file(handler_output: MediaResult) -> tuple[bool, str]:
+    """Проверяет existence для одиночного media file."""
+    file_path = _extract_main_file_path(handler_output)
+    if not isinstance(file_path, Path):
+        return False, "в результате отсутствует корректный путь к медиафайлу"
+    if not file_path.exists():
+        return False, f"файл не найден: {file_path}"
+    file_size = file_path.stat().st_size
+    if file_size <= 0:
+        return False, "размер медиафайла равен 0"
+    return True, f"валидный медиафайл ({file_size} bytes)"
+
+
+def validate_media_group(handler_output: MediaResult) -> tuple[bool, str]:
+    """Проверяет media_group поста."""
+    if not handler_output.media_group:
+        return False, "post typed-результат не содержит media_group"
+    for attachment in handler_output.media_group:
+        if attachment.kind not in {AttachmentKind.PHOTO, AttachmentKind.VIDEO}:
+            return False, f"неподдерживаемый тип вложения: {attachment.kind}"
+        if not attachment.file_path.exists():
+            return False, f"вложение не найдено: {attachment.file_path}"
+        if attachment.file_path.stat().st_size <= 0:
+            return False, f"пустое вложение: {attachment.file_path}"
+    return True, f"media_group ok ({len(handler_output.media_group)} files)"
+
+
+def validate_profile_result(handler_output: MediaResult) -> tuple[bool, str]:
+    """Проверяет profile-card результат."""
+    caption_text = str(handler_output.caption_text or "").strip()
+    if not caption_text:
+        return False, "profile typed-результат не содержит caption_text"
+    return True, "profile caption сформирован"
 
 
 async def run_playlist_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
@@ -344,6 +406,68 @@ async def run_track_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
             _cleanup_media_result(handler_output)
 
 
+async def run_generic_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
+    """Запускает generic smoke-кейс для clip/post/profile."""
+    service_manager = _build_vk_service_manager()
+    resolved_url = await resolve_url(case.url)
+    handler = service_manager.get_handler(resolved_url)
+
+    if not handler:
+        return SmokeResult(case=case, resolved_url=resolved_url, ok=False, message="обработчик не найден для resolved URL")
+    if not isinstance(handler, VKHandler):
+        return SmokeResult(
+            case=case,
+            resolved_url=resolved_url,
+            ok=False,
+            message=f"ожидался VKHandler, получен: {handler.__class__.__name__}",
+        )
+
+    handler_output: MediaResult | None = None
+    try:
+        try:
+            handler_output = await asyncio.wait_for(
+                handler.process(case.url, context=f"local-smoke:{case.name}", resolved_url=resolved_url),
+                timeout=timeout_sec,
+            )
+        except asyncio.TimeoutError:
+            return SmokeResult(case=case, resolved_url=resolved_url, ok=False, message=f"таймаут обработки ({timeout_sec} сек)")
+        except Exception as exc:  # noqa: BLE001
+            return SmokeResult(case=case, resolved_url=resolved_url, ok=False, message=f"исключение: {exc}")
+
+        if not handler_output:
+            return SmokeResult(case=case, resolved_url=resolved_url, ok=False, message="handler.process вернул None")
+
+        actual_type = _extract_actual_type(handler_output)
+        if actual_type != case.expected_type:
+            return SmokeResult(
+                case=case,
+                resolved_url=resolved_url,
+                ok=False,
+                message=f"ожидался type={case.expected_type}, получен type={actual_type}",
+                actual_type=actual_type,
+            )
+
+        if actual_type == "video":
+            ok, message = validate_media_file(handler_output)
+        elif actual_type == "media_group":
+            ok, message = validate_media_group(handler_output)
+        elif actual_type == "profile":
+            ok, message = validate_profile_result(handler_output)
+        else:
+            ok, message = False, f"generic validator does not support type={actual_type}"
+
+        return SmokeResult(
+            case=case,
+            resolved_url=resolved_url,
+            ok=ok,
+            message=message,
+            actual_type=actual_type,
+        )
+    finally:
+        if isinstance(handler_output, MediaResult):
+            _cleanup_media_result(handler_output)
+
+
 async def run_all(timeout_sec: int) -> int:
     """Выполняет все тест-кейсы и возвращает код завершения."""
     print("=== VKHandler local smoke ===")
@@ -352,22 +476,21 @@ async def run_all(timeout_sec: int) -> int:
 
     results: list[SmokeResult] = []
 
-    print(f"[RUN] {PLAYLIST_CASE.name}: {PLAYLIST_CASE.url}")
-    print(f"  description: {PLAYLIST_CASE.description}")
-    playlist_result = await run_playlist_case(PLAYLIST_CASE, timeout_sec=timeout_sec)
-    results.append(playlist_result)
-    playlist_status = "OK" if playlist_result.ok else "FAIL"
-    print(f"  status: {playlist_status}")
-    print(f"  resolved_url: {playlist_result.resolved_url}")
-    print(f"  expected_type: {PLAYLIST_CASE.expected_type}")
-    print(f"  actual_type: {playlist_result.actual_type}")
-    print(f"  message: {playlist_result.message}")
-    print("")
+    all_cases: list[tuple[SmokeCase, str]] = [(PLAYLIST_CASE, "playlist")]
+    all_cases.extend((case, "audio") for case in TRACK_CASES)
+    all_cases.append((CLIP_CASE, "generic"))
+    all_cases.append((POST_CASE, "generic"))
+    all_cases.extend((case, "generic") for case in PROFILE_CASES)
 
-    for case in TRACK_CASES:
+    for case, runner_kind in all_cases:
         print(f"[RUN] {case.name}: {case.url}")
         print(f"  description: {case.description}")
-        result = await run_track_case(case, timeout_sec=timeout_sec)
+        if runner_kind == "playlist":
+            result = await run_playlist_case(case, timeout_sec=timeout_sec)
+        elif runner_kind == "audio":
+            result = await run_track_case(case, timeout_sec=timeout_sec)
+        else:
+            result = await run_generic_case(case, timeout_sec=timeout_sec)
         results.append(result)
         status = "OK" if result.ok else "FAIL"
         print(f"  status: {status}")
@@ -389,7 +512,7 @@ async def run_all(timeout_sec: int) -> int:
 def parse_args() -> argparse.Namespace:
     """Парсит аргументы CLI."""
     parser = argparse.ArgumentParser(
-        description="Локальный smoke-тест для VKHandler (playlist/audio)."
+        description="Локальный smoke-тест для VKHandler (playlist/audio/clip/post/profile)."
     )
     parser.add_argument(
         "--timeout",
