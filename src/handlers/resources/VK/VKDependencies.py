@@ -34,6 +34,7 @@ class VKRequestContextProtocol(Protocol):
     """Контракт shared VK-хелперов и сетевых операций."""
 
     _request_cookies: dict[str, str]
+    _cookie_buckets: dict[str, dict[str, str]]
     _vk_user_id: int
     VK_AUDIO_B64_ALPHABET: str
     VK_OP_SEPARATOR: str
@@ -111,9 +112,77 @@ class VKRequestContext:
             runtime_dir=runtime_dir,
             log=logger,
         )
-        self._request_cookies = self._vk_cookies.build_request_cookies()
-        self._vk_user_id = self._extract_vk_user_id_from_cookies(self._request_cookies)
+        valid_cookie_path = self._vk_cookies.resolve_valid_path()
+        self._cookie_buckets = self._load_domain_cookie_buckets(valid_cookie_path)
+        self._request_cookies = self._build_default_request_cookies()
+        self._vk_user_id = self._extract_vk_user_id_from_cookies(
+            self._cookie_buckets.get("vk.com") or self._request_cookies
+        )
         self._badbrowser_logged_pairs: set[tuple[str, str]] = set()
+
+    @staticmethod
+    def _normalize_cookie_domain(domain: str) -> str:
+        """Нормализует домен cookie до host-like вида без ведущей точки."""
+        return domain.strip().lstrip(".").lower()
+
+    @classmethod
+    def _load_domain_cookie_buckets(cls, cookie_path: Optional[Path]) -> dict[str, dict[str, str]]:
+        """Загружает cookies с разделением по доменам из Netscape-файла."""
+        if not isinstance(cookie_path, Path) or not cookie_path.exists():
+            return {}
+
+        buckets: dict[str, dict[str, str]] = {}
+        for raw_line in cookie_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith("#HttpOnly_"):
+                line = line[len("#HttpOnly_"):]
+            elif line.startswith("#"):
+                continue
+
+            parts = line.split("\t")
+            if len(parts) < 7:
+                continue
+
+            domain = cls._normalize_cookie_domain(parts[0])
+            name = parts[5].strip()
+            value = parts[6].strip()
+            if not domain or not name:
+                continue
+
+            bucket = buckets.setdefault(domain, {})
+            bucket[name] = value
+
+        return buckets
+
+    def _build_default_request_cookies(self) -> dict[str, str]:
+        """Строит дефолтный набор cookies с приоритетом `vk.com`."""
+        if self._cookie_buckets.get("vk.com"):
+            return dict(self._cookie_buckets["vk.com"])
+
+        merged: dict[str, str] = {}
+        for bucket in self._cookie_buckets.values():
+            merged.update(bucket)
+        return merged
+
+    def _cookies_for_url(self, url: str) -> dict[str, str]:
+        """Возвращает host-specific cookies для конкретного URL."""
+        host = (urlsplit(url).hostname or "").strip().lower()
+        if not host:
+            return self._request_cookies
+
+        normalized_host = self._normalize_cookie_domain(host)
+        if normalized_host in self._cookie_buckets:
+            return self._cookie_buckets[normalized_host]
+
+        if normalized_host.endswith(".vk.com") and self._cookie_buckets.get("vk.com"):
+            return self._cookie_buckets["vk.com"]
+
+        if normalized_host.endswith(".vkvideo.ru") and self._cookie_buckets.get("vkvideo.ru"):
+            return self._cookie_buckets["vkvideo.ru"]
+
+        return self._request_cookies
 
     @classmethod
     def _extract_vk_user_id_from_cookies(cls, cookies: dict[str, str]) -> int:
@@ -258,7 +327,7 @@ class VKRequestContext:
             async with session.get(
                 url,
                 allow_redirects=True,
-                cookies=self._request_cookies or None,
+                cookies=self._cookies_for_url(url) or None,
             ) as response:
                 response_url = str(response.url)
                 if self._is_badbrowser_url(response_url):
@@ -284,7 +353,7 @@ class VKRequestContext:
                 url,
                 data=form_data,
                 allow_redirects=True,
-                cookies=self._request_cookies or None,
+                cookies=self._cookies_for_url(url) or None,
             ) as response:
                 response_url = str(response.url)
                 if self._is_badbrowser_url(response_url):
