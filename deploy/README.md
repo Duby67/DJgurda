@@ -21,6 +21,7 @@
 - `manager.sh`
 - `sync_cookies.sh`
 - `sync_cookies.bat`
+- `sync_cookies.env.example`
 - `cookies/`
 
 Tracked docs в этой папке:
@@ -28,5 +29,11 @@ Tracked docs в этой папке:
 - `README.md` - human-only описание deploy-контура;
 - `AGENTS.md` - policy и routing для агентов;
 - в `deploy/cookies/` tracked остаются только `README.md` и `AGENTS.md`, а не реальные secrets.
+
+Ручной cookie-sync path:
+
+- локальный `deploy/sync_cookies.env` хранит только параметры подключения и не коммитится;
+- `sync_cookies.sh` и `sync_cookies.bat` загружают только `deploy/cookies/*_cookies.txt`;
+- на сервере файлы попадают в `/home/<REMOTE_USER>/bot_{dev|prod}/data/cookies`.
 
 Test-only Docker images вынесены в `test/docker/`.

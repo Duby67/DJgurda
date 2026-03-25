@@ -41,6 +41,7 @@ def test_stable_runtime_descriptors_define_explicit_resilience_profiles() -> Non
         "Instagram",
         "COUB",
         "Yandex.Music",
+        "VK",
     }
 
     for descriptor in descriptors_by_source.values():
@@ -52,26 +53,24 @@ def test_stable_runtime_descriptors_define_explicit_resilience_profiles() -> Non
         assert profile.degrade_behavior
 
 
-def test_vk_remains_non_runtime_source_with_separate_status() -> None:
-    """VK should stay outside the stable runtime resilience contract."""
+def test_vk_is_active_runtime_source_and_non_runtime_statuses_are_empty() -> None:
+    """VK should be present in active runtime and removed from non-runtime statuses."""
     registry = get_default_handler_registry()
     source_names = {descriptor.source_name for descriptor in registry.descriptors}
 
-    assert "VK" not in source_names
-    assert get_non_runtime_source_statuses() == {"VK": "in_development"}
+    assert "VK" in source_names
+    assert get_non_runtime_source_statuses() == {}
 
 
-def test_non_runtime_opt_in_registry_includes_vk_without_changing_default_runtime() -> None:
-    """Explicit opt-in should include VK only in the derived registry."""
+def test_non_runtime_opt_in_registry_matches_default_when_no_non_runtime_sources_left() -> None:
+    """Derived registry should remain equal to default when non-runtime catalog is empty."""
     default_registry = get_default_handler_registry()
-    opt_in_registry = get_handler_registry_with_non_runtime_sources(("VK",))
+    opt_in_registry = get_handler_registry_with_non_runtime_sources(())
 
     default_sources = {descriptor.source_name for descriptor in default_registry.descriptors}
     opt_in_sources = {descriptor.source_name for descriptor in opt_in_registry.descriptors}
 
-    assert "VK" not in default_sources
-    assert "VK" in opt_in_sources
-    assert default_sources <= opt_in_sources
+    assert default_sources == opt_in_sources
 
 
 def test_non_runtime_opt_in_rejects_unsupported_sources() -> None:
@@ -93,3 +92,4 @@ def test_resilience_profiles_capture_source_specific_signals() -> None:
     assert "instagram_web_profile_info_failed" in descriptors_by_source["Instagram"].resilience_profile.degrade_signals
     assert "coub_pipeline_exhausted" in descriptors_by_source["COUB"].resilience_profile.degrade_signals
     assert "yandex_music_token_missing" in descriptors_by_source["Yandex.Music"].resilience_profile.degrade_signals
+    assert "vk_audio_download_failed" in descriptors_by_source["VK"].resilience_profile.degrade_signals

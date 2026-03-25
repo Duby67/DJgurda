@@ -15,17 +15,16 @@
 
 ## Runtime Reality
 
-- Stable sources:
+- Active runtime sources:
   - TikTok
   - YouTube
   - Instagram
   - COUB
   - Yandex Music
-- Experimental source:
   - VK
-- `VK` должен оставаться отдельным R&D-треком, а не восприниматься как стабильный runtime-контракт.
+- `VK` включен в active runtime, но остается самым хрупким cookie-sensitive source и требует более осторожной проверки, чем core sources.
 
-## Stable Source Resilience Posture
+## Active Source Resilience Posture
 
 - `TikTok`
   - Основные зависимости: `yt-dlp`, `TikWM API`, profile fetch path.
@@ -47,11 +46,15 @@
   - Основные зависимости: Yandex Music API client, direct track links, shared HTTP audio/cover downloads.
   - Явные ожидания: shared HTTP downloads stay on the `10s` posture, auth/metadata gaps должны завершаться быстро и явно.
   - Допустимый degrade path: один fallback при извлечении `track_id` из `resolved_url`; отсутствие token/direct link не должно превращаться в blind retry.
+- `VK`
+  - Основные зависимости: cookie-sensitive HTML/JSON extraction, `al_audio` web endpoints, direct/HLS downloads и bounded `yt-dlp` fallback для части путей.
+  - Явные ожидания: VK smoke остается network-sensitive, cookies должны быть актуальными, а bounded fallbacks не должны превращаться в скрытые retry loops.
+  - Допустимый degrade path: один ограниченный fallback внутри VK-модуля, затем явный fail-closed outcome без маскировки interstitial/cookie проблем.
 
 ## Observability Signals
 
-- Stable runtime должен держать per-source resilience posture в tracked contract, а не в неявном tribal knowledge.
-- Для каждого stable source нужно сохранять именованные degrade signals, которые совпадают с documented fallback path и могут использоваться в логах, review и future metrics.
+- Active runtime должен держать per-source resilience posture в tracked contract, а не в неявном tribal knowledge.
+- Для каждого active source нужно сохранять именованные degrade signals, которые совпадают с documented fallback path и могут использоваться в логах, review и future metrics.
 - Registry metadata является главным tracked слоем для этого posture; markdown-документы должны лишь объяснять его human-readable версию.
 
 ## Handler Smoke Tests

@@ -23,6 +23,8 @@
 ## Deploy Notes
 
 - GitHub Actions может materialize `deploy/cookies` из optional secrets.
+- Ручной cookie sync использует тот же staging-каталог `deploy/cookies` и локальный `deploy/sync_cookies.env`.
+- Ручные sync-скрипты копируют только `deploy/cookies/*_cookies.txt` в `/home/<REMOTE_USER>/bot_{dev|prod}/data/cookies`.
 - Если secrets отсутствуют, deploy должен продолжаться с reuse уже существующих server-side cookies.
 - `bot.db` живет вне контейнера и монтируется внутрь.
 - Runtime temp storage больше не опирается на внешний `runtime` volume.

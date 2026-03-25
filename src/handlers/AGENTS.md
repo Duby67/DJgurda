@@ -39,7 +39,7 @@
   - source-status policy;
   - целевые tests/smoke checks;
   - релевантные docs.
-- Не повышать `VK` до stable runtime без отдельного readiness-решения.
+- Изменения вокруг `VK` требуют отдельной оценки cookie-sensitive и network-sensitive рисков для всего active runtime.
 - Предпочитать shared infrastructure только там, где это реально уменьшает дублирование без потери ясности source behavior.
 
 ## Test Guidance
