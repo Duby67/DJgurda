@@ -295,6 +295,51 @@ def _default_descriptors() -> tuple[HandlerDescriptor, ...]:
     )
 
 
+def _vk_non_runtime_descriptor() -> HandlerDescriptor:
+    """Возвращает descriptor VK для явного non-runtime opt-in."""
+    from src.handlers.resources.VK import VKHandler
+
+    return HandlerDescriptor(
+        source_name="VK",
+        pattern=VKHandler.PATTERN,
+        priority=50,
+        feature_flags=("non_runtime_opt_in", "in_development"),
+        factory=VKHandler,
+        supported_content_types=(
+            ContentType.AUDIO,
+            ContentType.PLAYLIST,
+        ),
+        resilience_profile=SourceResilienceProfile(
+            dependency_surfaces=(
+                "VK web audio metadata via al_audio endpoints",
+                "cookie-sensitive HTML and JSON extraction",
+                "direct/HLS audio download with bounded yt-dlp fallback",
+            ),
+            timeout_expectations=(
+                "handler-level network timeouts stay bounded for local smoke workflows",
+                "audio download path remains limited by shared HttpFileService size posture",
+            ),
+            retry_expectations=(
+                "best-effort extraction fallbacks are allowed only inside VK module",
+                "no unbounded retries after anti-bot/interstitial responses",
+            ),
+            degrade_signals=(
+                "vk_audio_stream_url_not_found",
+                "vk_audio_download_failed",
+                "vk_badbrowser_interstitial",
+            ),
+            degrade_behavior=(
+                "Remain opt-in and fail closed for unstable extraction paths without promoting VK to stable runtime."
+            ),
+        ),
+    )
+
+
+_NON_RUNTIME_DESCRIPTOR_BUILDERS: dict[str, Callable[[], HandlerDescriptor]] = {
+    "VK": _vk_non_runtime_descriptor,
+}
+
+
 _DEFAULT_HANDLER_REGISTRY: HandlerRegistry | None = None
 
 
@@ -304,6 +349,27 @@ def get_default_handler_registry() -> HandlerRegistry:
     if _DEFAULT_HANDLER_REGISTRY is None:
         _DEFAULT_HANDLER_REGISTRY = HandlerRegistry(_default_descriptors())
     return _DEFAULT_HANDLER_REGISTRY
+
+
+def get_handler_registry_with_non_runtime_sources(source_names: Sequence[str]) -> HandlerRegistry:
+    """Возвращает runtime registry c явным opt-in non-runtime sources."""
+    normalized_sources = tuple(
+        dict.fromkeys(name.strip() for name in source_names if isinstance(name, str) and name.strip())
+    )
+    unsupported = sorted(
+        source_name
+        for source_name in normalized_sources
+        if source_name not in _NON_RUNTIME_DESCRIPTOR_BUILDERS
+    )
+    if unsupported:
+        raise ValueError(
+            f"Unsupported non-runtime source opt-in: {', '.join(unsupported)}"
+        )
+
+    descriptors = list(_default_descriptors())
+    for source_name in normalized_sources:
+        descriptors.append(_NON_RUNTIME_DESCRIPTOR_BUILDERS[source_name]())
+    return HandlerRegistry(descriptors)
 
 
 def get_non_runtime_source_statuses() -> dict[str, str]:

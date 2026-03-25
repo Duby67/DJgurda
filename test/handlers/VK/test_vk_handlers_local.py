@@ -94,6 +94,11 @@ TRACK_CASES = tuple(
 )
 
 
+def _build_vk_service_manager() -> ServiceManager:
+    """Создает ServiceManager с явным opt-in на non-runtime VK handler."""
+    return ServiceManager(non_runtime_sources=("VK",))
+
+
 def _cleanup_media_result(result: MediaResult) -> None:
     """Очищает runtime-файлы для typed-результата."""
     for path in result.iter_cleanup_paths():
@@ -175,7 +180,7 @@ def validate_audio_file(handler_output: MediaResult) -> tuple[bool, str]:
 
 async def run_playlist_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
     """Запускает smoke-кейс плейлиста VK."""
-    service_manager = ServiceManager()
+    service_manager = _build_vk_service_manager()
     resolved_url = await resolve_url(case.url)
     handler = service_manager.get_handler(resolved_url)
 
@@ -258,7 +263,7 @@ async def run_playlist_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
 
 async def run_track_case(case: SmokeCase, timeout_sec: int) -> SmokeResult:
     """Запускает smoke-кейс одиночного трека VK."""
-    service_manager = ServiceManager()
+    service_manager = _build_vk_service_manager()
     resolved_url = await resolve_url(case.url)
     handler = service_manager.get_handler(resolved_url)
 
