@@ -153,6 +153,29 @@ def test_release_promote_preview_dry_run_smoke() -> None:
     assert payload["plan"]["target_branch"] == "dev"
     assert payload["plan"]["target_kind"] == "preview"
     assert payload["plan"]["next_release"]["tag"].startswith("v")
+    assert payload["plan"]["execution_preflight"]["checks"]
+    assert any(
+        check["id"] == "planned_release_still_matches_remote_state"
+        for check in payload["plan"]["execution_preflight"]["checks"]
+    )
+
+
+def test_release_promote_rejects_push_without_execute() -> None:
+    result = run_module(
+        "-m",
+        "scripts.release.automation.promote",
+        "--source-branch",
+        "swarm-dev",
+        "--target-branch",
+        "dev",
+        "--target-kind",
+        "preview",
+        "--push",
+    )
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload["error"] == "--push можно использовать только вместе с --execute"
 
 
 def test_release_sync_smoke_for_current_prod_tag() -> None:
@@ -387,6 +410,59 @@ def test_plan_output_builds_profile_context_from_real_route() -> None:
     assert any(risk["title"] == "Docs Cleanup After Typed-Runtime Transition" for risk in plan_output["known_risks"])
     assert plan_output["active_initiatives"]
     assert plan_output["active_initiatives"][0]["path"] == "docs/exec-plans/active/agent-first-docs-migration.md"
+
+
+def test_route_output_expands_runtime_context_for_planning_doc_anchor() -> None:
+    classifier = load_route_json(CLASSIFIER_PATH)
+    routing = load_route_json(ROUTING_PATH)
+
+    route_result = build_route_output(
+        classifier=classifier,
+        routing=routing,
+        prompt="Разобрать CODEX <-> swarm contour, dispatcher, supervisor и approval boundary UX",
+        paths=["docs/exec-plans/tech-debt-tracker.md"],
+    )
+
+    assert route_result["task_type"]["id"] == "swarm_policy_or_planning_change"
+    assert route_result["context_expansion"]["applied"] is True
+    assert route_result["context_expansion"]["rule_id"] == "planning_doc_anchor_expands_runtime_context"
+    assert [item["id"] for item in route_result["context_expansion"]["expanded_task_types"]] == [
+        "swarm_runtime_orchestration_change"
+    ]
+    assert route_result["routing_diagnostics"]["instruction_conflict"] is False
+    assert "multiple_task_types_match_with_similar_confidence" not in route_result["escalation"]["reasons"]
+    assert "scripts/agents/mcp/" in route_result["context_pack"]["code"]
+    assert "scripts/agents/lifecycle/" in route_result["context_pack"]["code"]
+    assert "scripts/agents/executor.py" in route_result["context_pack"]["code"]
+    assert "test/scripts/test_swarm_mcp_smoke.py" in route_result["context_pack"]["tests"]
+    assert "test/scripts/test_swarm_executor_smoke.py" in route_result["context_pack"]["tests"]
+    assert any(
+        entry["selection_source"] == "context_expansion"
+        and entry["reason"] == "context_expansion:swarm_runtime_orchestration_change"
+        for entry in route_result["context_trace"]
+    )
+
+
+def test_plan_output_preserves_context_expansion_for_planning_runtime_overlap() -> None:
+    classifier = load_route_json(CLASSIFIER_PATH)
+    routing = load_route_json(ROUTING_PATH)
+
+    route_result = build_route_output(
+        classifier=classifier,
+        routing=routing,
+        prompt="Улучшить planning flow вокруг dispatcher и supervisor handoff",
+        paths=["docs/exec-plans/tech-debt-tracker.md"],
+    )
+    plan_output = build_plan_output(route_result)
+
+    assert plan_output["task_type"]["id"] == "swarm_policy_or_planning_change"
+    assert plan_output["context_expansion"]["applied"] is True
+    assert "test/scripts/test_swarm_mcp_smoke.py" in plan_output["context_pack"]["tests"]
+    assert "test/scripts/test_swarm_executor_smoke.py" in plan_output["context_pack"]["tests"]
+    assert any(
+        item["id"] == "swarm_runtime_orchestration_change"
+        for item in plan_output["context_expansion"]["expanded_task_types"]
+    )
 
 
 def test_verify_rejects_missing_required_profile_checks() -> None:

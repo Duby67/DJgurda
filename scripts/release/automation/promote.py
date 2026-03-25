@@ -269,6 +269,122 @@ def compute_next_stable_version(
     return expected_next, "promote directly to next stable version from target branch baseline"
 
 
+def recompute_next_release_tag(
+    *,
+    source_branch: str,
+    target_branch: str,
+    target_kind: str,
+    main_branch: str,
+    remote: str,
+    prefix: str,
+) -> str:
+    """Пересчитывает ожидаемый release tag по текущему git-состоянию."""
+    source_version = read_version_from_ref(source_branch)
+    remote_target_version = read_version_from_ref(f"{remote}/{target_branch}")
+    remote_main_version = read_version_from_ref(f"{remote}/{main_branch}")
+
+    if target_kind == "preview":
+        next_version, _ = compute_next_preview_version(remote_main_version, remote_target_version)
+    else:
+        warnings: list[str] = []
+        next_version, _ = compute_next_stable_version(
+            source_branch=source_branch,
+            source_version=source_version,
+            remote_target_version=remote_target_version,
+            main_branch=main_branch,
+            warnings=warnings,
+        )
+    return next_version.tag(prefix)
+
+
+def build_execution_preflight(
+    *,
+    source_branch: str,
+    target_branch: str,
+    target_kind: str,
+    main_branch: str,
+    remote: str,
+    prefix: str,
+    planned_tag: str,
+) -> dict[str, Any]:
+    """Строит preflight-проверки перед execute-стадией promotion."""
+    checks: list[dict[str, Any]] = []
+    missing_refs: list[str] = []
+    for ref in (
+        f"refs/heads/{source_branch}",
+        f"refs/heads/{target_branch}",
+        f"refs/remotes/{remote}/{target_branch}",
+        f"refs/heads/{main_branch}",
+        f"refs/remotes/{remote}/{main_branch}",
+    ):
+        try:
+            ensure_ref_exists(ref)
+        except ValueError:
+            missing_refs.append(ref)
+
+    checks.append(
+        {
+            "id": "working_tree_clean",
+            "status": "passed" if working_tree_is_clean() else "failed",
+            "details": "execute mutates the repo root and requires a clean working tree",
+        }
+    )
+    checks.append(
+        {
+            "id": "required_refs_exist",
+            "status": "passed" if not missing_refs else "failed",
+            "details": "all local and remote refs required for promotion are present",
+            "missing_refs": missing_refs,
+        }
+    )
+
+    if not missing_refs:
+        target_sync = ahead_behind(target_branch, f"{remote}/{target_branch}")
+        checks.append(
+            {
+                "id": "target_can_fast_forward_to_remote",
+                "status": "passed" if target_sync["left_only"] == 0 else "failed",
+                "details": f"local {target_branch} must not contain commits missing from {remote}/{target_branch}",
+                "divergence": target_sync,
+            }
+        )
+
+        source_gap = ahead_behind(f"{remote}/{target_branch}", source_branch)
+        checks.append(
+            {
+                "id": "source_ahead_of_remote_target",
+                "status": "passed" if source_gap["right_only"] > 0 else "failed",
+                "details": f"{source_branch} should still be ahead of {remote}/{target_branch} when execute starts",
+                "divergence": source_gap,
+            }
+        )
+
+        recomputed_tag = recompute_next_release_tag(
+            source_branch=source_branch,
+            target_branch=target_branch,
+            target_kind=target_kind,
+            main_branch=main_branch,
+            remote=remote,
+            prefix=prefix,
+        )
+        checks.append(
+            {
+                "id": "planned_release_still_matches_remote_state",
+                "status": "passed" if recomputed_tag == planned_tag else "failed",
+                "details": "the planned next release tag still matches current remote state",
+                "planned_tag": planned_tag,
+                "recomputed_tag": recomputed_tag,
+            }
+        )
+
+    failed_checks = [check["id"] for check in checks if check["status"] != "passed"]
+    return {
+        "ready": not failed_checks,
+        "failed_checks": failed_checks,
+        "checks": checks,
+    }
+
+
 def build_release_plan(
     *,
     source_branch: str,
@@ -338,6 +454,15 @@ def build_release_plan(
     ]
 
     strategy = "promote_to_preview" if profile["target_kind"] == "preview" else "promote_to_stable"
+    preflight = build_execution_preflight(
+        source_branch=source_branch,
+        target_branch=target_branch,
+        target_kind=profile["target_kind"],
+        main_branch=main_branch,
+        remote=remote,
+        prefix=prefix,
+        planned_tag=next_tag,
+    )
     return {
         "strategy": strategy,
         "source_branch": source_branch,
@@ -346,6 +471,7 @@ def build_release_plan(
         "release_env": profile["release_env"],
         "main_branch": main_branch,
         "remote": remote,
+        "tag_prefix": prefix,
         "working_tree_clean": working_tree_is_clean(),
         "current_branch": current_branch_name(),
         "warnings": warnings,
@@ -372,6 +498,7 @@ def build_release_plan(
             "tag": next_tag,
             "decision_rule": decision_rule,
         },
+        "execution_preflight": preflight,
         "divergence": {
             "target_vs_source": divergence,
             "remote_target_vs_source": remote_divergence,
@@ -386,15 +513,27 @@ def execute_release(
     push: bool,
 ) -> dict[str, Any]:
     """Выполняет release-операции локально и опционально пушит их в remote."""
-    if not plan["working_tree_clean"]:
-        raise ValueError("Для --execute требуется чистое рабочее дерево")
-
     source_branch = plan["source_branch"]
     target_branch = plan["target_branch"]
     remote = plan["remote"]
+    main_branch = plan["main_branch"]
+    target_kind = plan["target_kind"]
+    prefix = plan["tag_prefix"]
     release_env = plan["release_env"]
     next_version = plan["next_release"]["version"]
     next_tag = plan["next_release"]["tag"]
+    preflight = build_execution_preflight(
+        source_branch=source_branch,
+        target_branch=target_branch,
+        target_kind=target_kind,
+        main_branch=main_branch,
+        remote=remote,
+        prefix=prefix,
+        planned_tag=next_tag,
+    )
+    if not preflight["ready"]:
+        failed = ", ".join(preflight["failed_checks"])
+        raise ValueError(f"Execution preflight failed: {failed}")
 
     checkout_branch(target_branch)
     sync_result = run_git_command(["merge", "--ff-only", f"{remote}/{target_branch}"], check=False)
@@ -415,6 +554,7 @@ def execute_release(
         push_release(remote, target_branch, next_tag)
 
     return {
+        "execution_preflight": preflight,
         "checked_out_branch": target_branch,
         "merge": merge_result,
         "version_updated_to": next_version,
@@ -427,6 +567,7 @@ def execute_release(
 
 def render_human_plan(plan: dict[str, Any], execution: dict[str, Any] | None) -> str:
     """Рендерит короткий человекочитаемый статус release plan."""
+    preflight = plan.get("execution_preflight", {})
     lines = [
         f"Strategy: {plan['strategy']}",
         f"Source branch: {plan['source_branch']}",
@@ -440,7 +581,12 @@ def render_human_plan(plan: dict[str, Any], execution: dict[str, Any] | None) ->
         f"{plan['target_state']['remote_latest_release_tag'] or plan['target_state']['remote_src_version']}",
         f"Next release: {plan['next_release']['tag']} ({plan['next_release']['version']})",
         f"Decision rule: {plan['next_release']['decision_rule']}",
+        f"Execution preflight ready: {'yes' if preflight.get('ready') else 'no'}",
     ]
+    if preflight.get("checks"):
+        lines.append("Execution preflight:")
+        for check in preflight["checks"]:
+            lines.append(f"- {check['id']}: {check['status']}")
     if plan["warnings"]:
         lines.append("Warnings:")
         lines.extend(f"- {warning}" for warning in plan["warnings"])

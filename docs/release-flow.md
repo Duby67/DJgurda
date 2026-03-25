@@ -78,6 +78,9 @@
 
 Если нужен сетевой `push`, он включается отдельно через `push=true`.
 
+Dry-run plan теперь также показывает `execution preflight` для execute-стадии.
+Этот preflight проверяет чистоту рабочего дерева, наличие нужных refs, возможность fast-forward целевой ветки до remote, то что source все еще опережает remote target, и что запланированный release tag не успел устареть относительно текущего remote state.
+
 ## Recommended Modes
 
 В workflow есть типовые режимы запуска:
