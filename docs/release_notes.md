@@ -22,6 +22,7 @@
   - `VKHandler` снова включен в active runtime и попадает в default `ServiceManager` без dev-only opt-in.
   - Runtime registry, VK smoke checks и user-facing docs синхронизированы под новый active source list.
   - Ручной cookie-sync path зафиксирован как `deploy/cookies/*_cookies.txt -> /home/<REMOTE_USER>/bot_{dev|prod}/data/cookies` через локальный `deploy/sync_cookies.env`.
+  - CI/CD deploy staging на сервере переведен с постоянного `~/deploy` на временный каталог под `/tmp/djgurda-deploy-<env>-<run>` с cleanup после run.
 - Важно для деплоя:
   - Для надежной работы VK в runtime нужно поддерживать актуальный `vk.com_cookies.txt` в `deploy/cookies` и на сервере.
   - `deploy/sync_cookies.env` остается локальным файлом и не должен попадать в git.

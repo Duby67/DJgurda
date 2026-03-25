@@ -42,6 +42,9 @@ class VKRequestContextProtocol(Protocol):
     def _build_vk_cookie_opts(self) -> dict[str, str]:
         """Возвращает cookiefile-опции для yt-dlp fallback."""
 
+    def build_browser_headers(self, *, referer: Optional[str] = None) -> dict[str, str]:
+        """Возвращает browser-like headers для VK HTTP и yt-dlp запросов."""
+
     async def _fetch_html(self, session: aiohttp.ClientSession, url: str) -> Optional[str]:
         """Загружает HTML-страницу."""
 
@@ -86,6 +89,17 @@ class VKRequestContext:
     VK_AUDIO_B64_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN0PQRSTUVWXYZO123456789+/="
     VK_OP_SEPARATOR = chr(9)
     VK_ARG_SEPARATOR = chr(11)
+    DEFAULT_USER_AGENT = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    )
+    DEFAULT_ACCEPT_LANGUAGE = "ru,en-US;q=0.9,en;q=0.8"
+    DEFAULT_ACCEPT = (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "image/avif,image/webp,image/apng,*/*;q=0.8"
+    )
+    _VK_STID_UID_PATTERN = re.compile(r"^(?P<user_id>\d+)_")
 
     def __init__(self, runtime_dir: Path) -> None:
         self._vk_cookies = CookieFile(
@@ -98,12 +112,50 @@ class VKRequestContext:
             log=logger,
         )
         self._request_cookies = self._vk_cookies.build_request_cookies()
-        self._vk_user_id = self._safe_int(self._request_cookies.get("remixuserid")) or 0
+        self._vk_user_id = self._extract_vk_user_id_from_cookies(self._request_cookies)
         self._badbrowser_logged_pairs: set[tuple[str, str]] = set()
+
+    @classmethod
+    def _extract_vk_user_id_from_cookies(cls, cookies: dict[str, str]) -> int:
+        """
+        Возвращает user_id для VK audio decode.
+
+        Основной путь — `remixuserid`.
+        Fallback — префикс `<uid>_...` в `remixstid`, который часто есть
+        в актуальных экспортируемых cookie-файлах даже без `remixuserid`.
+        """
+        if not isinstance(cookies, dict):
+            return 0
+
+        direct_uid = cls._safe_int(cookies.get("remixuserid"))
+        if isinstance(direct_uid, int) and direct_uid > 0:
+            return direct_uid
+
+        remixstid = cookies.get("remixstid")
+        if isinstance(remixstid, str):
+            match = cls._VK_STID_UID_PATTERN.match(remixstid.strip())
+            if match:
+                stid_uid = cls._safe_int(match.group("user_id"))
+                if isinstance(stid_uid, int) and stid_uid > 0:
+                    return stid_uid
+
+        return 0
 
     def _build_vk_cookie_opts(self) -> dict[str, str]:
         """Возвращает cookiefile-опции для yt-dlp в VK fallback-сценариях."""
         return self._vk_cookies.build_ytdlp_opts()
+
+    def build_browser_headers(self, *, referer: Optional[str] = None) -> dict[str, str]:
+        """Возвращает browser-like headers для VK network paths."""
+        effective_referer = referer or "https://vk.com/"
+        return {
+            "User-Agent": self.DEFAULT_USER_AGENT,
+            "Accept": self.DEFAULT_ACCEPT,
+            "Accept-Language": self.DEFAULT_ACCEPT_LANGUAGE,
+            "Referer": effective_referer,
+            "Origin": "https://vk.com",
+            "X-Requested-With": "XMLHttpRequest",
+        }
 
     @staticmethod
     def _first_non_empty(*values: Any) -> Optional[str]:
