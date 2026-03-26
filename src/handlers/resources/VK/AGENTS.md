@@ -34,6 +34,17 @@
   - fallback behavior.
 - Не переносить VK-specific hacks в общий infrastructure-слой без очень сильного обоснования.
 
+## Presentation Contract
+
+- Для `post` ожидается двухшаговая выдача:
+  - `lead_text` как отдельное сообщение (длинный текст поста);
+  - затем media payload (`media_group` + optional `audios`) со стандартным runtime caption от sender registry.
+- Для `profile/community` ожидается card-формат:
+  - avatar (если доступен);
+  - hyperlink name;
+  - nickname и публичные info-строки в `caption_text`.
+- `audio`, `clip`, `playlist` не должны регрессировать при правках presentation-only логики.
+
 ## Test Guidance
 
 - Основные проверки находятся в `test/handlers/VK/`.

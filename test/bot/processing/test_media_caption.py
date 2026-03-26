@@ -110,3 +110,34 @@ def test_build_caption_truncates_user_link_anchor_safely() -> None:
     assert "tg://user?id=202" in caption
     assert "TikTok" in caption
     assert "..." in caption
+
+
+def test_build_caption_keeps_user_and_source_lines_in_one_compact_block() -> None:
+    """User/source footer не должен содержать пустую строку между строками."""
+    media_result = MediaResult(
+        content_type=ContentType.VIDEO,
+        source_name="YouTube",
+        original_url="https://example.com/watch",
+        context="Контекст",
+        title="Короткий заголовок",
+        uploader="Автор",
+    )
+    user_link = get_user_link(
+        SimpleNamespace(
+            id=303,
+            username="compact_footer",
+            full_name="Compact Footer",
+        )
+    )
+
+    caption = build_caption(
+        user_context="Контекст",
+        media_result=media_result,
+        user_link=user_link,
+        url="https://example.com/watch",
+        handler=FakeHandler(),
+    )
+
+    lines = caption.splitlines()
+    assert "compact_footer" in lines[-2]
+    assert "https://example.com/watch" in lines[-1]

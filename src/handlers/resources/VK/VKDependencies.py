@@ -23,6 +23,7 @@ from src.handlers.infrastructure import (
     DelayPolicyService,
     HttpFileService,
     RuntimePathService,
+    YtdlpMediaGroupService,
     YtdlpOptionBuilder,
 )
 from src.utils.cookies import CookieFile
@@ -34,6 +35,7 @@ class VKRequestContextProtocol(Protocol):
     """Контракт shared VK-хелперов и сетевых операций."""
 
     _request_cookies: dict[str, str]
+    _cookie_buckets: dict[str, dict[str, str]]
     _vk_user_id: int
     VK_AUDIO_B64_ALPHABET: str
     VK_OP_SEPARATOR: str
@@ -82,6 +84,16 @@ class VKMediaGatewayProtocol(Protocol):
     ) -> bool:
         """Скачивает thumbnail."""
 
+    async def _download_media_group(
+        self,
+        url: str,
+        ydl_opts: dict[str, Any],
+        *,
+        group_id: Optional[str] = None,
+        size_limit: Optional[int] = None,
+    ) -> Optional[list[dict[str, Any]]]:
+        """Скачивает media-group через yt-dlp."""
+
 
 class VKRequestContext:
     """Shared-контекст VK: cookies, helper-функции и сетевые вызовы."""
@@ -111,9 +123,77 @@ class VKRequestContext:
             runtime_dir=runtime_dir,
             log=logger,
         )
-        self._request_cookies = self._vk_cookies.build_request_cookies()
-        self._vk_user_id = self._extract_vk_user_id_from_cookies(self._request_cookies)
+        valid_cookie_path = self._vk_cookies.resolve_valid_path()
+        self._cookie_buckets = self._load_domain_cookie_buckets(valid_cookie_path)
+        self._request_cookies = self._build_default_request_cookies()
+        self._vk_user_id = self._extract_vk_user_id_from_cookies(
+            self._cookie_buckets.get("vk.com") or self._request_cookies
+        )
         self._badbrowser_logged_pairs: set[tuple[str, str]] = set()
+
+    @staticmethod
+    def _normalize_cookie_domain(domain: str) -> str:
+        """Нормализует домен cookie до host-like вида без ведущей точки."""
+        return domain.strip().lstrip(".").lower()
+
+    @classmethod
+    def _load_domain_cookie_buckets(cls, cookie_path: Optional[Path]) -> dict[str, dict[str, str]]:
+        """Загружает cookies с разделением по доменам из Netscape-файла."""
+        if not isinstance(cookie_path, Path) or not cookie_path.exists():
+            return {}
+
+        buckets: dict[str, dict[str, str]] = {}
+        for raw_line in cookie_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith("#HttpOnly_"):
+                line = line[len("#HttpOnly_"):]
+            elif line.startswith("#"):
+                continue
+
+            parts = line.split("\t")
+            if len(parts) < 7:
+                continue
+
+            domain = cls._normalize_cookie_domain(parts[0])
+            name = parts[5].strip()
+            value = parts[6].strip()
+            if not domain or not name:
+                continue
+
+            bucket = buckets.setdefault(domain, {})
+            bucket[name] = value
+
+        return buckets
+
+    def _build_default_request_cookies(self) -> dict[str, str]:
+        """Строит дефолтный набор cookies с приоритетом `vk.com`."""
+        if self._cookie_buckets.get("vk.com"):
+            return dict(self._cookie_buckets["vk.com"])
+
+        merged: dict[str, str] = {}
+        for bucket in self._cookie_buckets.values():
+            merged.update(bucket)
+        return merged
+
+    def _cookies_for_url(self, url: str) -> dict[str, str]:
+        """Возвращает host-specific cookies для конкретного URL."""
+        host = (urlsplit(url).hostname or "").strip().lower()
+        if not host:
+            return self._request_cookies
+
+        normalized_host = self._normalize_cookie_domain(host)
+        if normalized_host in self._cookie_buckets:
+            return self._cookie_buckets[normalized_host]
+
+        if normalized_host.endswith(".vk.com") and self._cookie_buckets.get("vk.com"):
+            return self._cookie_buckets["vk.com"]
+
+        if normalized_host.endswith(".vkvideo.ru") and self._cookie_buckets.get("vkvideo.ru"):
+            return self._cookie_buckets["vkvideo.ru"]
+
+        return self._request_cookies
 
     @classmethod
     def _extract_vk_user_id_from_cookies(cls, cookies: dict[str, str]) -> int:
@@ -252,13 +332,44 @@ class VKRequestContext:
             response_url,
         )
 
+    @staticmethod
+    def _decode_html_response(raw_bytes: bytes, response: aiohttp.ClientResponse) -> str:
+        """Декодирует HTML с уважением к charset из VK-ответа."""
+        encoding_candidates: list[str] = []
+
+        response_charset = getattr(response, "charset", None)
+        if isinstance(response_charset, str) and response_charset.strip():
+            encoding_candidates.append(response_charset.strip())
+
+        try:
+            detected_encoding = response.get_encoding()
+        except Exception:
+            detected_encoding = None
+        if isinstance(detected_encoding, str) and detected_encoding.strip():
+            encoding_candidates.append(detected_encoding.strip())
+
+        encoding_candidates.extend(["windows-1251", "cp1251", "utf-8"])
+
+        seen: set[str] = set()
+        for encoding in encoding_candidates:
+            normalized = encoding.lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            try:
+                return raw_bytes.decode(encoding, errors="ignore")
+            except LookupError:
+                continue
+
+        return raw_bytes.decode("utf-8", errors="ignore")
+
     async def _fetch_html(self, session: aiohttp.ClientSession, url: str) -> Optional[str]:
         """Загружает HTML-страницу."""
         try:
             async with session.get(
                 url,
                 allow_redirects=True,
-                cookies=self._request_cookies or None,
+                cookies=self._cookies_for_url(url) or None,
             ) as response:
                 response_url = str(response.url)
                 if self._is_badbrowser_url(response_url):
@@ -267,7 +378,8 @@ class VKRequestContext:
                 if response.status != 200:
                     logger.warning("VK HTML request failed (%s): %s", response.status, url)
                     return None
-                return await response.text(errors="ignore")
+                raw_bytes = await response.read()
+                return self._decode_html_response(raw_bytes, response)
         except Exception as exc:
             logger.warning("VK HTML request failed for %s: %s", url, exc)
             return None
@@ -284,7 +396,7 @@ class VKRequestContext:
                 url,
                 data=form_data,
                 allow_redirects=True,
-                cookies=self._request_cookies or None,
+                cookies=self._cookies_for_url(url) or None,
             ) as response:
                 response_url = str(response.url)
                 if self._is_badbrowser_url(response_url):
@@ -411,6 +523,11 @@ class VKMediaGateway:
         self._delay_policy = DelayPolicyService()
         self._http_service = HttpFileService(delay_policy=self._delay_policy)
         self._option_builder = YtdlpOptionBuilder(scope=self.__class__.__name__)
+        self._media_group_service = YtdlpMediaGroupService(
+            runtime_paths=self._runtime_paths,
+            delay_policy=self._delay_policy,
+            option_builder=self._option_builder,
+        )
         self.audio_limit = self._http_service.audio_limit
         self.photo_limit = self._http_service.photo_limit
 
@@ -434,3 +551,19 @@ class VKMediaGateway:
     ) -> bool:
         """Скачивает thumbnail с проверкой лимита размера."""
         return await self._http_service.download_thumbnail(url, dest_path, size_limit=size_limit)
+
+    async def _download_media_group(
+        self,
+        url: str,
+        ydl_opts: dict[str, Any],
+        *,
+        group_id: Optional[str] = None,
+        size_limit: Optional[int] = None,
+    ) -> Optional[list[dict[str, Any]]]:
+        """Скачивает media-group через yt-dlp с текущими runtime/policy сервисами."""
+        return await self._media_group_service.download_media_group(
+            url,
+            ydl_opts,
+            group_id=group_id,
+            size_limit=size_limit,
+        )

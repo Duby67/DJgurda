@@ -67,6 +67,7 @@ class MediaResult:
     title: str | None = None
     uploader: str | None = None
     caption_text: str | None = None
+    lead_text: str | None = None
     main_file_path: Path | None = None
     thumbnail_path: Path | None = None
     story_media_kind: AttachmentKind | None = None

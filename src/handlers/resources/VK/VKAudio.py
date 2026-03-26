@@ -574,7 +574,7 @@ class VKAudio:
             async with session.get(
                 audio_url,
                 allow_redirects=True,
-                cookies=self._request_cookies or None,
+                cookies=self._cookies_for_url(audio_url) or None,
             ) as response:
                 if response.status < 200 or response.status >= 300:
                     logger.warning("VK audio download failed (%s): %s", response.status, audio_url)

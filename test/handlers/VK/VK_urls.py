@@ -50,7 +50,8 @@ VK_TRACK_TEST_CASES: Final[tuple[dict[str, str], ...]] = (
 # Дополнительные VK кейсы вне music-only scope.
 CLIP_URL: Final[str] = "https://vkvideo.ru/clip-223170978_456322727"
 POST_URL: Final[str] = "https://vk.com/wall-99353432_629095"
-ACCOUNT_URL: Final[str] = "https://vk.com/id146383805"
+ACCOUNT_URL: Final[str] = "https://vk.ru/schizod_gada"
+ACCOUNT_PUBLIC_URL: Final[str] = "https://vk.com/12razdva"
 COMMUNITY_URL: Final[str] = "https://vk.com/spaces"
 
 VK_CLIP_TEST_CASE: Final[dict[str, str]] = {
@@ -64,7 +65,7 @@ VK_POST_TEST_CASE: Final[dict[str, str]] = {
     "name": "post",
     "url": POST_URL,
     "expected_type": "media_group",
-    "description": "VK wall post URL (ожидается media_group с caption).",
+    "description": "VK wall post URL (ожидается lead_text + media_group/audios payload).",
 }
 
 VK_PROFILE_TEST_CASES: Final[tuple[dict[str, str], ...]] = (
@@ -72,12 +73,18 @@ VK_PROFILE_TEST_CASES: Final[tuple[dict[str, str], ...]] = (
         "name": "account",
         "url": ACCOUNT_URL,
         "expected_type": "profile",
-        "description": "VK user account URL (ожидается profile card).",
+        "description": "VK user account URL (ожидается avatar + hyperlink name + public info).",
+    },
+    {
+        "name": "account_public",
+        "url": ACCOUNT_PUBLIC_URL,
+        "expected_type": "profile",
+        "description": "VK public profile alias URL (ожидается avatar + hyperlink name + public info).",
     },
     {
         "name": "community",
         "url": COMMUNITY_URL,
         "expected_type": "profile",
-        "description": "VK community URL (ожидается profile card).",
+        "description": "VK community URL (ожидается avatar + hyperlink name + public info).",
     },
 )

@@ -98,7 +98,7 @@ YOUTUBE_COOKIES_PATH, YOUTUBE_COOKIES = _resolve_cookie_path(
 INSTAGRAM_COOKIES_ENABLED = _read_bool_env("INSTAGRAM_COOKIES_ENABLED", default=True)
 INSTAGRAM_COOKIES_PATH, INSTAGRAM_COOKIES = _resolve_cookie_path(
     env_name="INSTAGRAM_COOKIES_PATH",
-    fallback_filename="instagram_cookies.txt",
+    fallback_filename="www.instagram.com_cookies.txt",
 )
 
 TIKTOK_COOKIES_ENABLED = _read_bool_env("TIKTOK_COOKIES_ENABLED", default=True)

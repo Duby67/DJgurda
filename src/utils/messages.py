@@ -141,6 +141,17 @@ def _render_sections(sections: list[str]) -> str:
     return "\n\n".join(non_empty_sections)
 
 
+def _build_identity_block(
+    *,
+    user_link_prefix: str,
+    user_link_html: str,
+    source_prefix: str,
+    source_link_html: str,
+) -> str:
+    """Builds a compact user/source block without an extra blank line between rows."""
+    return f"{user_link_prefix}{user_link_html}\n{source_prefix}{source_link_html}"
+
+
 def _build_title_line(media_result: MediaResult, source: str) -> str | None:
     """Builds the media title line before HTML-safe truncation."""
     if media_result.content_type not in TITLE_ELIGIBLE_TYPES:
@@ -172,12 +183,17 @@ def _fit_caption_sections(
     current_source_link = source_link_html
 
     for _ in range(6):
+        identity_block = _build_identity_block(
+            user_link_prefix=user_link_prefix,
+            user_link_html=current_user_link,
+            source_prefix=source_prefix,
+            source_link_html=current_source_link,
+        )
         caption = _render_sections(
             [
                 current_context or "",
                 current_title or "",
-                f"{user_link_prefix}{current_user_link}",
-                f"{source_prefix}{current_source_link}",
+                identity_block,
             ]
         )
         if len(caption) <= MAX_CAPTION:
@@ -190,16 +206,14 @@ def _fit_caption_sections(
                 other_sections = _render_sections(
                     [
                         current_title,
-                        f"{user_link_prefix}{current_user_link}",
-                        f"{source_prefix}{current_source_link}",
+                        identity_block,
                     ]
                 )
                 limit = MAX_CAPTION - len(other_sections) - 2
             else:
                 other_sections = _render_sections(
                     [
-                        f"{user_link_prefix}{current_user_link}",
-                        f"{source_prefix}{current_source_link}",
+                        identity_block,
                     ]
                 )
                 limit = MAX_CAPTION - len(other_sections) - 2
@@ -216,8 +230,7 @@ def _fit_caption_sections(
         if current_title:
             other_sections = _render_sections(
                 [
-                    f"{user_link_prefix}{current_user_link}",
-                    f"{source_prefix}{current_source_link}",
+                    identity_block,
                 ]
             )
             limit = MAX_CAPTION - len(other_sections) - 2
@@ -248,8 +261,12 @@ def _fit_caption_sections(
         [
             current_context or "",
             current_title or "",
-            f"{user_link_prefix}{current_user_link}",
-            f"{source_prefix}{current_source_link}",
+            _build_identity_block(
+                user_link_prefix=user_link_prefix,
+                user_link_html=current_user_link,
+                source_prefix=source_prefix,
+                source_link_html=current_source_link,
+            ),
         ]
     )
     if len(caption) <= MAX_CAPTION:

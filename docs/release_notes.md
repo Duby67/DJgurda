@@ -76,6 +76,19 @@
   - Нет / Да (описание)
 ```
 
+## 2026-03-26 | version/tag: vk-rich-presentation | env: both
+
+- Что изменилось:
+  - `VK wall post` теперь отправляет lead-text отдельным сообщением, а затем уже фото/видео/аудио через стандартный sender-контур.
+  - Для `VK profile/community` карточек усилены display-name/avatar fallback'и через JSON-LD и более читаемый hyperlink-first caption.
+  - Локальные VK smoke-ожидания уже проверяют `lead_text` для post и hyperlink/avatar для profile/community.
+- Важно для деплоя:
+  - Качество `VK post/profile` extraction по-прежнему зависит от актуальных cookies и от текущего HTML/metadata layout на стороне VK.
+- Breaking changes:
+  - Нет.
+- Ручные действия после релиза:
+  - После обновления VK cookies желательно прогонять локальный `test/handlers/VK/test_vk_handlers_local.py --timeout 180`.
+
 ## 2026-03-25 | version/tag: vk-runtime-reactivation | env: both
 
 - Что изменилось:
