@@ -19,6 +19,7 @@ from src.handlers.contracts import (
     ContentType,
     MediaAttachment,
     MediaResult,
+    normalize_cleanup_paths,
 )
 from .VKDependencies import VKMediaGatewayProtocol, VKRequestContextProtocol
 
@@ -40,6 +41,7 @@ class VKPost:
         ".post_text",
         "[data-post-id] .wall_post_text",
     )
+    POST_CAPTION_TITLE = "Посты из ленты"
     MAX_INLINE_IMAGES = 6
     MAX_LEAD_TEXT = 3900
 
@@ -81,7 +83,7 @@ class VKPost:
         if not stripped:
             return None
 
-        normalized = stripped.replace("\r\n", "\n").replace("\r", "\n")
+        normalized = html.unescape(stripped).replace("\r\n", "\n").replace("\r", "\n")
         lines = [re.sub(r"\s+", " ", line).strip() for line in normalized.split("\n")]
         compact_lines = [line for line in lines if line]
         if not compact_lines:
@@ -136,21 +138,81 @@ class VKPost:
             return None
         return max(candidates, key=len)
 
-    @staticmethod
-    def _derive_title_from_lead_text(lead_text: Optional[str], fallback_title: str) -> str:
-        """Строит human-friendly title из первой строки post text, если page title слишком общий."""
-        generic_titles = {"вконтакте", "запись на стене"}
-        if fallback_title.strip().lower() not in generic_titles:
-            return fallback_title
-        if not isinstance(lead_text, str) or not lead_text.strip():
-            return fallback_title
+    def _extract_prefetched_owner_name(self, html_text: str, owner_id: str) -> Optional[str]:
+        """Извлекает human-readable owner name из embedded groups/profiles blocks."""
+        if owner_id.startswith("-"):
+            group_id = owner_id.lstrip("-")
+            pattern = re.compile(
+                rf'"groups":\[(?P<section>.{{0,20000}}?"id":{group_id}.{{0,4000}}?"name":"(?P<name>[^"\\]*(?:\\.[^"\\]*)*)")',
+                re.DOTALL,
+            )
+            match = pattern.search(html_text)
+            if match:
+                return self._decode_embedded_json_string(match.group("name"))
+            return None
 
-        first_line = next((line.strip() for line in lead_text.splitlines() if line.strip()), "")
-        if not first_line:
-            return fallback_title
-        if len(first_line) > 90:
-            first_line = first_line[:87].rstrip() + "..."
-        return first_line
+        profile_pattern = re.compile(
+            rf'"profiles":\[(?P<section>.{{0,20000}}?"id":{owner_id}.{{0,4000}}?)',
+            re.DOTALL,
+        )
+        profile_match = profile_pattern.search(html_text)
+        if not profile_match:
+            return None
+
+        section = profile_match.group("section")
+        first_name_match = re.search(r'"first_name":"(?P<value>[^"\\]*(?:\\.[^"\\]*)*)"', section)
+        last_name_match = re.search(r'"last_name":"(?P<value>[^"\\]*(?:\\.[^"\\]*)*)"', section)
+        first_name = self._decode_embedded_json_string(first_name_match.group("value")) if first_name_match else None
+        last_name = self._decode_embedded_json_string(last_name_match.group("value")) if last_name_match else None
+        display_name = " ".join(
+            part for part in (first_name, last_name) if isinstance(part, str) and part.strip()
+        ).strip()
+        return display_name or first_name or last_name
+
+    def _extract_prefetched_post_photo_url(self, html_text: str, post_id: str) -> Optional[str]:
+        """Извлекает URL основной картинки поста из embedded wall payload."""
+        marker_index = html_text.find(self.EMBEDDED_POST_MARKER)
+        if marker_index < 0:
+            return None
+        segment = html_text[marker_index : marker_index + 90000]
+
+        post_pattern = re.compile(
+            rf'"id":{post_id}.{{0,15000}}?"orig_photo":\{{[^}}]*"url":"(?P<url>[^"\\]*(?:\\.[^"\\]*)*)"',
+            re.DOTALL,
+        )
+        match = post_pattern.search(segment)
+        if not match:
+            return None
+        return self._decode_embedded_json_string(match.group("url"))
+
+    @staticmethod
+    def _should_prefer_embedded_photo(
+        media_group: list[MediaAttachment],
+        audios: list[AudioAttachment],
+    ) -> bool:
+        """Предпочитает embedded original-photo для одиночного photo-post."""
+        if audios:
+            return False
+        if not media_group:
+            return True
+        return len(media_group) == 1 and media_group[0].kind == AttachmentKind.PHOTO
+
+    async def _download_embedded_post_photo(
+        self,
+        *,
+        html_text: str,
+        post_id: str,
+        post_token: str,
+    ) -> Optional[MediaAttachment]:
+        """Скачивает original photo из embedded wall payload, если она есть."""
+        embedded_photo_url = self._extract_prefetched_post_photo_url(html_text, post_id)
+        if not embedded_photo_url:
+            return None
+
+        embedded_photo_path = self._generate_unique_path(f"{post_token}_embedded", suffix=".jpg")
+        if not await self._download_thumbnail(embedded_photo_url, embedded_photo_path, self.photo_limit):
+            return None
+        return MediaAttachment(kind=AttachmentKind.PHOTO, file_path=embedded_photo_path)
 
     def _extract_post_text(self, soup: BeautifulSoup, html_text: str, title: str) -> Optional[str]:
         """Извлекает текст поста из HTML/JSON-LD с graceful fallback."""
@@ -280,11 +342,12 @@ class VKPost:
         soup = BeautifulSoup(html_text, "html.parser")
         title = self._extract_title(soup, owner_id=owner_id, post_id=post_id)
         lead_text = self._extract_post_text(soup, html_text, title=title)
-        title = self._derive_title_from_lead_text(lead_text, title)
+        owner_label = self._extract_prefetched_owner_name(html_text, owner_id) or owner_id
 
         post_token = f"wall{owner_id}_{post_id}"
         media_group: list[MediaAttachment] = []
         audios: list[AudioAttachment] = []
+        extra_cleanup_paths = []
 
         payload = await self._download_media_payload(
             original_url=original_url,
@@ -314,6 +377,18 @@ class VKPost:
                     continue
                 media_group.append(MediaAttachment(kind=AttachmentKind.VIDEO, file_path=file_path))
 
+        embedded_photo = await self._download_embedded_post_photo(
+            html_text=html_text,
+            post_id=post_id,
+            post_token=post_token,
+        )
+        if embedded_photo is not None:
+            if self._should_prefer_embedded_photo(media_group, audios):
+                extra_cleanup_paths.extend(item.file_path for item in media_group)
+                media_group = [embedded_photo]
+            else:
+                extra_cleanup_paths.append(embedded_photo.file_path)
+
         if not media_group and not audios:
             fallback_media = await self._extract_inline_images(html_text=html_text, post_token=post_token)
             media_group.extend(fallback_media)
@@ -321,21 +396,22 @@ class VKPost:
         if not media_group and not audios:
             return None
 
-        uploader = owner_id
+        uploader = owner_label
         if payload and isinstance(payload[0], dict):
             info = payload[0].get("info")
             if isinstance(info, dict):
                 uploader = self._first_non_empty(
                     info.get("uploader"),
                     info.get("channel"),
+                    owner_label,
                     info.get("uploader_id"),
                     owner_id,
-                ) or owner_id
+                ) or owner_label
 
         enriched_audios = tuple(
             AudioAttachment(
                 file_path=audio_item.file_path,
-                title=title,
+                title=self.POST_CAPTION_TITLE,
                 performer=uploader,
             )
             for audio_item in audios
@@ -346,11 +422,12 @@ class VKPost:
             source_name="VK",
             original_url=original_url,
             context=context,
-            title=title,
+            title=self.POST_CAPTION_TITLE,
             uploader=uploader,
-            caption_text=self._build_caption(title=title, canonical_url=canonical_url),
+            caption_text=self._build_caption(title=owner_label, canonical_url=canonical_url),
             lead_text=lead_text,
             media_group=tuple(media_group),
             audios=enriched_audios,
             audio=enriched_audios[0] if enriched_audios else None,
+            cleanup_paths=normalize_cleanup_paths(extra_cleanup_paths),
         )

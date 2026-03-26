@@ -32,6 +32,7 @@ class VKProfile:
     MAX_INFO_LINES = 7
     MAX_INFO_TOTAL = 900
     ACCOUNT_ID_PATTERN = re.compile(r"^(?:id)?(?P<user_id>\d+)$", re.IGNORECASE)
+    EMBEDDED_ESCAPED_FRAGMENT_PATTERN = r'[^"\\]*(?:\\.[^"\\]*)*'
     EMBEDDED_ESCAPED_STRING_PATTERN = r'(?P<value>[^"\\]*(?:\\.[^"\\]*)*)'
     GENERIC_EMBEDDED_TITLES = frozenset({"wall", "photos", "videos", "articles", "short_videos"})
 
@@ -241,7 +242,7 @@ class VKProfile:
             rf'"is_group_displayed":true.{{0,1200}}?"name":"{self.EMBEDDED_ESCAPED_STRING_PATTERN}".{{0,1200}}?"screen_name":"{escaped_screen_name}"',
         ) or self._match_embedded_field(
             html_text,
-            rf'"name":"{self.EMBEDDED_ESCAPED_STRING_PATTERN}".{{0,1200}}?"screen_name":"{escaped_screen_name}".{{0,2400}}?"photo_200":"{self.EMBEDDED_ESCAPED_STRING_PATTERN}"',
+            rf'"name":"{self.EMBEDDED_ESCAPED_STRING_PATTERN}".{{0,1200}}?"screen_name":"{escaped_screen_name}".{{0,2400}}?"photo_200":"{self.EMBEDDED_ESCAPED_FRAGMENT_PATTERN}"',
         )
         avatar_url = self._match_embedded_field(
             html_text,

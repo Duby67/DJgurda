@@ -9,6 +9,7 @@ from aiogram import types
 from aiogram.types import Message
 from aiogram.types.input_file import FSInputFile
 
+from src.config import MAX_CAPTION
 from src.handlers.contracts import AttachmentKind, AudioAttachment, ContentType, MediaResult
 
 SenderStrategy = Callable[[Message, MediaResult, str], Awaitable[None]]
@@ -33,6 +34,26 @@ class SenderRegistry:
         if sender is None:
             raise ValueError(f"Unsupported content type: {result.content_type.value}")
         await sender(message, result, caption)
+
+
+def _merge_caption_parts(*parts: str | None, separator: str = "\n\n") -> str:
+    """Combines distinct caption fragments into a single Telegram-friendly block."""
+    normalized_parts: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        if not isinstance(part, str):
+            continue
+        normalized = part.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        normalized_parts.append(normalized)
+
+    merged = separator.join(normalized_parts)
+    if len(merged) <= MAX_CAPTION:
+        return merged
+
+    return normalized_parts[0] if normalized_parts else ""
 
 
 def _normalize_lead_text(result: MediaResult) -> str | None:
@@ -164,7 +185,7 @@ async def _send_media_group(message: Message, result: MediaResult, caption: str)
 
 
 async def _send_profile_or_channel(message: Message, result: MediaResult, caption: str) -> None:
-    profile_caption = result.caption_text or caption
+    profile_caption = _merge_caption_parts(result.caption_text, caption)
     if result.main_file_path is not None and result.main_file_path.exists():
         await message.answer_photo(photo=FSInputFile(result.main_file_path), caption=profile_caption)
         return

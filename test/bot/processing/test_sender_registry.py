@@ -20,7 +20,7 @@ os.environ.setdefault("BOT_TOKEN", "local-test-token")
 os.environ.setdefault("YANDEX_MUSIC_TOKEN", "local-test-token")
 os.environ.setdefault("YOUTUBE_COOKIES_ENABLED", "false")
 
-from src.bot.processing.senders.registry import _send_media_group
+from src.bot.processing.senders.registry import _send_media_group, _send_profile_or_channel
 from src.handlers.contracts import AttachmentKind, AudioAttachment, ContentType, MediaAttachment, MediaResult
 
 
@@ -100,3 +100,28 @@ def test_send_media_group_keeps_standard_caption_for_audio_only_payload(tmp_path
 
     assert [call["kind"] for call in message.calls] == ["text", "audio", "text"]
     assert message.calls[-1]["text"] == "standard caption"
+
+
+def test_send_profile_or_channel_merges_standard_caption_into_single_photo_message(tmp_path: Path) -> None:
+    """Profile card должен объединять rich-caption и стандартный caption в одно сообщение."""
+    photo_path = tmp_path / "avatar.jpg"
+    photo_path.write_bytes(b"avatar")
+
+    result = MediaResult(
+        content_type=ContentType.PROFILE,
+        source_name="VK",
+        original_url="https://vk.com/spaces",
+        context="ctx",
+        title="КОСМОС",
+        uploader="spaces",
+        caption_text="<a href=\"https://vk.com/spaces\"><b>КОСМОС</b></a>\n@spaces",
+        main_file_path=photo_path,
+    )
+    message = FakeMessage()
+
+    asyncio.run(_send_profile_or_channel(message, result, caption="standard caption"))
+
+    assert [call["kind"] for call in message.calls] == ["photo"]
+    assert message.calls[0]["caption"] == (
+        "<a href=\"https://vk.com/spaces\"><b>КОСМОС</b></a>\n@spaces\n\nstandard caption"
+    )

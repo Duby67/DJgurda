@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -23,6 +24,7 @@ os.environ.setdefault("YANDEX_MUSIC_TOKEN", "local-test-token")
 
 from src.handlers.resources.VK.VKPost import VKPost
 from src.handlers.resources.VK.VKProfile import VKProfile
+from src.handlers.contracts import AttachmentKind
 
 
 class _DummyRequestContext:
@@ -30,7 +32,13 @@ class _DummyRequestContext:
 
     DEFAULT_USER_AGENT = "test-agent"
 
-    def __init__(self, *, ld_objects: list[dict[str, Any]] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        html_text: str = "",
+        ld_objects: list[dict[str, Any]] | None = None,
+    ) -> None:
+        self._html_text = html_text
         self._ld_objects = ld_objects or []
 
     def _extract_ld_objects(self, html_text: str) -> list[dict[str, Any]]:  # noqa: ARG002
@@ -42,9 +50,61 @@ class _DummyRequestContext:
             return None
         return BeautifulSoup(value, "html.parser").get_text(" ", strip=True) or None
 
+    @staticmethod
+    def _first_non_empty(*values: Any) -> str | None:
+        for value in values:
+            if isinstance(value, str):
+                cleaned = value.strip()
+                if cleaned:
+                    return cleaned
+        return None
+
+    @staticmethod
+    def build_browser_headers(*, referer: str | None = None) -> dict[str, str]:  # noqa: ARG004
+        return {"User-Agent": "test-agent"}
+
+    @staticmethod
+    def _build_vk_cookie_opts() -> dict[str, str]:
+        return {}
+
+    @staticmethod
+    def _normalize_vk_url(url: str) -> str:
+        return url
+
+    async def _fetch_html(self, session: Any, url: str) -> str | None:  # noqa: ARG002
+        return self._html_text
+
 
 class _DummyMediaGateway:
     """Минимальный gateway-заглушка для helper unit-tests."""
+
+    def __init__(self, tmp_path: Path | None = None, *, payload: list[dict[str, Any]] | None = None) -> None:
+        self.temp_dir = tmp_path or Path.cwd()
+        self.audio_limit = 10_000_000
+        self.photo_limit = 10_000_000
+        self._payload = payload or []
+
+    def _generate_unique_path(self, identifier: str, suffix: str = "") -> Path:
+        return self.temp_dir / f"{identifier}{suffix}"
+
+    async def _download_thumbnail(
+        self,
+        url: str,
+        dest_path: Path,
+        size_limit: int | None = None,  # noqa: ARG002
+    ) -> bool:
+        dest_path.write_bytes(url.encode("utf-8"))
+        return True
+
+    async def _download_media_group(
+        self,
+        url: str,  # noqa: ARG002
+        ydl_opts: dict[str, Any],  # noqa: ARG002
+        *,
+        group_id: str | None = None,  # noqa: ARG002
+        size_limit: int | None = None,  # noqa: ARG002
+    ) -> list[dict[str, Any]]:
+        return list(self._payload)
 
 
 def test_vk_post_extract_post_text_prefers_richer_candidate() -> None:
@@ -68,6 +128,15 @@ def test_vk_post_extract_post_text_prefers_richer_candidate() -> None:
     assert "Большой текст поста" in extracted
 
 
+def test_vk_post_normalize_post_text_decodes_html_entities() -> None:
+    """HTML entities из embedded VK payload должны превращаться обратно в emoji для lead_text."""
+    post = VKPost(request_context=_DummyRequestContext(), media_gateway=_DummyMediaGateway())
+
+    normalized = post._normalize_post_text("&#127756; Космос &#10024;")
+
+    assert normalized == "🌌 Космос ✨"
+
+
 def test_vk_profile_caption_contains_hyperlink_nickname_and_public_info() -> None:
     """Profile/community caption should include link, nickname and public info rows."""
     caption = VKProfile._build_caption(
@@ -81,3 +150,40 @@ def test_vk_profile_caption_contains_hyperlink_nickname_and_public_info() -> Non
     assert "@spaces" in caption
     assert "• Открытая информация" in caption
     assert "• Контакты" in caption
+
+
+def test_vk_post_process_prefers_embedded_original_photo_for_single_photo_payload(tmp_path: Path) -> None:
+    """Одиночный placeholder-photo должен заменяться на embedded orig_photo из wall payload."""
+    placeholder_path = tmp_path / "placeholder.jpg"
+    placeholder_path.write_bytes(b"placeholder-photo")
+    html_text = (
+        "<html><head><title>Пост | ВКонтакте</title></head><body></body></html>"
+        f'{VKPost.EMBEDDED_POST_MARKER},'
+        '"groups":[{"id":99353432,"name":"КОСМОС","screen_name":"spaces"}],'
+        '"text":"&#127756; Текст поста",'
+        '"id":629095,'
+        '"orig_photo":{"url":"https:\\/\\/example.com\\/real-post.jpg"}'
+    )
+    request_context = _DummyRequestContext(html_text=html_text)
+    media_gateway = _DummyMediaGateway(
+        tmp_path,
+        payload=[{"type": "photo", "file_path": placeholder_path}],
+    )
+    post = VKPost(request_context=request_context, media_gateway=media_gateway)
+
+    result = asyncio.run(
+        post.process(
+            session=None,
+            original_url="https://vk.com/wall-99353432_629095",
+            context="ctx",
+            owner_id="-99353432",
+            post_id="629095",
+        )
+    )
+
+    assert result is not None
+    assert result.media_group
+    assert len(result.media_group) == 1
+    assert result.media_group[0].kind == AttachmentKind.PHOTO
+    assert result.media_group[0].file_path.read_bytes() == b"https://example.com/real-post.jpg"
+    assert placeholder_path in result.cleanup_paths
