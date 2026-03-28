@@ -47,8 +47,9 @@
   - Явные ожидания: shared HTTP downloads stay on the `10s` posture, auth/metadata gaps должны завершаться быстро и явно.
   - Допустимый degrade path: один fallback при извлечении `track_id` из `resolved_url`; отсутствие token/direct link не должно превращаться в blind retry.
 - `VK`
-  - Основные зависимости: cookie-sensitive HTML/JSON extraction, `al_audio` web endpoints, direct/HLS downloads и bounded `yt-dlp` fallback для части путей.
+  - Основные зависимости: cookie-sensitive HTML/JSON extraction, embedded payload parsing для `post/profile`, `al_audio` web endpoints, direct/HLS downloads и bounded `yt-dlp` fallback для части путей.
   - Явные ожидания: VK smoke остается network-sensitive, cookies должны быть актуальными, а bounded fallbacks не должны превращаться в скрытые retry loops.
+  - Текущий runtime scope: `audio`, `playlist`, `clip`, `post`, `profile/community`; smoke-покрытие в `test/handlers/VK/` должно оставаться синхронизированным с этим scope и не требовать optional payload-поля как будто они обязательны всегда.
   - Допустимый degrade path: один ограниченный fallback внутри VK-модуля, затем явный fail-closed outcome без маскировки interstitial/cookie проблем.
 
 ## Observability Signals

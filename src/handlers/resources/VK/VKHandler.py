@@ -43,7 +43,7 @@ class VKHandler(BaseHandler):
         r"clip-?\d+_\d+|"
         r"wall-?\d+_\d+|"
         r"id\d+|"
-        r"[A-Za-z0-9_.-]+"
+        r"(?!(?:audio|wall|id|video|clip|music|feed|login|badbrowser\.php))[A-Za-z0-9_.-]+"
         r")"
         r"(?:/?(?:\?.*)?)?$",
         re.IGNORECASE,

@@ -8,7 +8,7 @@
 
 - typed runtime boundary вокруг `MediaResult`;
 - внедрение sender registry и handler registry;
-- cleanup статусов источников: `YandexMusic` в stable runtime, `VK` только в development-only статусе;
+- cleanup статусов источников: `YandexMusic` в stable runtime, `VK` в active runtime с elevated-risk/cookie-sensitive posture;
 - cleanup lifecycle для runtime storage и cookies;
 - постепенное сокращение legacy compatibility и mixin-heavy boundaries.
 

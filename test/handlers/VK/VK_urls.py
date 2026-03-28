@@ -65,7 +65,7 @@ VK_POST_TEST_CASE: Final[dict[str, str]] = {
     "name": "post",
     "url": POST_URL,
     "expected_type": "media_group",
-    "description": "VK wall post URL (ожидается lead_text + media_group/audios payload).",
+    "description": "VK wall post URL (ожидается media_group/audios payload; lead_text добавляется, если текст поста удалось извлечь).",
 }
 
 VK_PROFILE_TEST_CASES: Final[tuple[dict[str, str], ...]] = (
@@ -73,18 +73,18 @@ VK_PROFILE_TEST_CASES: Final[tuple[dict[str, str], ...]] = (
         "name": "account",
         "url": ACCOUNT_URL,
         "expected_type": "profile",
-        "description": "VK user account URL (ожидается avatar + hyperlink name + public info).",
+        "description": "VK user account URL (ожидается profile-card с hyperlink name; avatar/public info прикладываются, если доступны).",
     },
     {
         "name": "account_public",
         "url": ACCOUNT_PUBLIC_URL,
         "expected_type": "profile",
-        "description": "VK public profile alias URL (ожидается avatar + hyperlink name + public info).",
+        "description": "VK public profile alias URL (ожидается profile-card с hyperlink name; avatar/public info прикладываются, если доступны).",
     },
     {
         "name": "community",
         "url": COMMUNITY_URL,
         "expected_type": "profile",
-        "description": "VK community URL (ожидается avatar + hyperlink name + public info).",
+        "description": "VK community URL (ожидается profile-card с hyperlink name; avatar/public info прикладываются, если доступны).",
     },
 )

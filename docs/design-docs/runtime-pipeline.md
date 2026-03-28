@@ -29,6 +29,10 @@
 - `media_router` владеет preflight policy вокруг raw/resolved URL и передачей выбранного handler-а в `process_block`.
 - Выбор sender-а должен определяться content type, а не source-specific branching.
 - Состояние включения/выключения бота должно проверяться middleware до основной обработки сообщений.
+- Source-specific presentation contract остается частью typed `MediaResult`, а не ad-hoc sender logic.
+- Для `VK` это особенно важно:
+  - `post` может вернуть `lead_text` как отдельный текстовый шаг и затем `media_group` и/или `audios`;
+  - `profile/community` возвращает `ContentType.PROFILE` с card-style `caption_text`, а avatar остается optional и прикладывается только если удалось скачать thumbnail.
 
 ## Risks To Keep Visible
 

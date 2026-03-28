@@ -27,8 +27,10 @@ from src.handlers.infrastructure import (
     YtdlpOptionBuilder,
 )
 from src.utils.cookies import CookieFile
+from .VKUrlService import VKUrlService
 
 logger = logging.getLogger(__name__)
+_VK_URL_SERVICE = VKUrlService()
 
 
 class VKRequestContextProtocol(Protocol):
@@ -304,14 +306,8 @@ class VKRequestContext:
 
     @staticmethod
     def _normalize_vk_url(url: str) -> str:
-        """Нормализует VK URL для metadata/playlist ссылок."""
-        parts = urlsplit(url)
-        netloc = parts.netloc.lower()
-        if netloc in {"vk.ru", "m.vk.ru", "vk.com", "m.vk.com"}:
-            netloc = "vk.com"
-        elif netloc == "www.vk.ru":
-            netloc = "www.vk.com"
-        return f"{parts.scheme or 'https'}://{netloc}{parts.path}"
+        """Нормализует VK URL через единый URL-service helper."""
+        return _VK_URL_SERVICE.normalize(url)
 
     @staticmethod
     def _is_badbrowser_url(url: str) -> bool:

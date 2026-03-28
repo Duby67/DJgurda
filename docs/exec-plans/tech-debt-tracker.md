@@ -43,10 +43,15 @@
 
 - Сокращать повтор шаблонов toggle-flow уже после более срочных runtime-задач.
 
+### 6. VK Runtime Fragility
+
+- Держать под наблюдением fragile зону `VK`: URL classification, cookie freshness и HTML/embedded parsing.
+- Не поднимать optional `post/profile` presentation-поля до обязательного контракта в smoke/docs без подтверждения кодом.
+
 ## Next Iteration Order
 
 1. Улучшение связки `CODEX` <-> swarm contour и reliability promotion flow.
-2. Helper deduplication и toggle-flow cleanup после более срочных runtime-задач.
+2. Helper deduplication, toggle-flow cleanup и VK runtime hardening после более срочных runtime-задач.
 
 ## Archived Source Notes
 

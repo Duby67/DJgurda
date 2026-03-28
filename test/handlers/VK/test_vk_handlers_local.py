@@ -220,10 +220,6 @@ def validate_media_file(handler_output: MediaResult) -> tuple[bool, str]:
 
 def validate_media_group(handler_output: MediaResult) -> tuple[bool, str]:
     """Проверяет media_group поста."""
-    lead_text = str(handler_output.lead_text or "").strip()
-    if not lead_text:
-        return False, "post typed-результат не содержит lead_text"
-
     if not handler_output.media_group:
         if not handler_output.audios:
             return False, "post typed-результат не содержит media_group/audios"
@@ -258,9 +254,7 @@ def validate_profile_result(handler_output: MediaResult) -> tuple[bool, str]:
         return False, "profile typed-результат не содержит caption_text"
     if "<a href=" not in caption_text:
         return False, "profile caption не содержит hyperlink"
-    if handler_output.main_file_path is None:
-        return False, "profile typed-результат не содержит avatar file"
-    if not handler_output.main_file_path.exists():
+    if handler_output.main_file_path is not None and not handler_output.main_file_path.exists():
         return False, f"avatar file не найден: {handler_output.main_file_path}"
     return True, "profile card сформирован"
 
