@@ -1,9 +1,8 @@
-﻿"""Validate exported YouTube cookie files in Netscape cookies.txt format."""
+﻿"""Validate exported cookie files in Netscape cookies.txt format."""
 
 from __future__ import annotations
 
 import argparse
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,15 +20,29 @@ class ValidationResult:
     message: str
 
 
-def _domain_matches(cookie_domain: str, target_domain: str) -> bool:
+def _parse_domains(raw: str) -> tuple[str, ...]:
+    domains = tuple(token.strip().lower() for token in raw.split(",") if token.strip())
+    if not domains:
+        raise ValueError("Domain list is empty")
+    return domains
+
+
+def _domain_matches(cookie_domain: str, target_domains: tuple[str, ...]) -> bool:
     normalized_cookie = cookie_domain.lower().lstrip(".")
-    normalized_target = target_domain.lower().lstrip(".")
-    return normalized_cookie == normalized_target or normalized_cookie.endswith(
-        f".{normalized_target}"
-    )
+    for target_domain in target_domains:
+        normalized_target = target_domain.lower().lstrip(".")
+        if normalized_cookie == normalized_target or normalized_cookie.endswith(
+            f".{normalized_target}"
+        ):
+            return True
+    return False
 
 
-def validate_cookie_file(cookie_file: Path, domain: str, min_cookies: int = 1) -> ValidationResult:
+def validate_cookie_file(
+    cookie_file: Path,
+    domains: tuple[str, ...],
+    min_cookies: int = 1,
+) -> ValidationResult:
     if not cookie_file.exists():
         return ValidationResult(
             ok=False,
@@ -72,18 +85,19 @@ def validate_cookie_file(cookie_file: Path, domain: str, min_cookies: int = 1) -
 
         total_rows += 1
         cookie_domain = parts[0]
-        if _domain_matches(cookie_domain, domain):
+        if _domain_matches(cookie_domain, domains):
             matched_rows += 1
 
     if total_rows == 0:
         return ValidationResult(False, 0, 0, "No cookie rows found in cookie file")
 
     if matched_rows < min_cookies:
+        domains_text = ", ".join(domains)
         return ValidationResult(
             False,
             total_rows,
             matched_rows,
-            f"Not enough cookies for domain '{domain}': {matched_rows} < {min_cookies}",
+            f"Not enough cookies for domains ({domains_text}): {matched_rows} < {min_cookies}",
         )
 
     return ValidationResult(
@@ -96,16 +110,16 @@ def validate_cookie_file(cookie_file: Path, domain: str, min_cookies: int = 1) -
 
 def parse_args() -> argparse.Namespace:
     cfg = load_config()
-    parser = argparse.ArgumentParser(description="Validate YouTube cookie file.")
+    parser = argparse.ArgumentParser(description="Validate cookie file.")
     parser.add_argument(
         "--cookie-file",
-        default=str(cfg.output_path),
-        help=f"Path to cookie file. Default: {cfg.output_path}",
+        default=str(cfg.output_dir / "YouTube" / "www.youtube.com_cookies.txt"),
+        help="Path to cookie file.",
     )
     parser.add_argument(
-        "--domain",
-        default=cfg.domain,
-        help=f"Domain to validate. Default: {cfg.domain}",
+        "--domains",
+        default="youtube.com,google.com,youtu.be,googlevideo.com",
+        help="Comma-separated domain list.",
     )
     parser.add_argument(
         "--min-cookies",
@@ -118,9 +132,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    domains = _parse_domains(args.domains)
     result = validate_cookie_file(
         cookie_file=Path(args.cookie_file),
-        domain=args.domain,
+        domains=domains,
         min_cookies=args.min_cookies,
     )
 

@@ -3,7 +3,7 @@
 ## 1) Создать директории
 
 ```bash
-mkdir -p ~/cookies/YouTube
+mkdir -p ~/cookies/YouTube ~/cookies/VK ~/cookies/Instagram ~/cookies/TikTok ~/cookies/Coub
 mkdir -p ~/firefox_profile
 mkdir -p ~/logs
 ```
@@ -12,16 +12,21 @@ mkdir -p ~/logs
 
 ```bash
 chmod 700 ~/firefox_profile
-chmod 755 ~/cookies ~/cookies/YouTube
+chmod 755 ~/cookies ~/cookies/YouTube ~/cookies/VK ~/cookies/Instagram ~/cookies/TikTok ~/cookies/Coub
 ```
 
-## 3) Подготовить Firefox профиль с авторизацией YouTube
+## 3) Подготовить Firefox профиль с авторизациями
 
 ```bash
-firefox --no-remote --profile ~/firefox_profile https://youtube.com
+firefox --no-remote --profile ~/firefox_profile \
+  https://www.youtube.com \
+  https://vk.com \
+  https://www.instagram.com \
+  https://www.tiktok.com \
+  https://coub.com
 ```
 
-В открывшемся окне войдите в аккаунт YouTube и полностью закройте Firefox.
+В открывшемся окне войдите в аккаунты на всех 5 платформах и полностью закройте Firefox.
 
 ## 4) Тестовый запуск контейнера
 
@@ -30,7 +35,13 @@ cd ~/bot_prod
 /usr/bin/docker compose -f deploy/compose/compose.cookies.yml run --rm cookies-extractor
 ```
 
-## 5) Добавить cron
+## 5) Проверить результаты
+
+```bash
+ls -la ~/cookies/YouTube ~/cookies/VK ~/cookies/Instagram ~/cookies/TikTok ~/cookies/Coub
+```
+
+## 6) Добавить cron
 
 ```bash
 crontab -e

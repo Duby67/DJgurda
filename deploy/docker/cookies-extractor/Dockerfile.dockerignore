@@ -4,6 +4,7 @@
 !src/
 !src/cookies_extractor/
 !src/cookies_extractor/config.py
+!src/cookies_extractor/targets.py
 !src/cookies_extractor/extract_youtube_cookies.py
 !src/cookies_extractor/validate_youtube_cookies.py
 !src/cookies_extractor/run_extractor.py

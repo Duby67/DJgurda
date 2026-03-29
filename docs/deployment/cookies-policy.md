@@ -10,6 +10,10 @@
 
 Папки, необходимые для cookies-extractor:
 - `~/cookies/YouTube` - выходные cookie-файлы YouTube.
-- `~/firefox_profile` - Firefox профиль с авторизацией YouTube.
+- `~/cookies/VK` - выходные cookie-файлы VK.
+- `~/cookies/Instagram` - выходные cookie-файлы Instagram.
+- `~/cookies/TikTok` - выходные cookie-файлы TikTok.
+- `~/cookies/Coub` - выходные cookie-файлы Coub.
+- `~/firefox_profile` - Firefox профиль с авторизацией на всех платформах.
 
 Именно с этими папками взаимодействует контейнер `cookies-extractor`.

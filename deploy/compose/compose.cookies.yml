@@ -7,9 +7,8 @@ services:
     environment:
       COOKIES_BROWSER: firefox
       COOKIES_BROWSER_PROFILE: /cookies_extractor/firefox_profile
-      COOKIES_DOMAIN: youtube.com
-      COOKIES_OUTPUT_DIR: /cookies_extractor/cookies/YouTube
-      COOKIES_OUTPUT_FILE: www.youtube.com_cookies.txt
+      COOKIES_OUTPUT_DIR: /cookies_extractor/cookies
+      COOKIES_TARGETS: youtube,vk,instagram,tiktok,coub
       COOKIES_MIN_COOKIES: 1
     volumes:
       - ${HOME}/cookies:/cookies_extractor/cookies:rw
