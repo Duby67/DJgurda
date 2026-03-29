@@ -1,3 +1,5 @@
 # Зависимости для разработки и тестирования (поверх базовых зависимостей проекта).
 -r requirements.txt
 pytest>=9.0.0
+yamllint
+pymarkdownlnt

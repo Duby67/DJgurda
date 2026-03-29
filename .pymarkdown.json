@@ -1,0 +1,16 @@
+﻿{
+  "plugins": {
+    "line-length": {
+      "enabled": false
+    },
+    "first-line-heading": {
+      "enabled": false
+    },
+    "no-multiple-blanks": {
+      "enabled": false
+    },
+    "blanks-around-lists": {
+      "enabled": false
+    }
+  }
+}

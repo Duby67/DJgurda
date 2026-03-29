@@ -3,6 +3,7 @@
 rules:
   truthy: disable
   document-start: disable
+  new-lines: disable
   line-length:
     max: 160
     level: warning
