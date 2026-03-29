@@ -1,7 +1,6 @@
-﻿# Виртуальное окружение и env
+# Виртуальное окружение и env
 venv/
 .env
-.env.*
 
 # Кеши и артефакты Python/тестов
 __pycache__/
@@ -23,12 +22,3 @@ htmlcov/
 *.pid.lock
 *.tmp
 *.temp
-
-# Локальные настройки VSCode
-.vscode/
-
-# Локальные docker-тесты
-deploy/local/
-
-# Cookie-файлы не должны попадать в git
-*_cookies.txt
