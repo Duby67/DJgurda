@@ -26,4 +26,5 @@
 - `SSH_HOST`
 - `SSH_USER`
 - `SSH_PRIVATE_KEY`
-- `GHCR_PAT` (минимум `read:packages` для сервера)
+- `GHCR_PAT` (рекомендуется PAT classic с `read:packages` и `repo` для приватного репозитория)
+- `GHCR_USERNAME` (GitHub-логин владельца PAT, опционально; если не задан, используется owner репозитория)

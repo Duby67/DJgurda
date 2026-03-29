@@ -122,7 +122,13 @@ jobs:
               exit 1
             fi
 
-            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ needs.build_and_push.outputs.owner_lc }}" --password-stdin
+            GHCR_USERNAME="${{ secrets.GHCR_USERNAME }}"
+            if [[ -z "$GHCR_USERNAME" ]]; then
+              GHCR_USERNAME="${{ needs.build_and_push.outputs.owner_lc }}"
+            fi
+
+            docker logout ghcr.io || true
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
             /usr/bin/docker pull "$IMAGE_REF"
             COOKIES_IMAGE="$IMAGE_REF" /usr/bin/docker compose -f "$COMPOSE_FILE" config > /dev/null
 
