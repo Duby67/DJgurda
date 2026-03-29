@@ -1,7 +1,7 @@
-version: "3.9"
 services:
   cookies-extractor:
     image: ${COOKIES_IMAGE:-ghcr.io/duby67/djgurda:cookies}
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     environment:
       COOKIES_BROWSER: firefox
       COOKIES_BROWSER_PROFILE: /cookies_extractor/firefox_profile

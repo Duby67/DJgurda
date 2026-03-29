@@ -53,6 +53,14 @@ ls -la ~/cookies/runtime
 ls -la ~/cookies/YouTube ~/cookies/VK ~/cookies/Instagram ~/cookies/TikTok ~/cookies/Coub
 ```
 
+## 6.1) Проверить владельца новых cookie-файлов
+
+После запуска файлы должны принадлежать вашему пользователю (например `DJgurda`), а не `root`:
+
+```bash
+ls -la ~/cookies/YouTube ~/cookies/VK ~/cookies/Instagram ~/cookies/TikTok ~/cookies/Coub
+```
+
 ## 7) Добавить cron
 
 ```bash
