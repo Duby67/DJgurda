@@ -1,17 +1,15 @@
 ﻿# Политика cookies
 
-## Локальная разработка
-
-- Все файлы вида `*_cookies.txt` игнорируются git.
-- Для локальных тестов используется `deploy/local/cookies/`.
+Контур `cookies-extractor` используется только для удаленного запуска на сервере.
 
 ## Сервер
 
 На сервере базовая структура:
-- `/home/DJgurda/bot_dev`
-- `/home/DJgurda/bot_prod`
+- `~/bot_dev`
+- `~/bot_prod`
 
-Папка с cookies:
-- `/home/DJgurda/DJgurda/cookies`
+Папки, необходимые для cookies-extractor:
+- `~/cookies` - выходные cookie-файлы.
+- `~/firefox-profile` - Firefox профиль с авторизацией YouTube.
 
-Именно с этой папкой взаимодействует контейнер `cookies-extractor`.
+Именно с этими папками взаимодействует контейнер `cookies-extractor`.

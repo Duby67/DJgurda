@@ -17,6 +17,7 @@
 - `AGENTS.md` - правила и контекст для агентной работы.
 - `docs/` - дополнительная документация.
 - `docs/deployment/` - политика веток, CI/CD, cron и cookies.
+- `docs/deployment/cookies-host-setup.md` - подготовка Ubuntu-хоста для Firefox cookies-extractor.
 - `deploy/` - каркас docker/compose/cron для запуска контуров.
 - `src/` - исходный код проекта.
 - `src/cookies_extractor/` - контур для извлечения cookies YouTube.

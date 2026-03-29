@@ -4,5 +4,11 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/cookies-extractor/Dockerfile
+    env_file:
+      - ./.env.cookies
+    environment:
+      COOKIES_OUTPUT_DIR: /cookies_extractor/cookies
     volumes:
-      - ../local/cookies:/cookies_extractor/cookies:rw
+      - ${HOME}/cookies:/cookies_extractor/cookies:rw
+      - ${HOME}/firefox-profile:/cookies_extractor/firefox_profile:ro
+    restart: "no"

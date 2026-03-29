@@ -1,4 +1,4 @@
-﻿"""Extract YouTube cookies from a local browser into Netscape cookies.txt format."""
+﻿"""Extract YouTube cookies from a browser into Netscape cookies.txt format."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
     cfg = load_config()
     parser = argparse.ArgumentParser(
         description=(
-            "Extract fresh cookies for youtube.com from a local browser profile "
+            "Extract fresh cookies for youtube.com from a browser profile "
             "and save them to /cookies_extractor/cookies/www.youtube.com_cookies.txt."
         )
     )
@@ -131,3 +131,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
