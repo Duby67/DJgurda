@@ -1,12 +1,91 @@
-﻿name: Build Cookies
+﻿name: Build and Deploy Cookies Extractor
 
 on:
   push:
-    branches: ["cookies"]
+    branches:
+      - cookies
+    paths:
+      - ".github/workflows/build-cookies.yml"
+      - "deploy/compose/compose.cookies.yml"
+      - "deploy/docker/cookies-extractor/**"
+      - "src/cookies_extractor/**"
+      - "requirements-cookies.txt"
   workflow_dispatch:
+    inputs:
+      deploy_to_server:
+        description: "Pull latest cookies image on server"
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: cookies-extractor-deploy
+  cancel-in-progress: false
 
 jobs:
-  placeholder:
+  build_and_push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_ref: ${{ steps.meta.outputs.image_ref }}
+      owner_lc: ${{ steps.meta.outputs.owner_lc }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compute image metadata
+        id: meta
+        shell: bash
+        run: |
+          echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=ghcr.io/${GITHUB_REPOSITORY,,}/cookies-extractor:cookies" >> "$GITHUB_OUTPUT"
+          echo "image_sha_ref=ghcr.io/${GITHUB_REPOSITORY,,}/cookies-extractor:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ steps.meta.outputs.owner_lc }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push cookies-extractor image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./deploy/docker/cookies-extractor/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image_ref }}
+            ${{ steps.meta.outputs.image_sha_ref }}
+          platforms: linux/amd64
+
+  deploy_to_server:
+    needs: build_and_push
+    if: ${{ github.event_name == 'push' || github.event.inputs.deploy_to_server == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - run: 'echo "TODO: implement cookies extractor build/deploy"'
+      - name: Pull latest cookies-extractor image on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 228
+          script_stop: true
+          script: |
+            set -euo pipefail
+            PROJECT_DIR="${HOME}/bot_prod"
+            COMPOSE_FILE="${PROJECT_DIR}/deploy/compose/compose.cookies.yml"
+            IMAGE_REF="${{ needs.build_and_push.outputs.image_ref }}"
+
+            if [[ ! -f "$COMPOSE_FILE" ]]; then
+              echo "Missing compose file: $COMPOSE_FILE" >&2
+              exit 1
+            fi
+
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ needs.build_and_push.outputs.owner_lc }}" --password-stdin
+            /usr/bin/docker pull "$IMAGE_REF"
+            COOKIES_IMAGE="$IMAGE_REF" /usr/bin/docker compose -f "$COMPOSE_FILE" config > /dev/null
+            echo "cookies-extractor image is ready: $IMAGE_REF"

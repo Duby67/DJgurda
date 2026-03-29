@@ -1,3 +1,3 @@
 ﻿# Пример задания cron для cookies-extractor
 # minute hour day month day-of-week command
-0 */6 * * * $HOME/bot_prod/deploy/cron/run_cookies_extractor.sh >> $HOME/logs/cookies-extractor.log 2>&1
+0 */6 * * * $HOME/bot_prod/deploy/cron/run_cookies_extractor.sh >> $HOME/logs/cookies_extractor.log 2>&1
