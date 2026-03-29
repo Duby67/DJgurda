@@ -10,3 +10,9 @@ venv/
 
 # Локальные настройки VSCode
 .vscode/
+
+# Локальные docker-тесты
+deploy/local/
+
+# Cookie-файлы не должны попадать в git
+*_cookies.txt

@@ -1,0 +1,6 @@
+﻿version: "3.9"
+services:
+  cookies-extractor:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/cookies-extractor/Dockerfile

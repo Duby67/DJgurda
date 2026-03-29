@@ -1,0 +1,14 @@
+﻿__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.git/
+venv/
+.pytest_cache/
+
+.env
+.env.*
+
+deploy/local/
+*_cookies.txt

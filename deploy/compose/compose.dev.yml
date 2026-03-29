@@ -1,0 +1,6 @@
+﻿version: "3.9"
+services:
+  bot-dev:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/bot-dev/Dockerfile

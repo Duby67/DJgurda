@@ -1,0 +1,10 @@
+﻿name: Build Local
+
+on:
+  workflow_dispatch:
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'echo "TODO: implement local test image build"'
