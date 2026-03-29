@@ -1,0 +1,6 @@
+# Основные зависимости для запуска Telegram-бота в production/обычной среде.
+yt-dlp
+aiogram>=3.25.0
+yandex-music==2.2.0
+sqlalchemy>=2.0.23
+python-dotenv>=1.2.0
