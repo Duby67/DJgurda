@@ -1,8 +1,9 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR="${PROJECT_DIR:-$HOME/bot_prod}"
-COMPOSE_FILE="$PROJECT_DIR/deploy/compose/compose.cookies.yml"
+EXTRACTOR_ROOT="${EXTRACTOR_ROOT:-$HOME/cookies}"
+RUNTIME_DIR="${RUNTIME_DIR:-$EXTRACTOR_ROOT/runtime}"
+COMPOSE_FILE="${COMPOSE_FILE:-$RUNTIME_DIR/compose.cookies.yml}"
 
 if [[ ! -f "$COMPOSE_FILE" ]]; then
   echo "Missing compose file: $COMPOSE_FILE" >&2

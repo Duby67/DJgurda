@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/build-cookies.yml"
       - "deploy/compose/compose.cookies.yml"
+      - "deploy/cron/run_cookies_extractor.sh"
       - "deploy/docker/cookies-extractor/**"
       - "src/cookies_extractor/**"
       - "requirements-cookies.txt"
@@ -66,7 +67,22 @@ jobs:
     if: ${{ github.event_name == 'push' || github.event.inputs.deploy_to_server == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Pull latest cookies-extractor image on server
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Copy cookies runtime files to server staging
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 228
+          source: "deploy/compose/compose.cookies.yml,deploy/cron/run_cookies_extractor.sh"
+          target: "/tmp/djgurda-cookies-${{ github.run_id }}-${{ github.run_attempt }}"
+          overwrite: true
+          strip_components: 0
+
+      - name: Prepare standalone cookies runtime on server
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -76,16 +92,29 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
-            PROJECT_DIR="${HOME}/bot_prod"
-            COMPOSE_FILE="${PROJECT_DIR}/deploy/compose/compose.cookies.yml"
+
+            STAGING_ROOT="/tmp/djgurda-cookies-${{ github.run_id }}-${{ github.run_attempt }}"
+            EXTRACTOR_ROOT="${HOME}/cookies"
+            RUNTIME_DIR="${EXTRACTOR_ROOT}/runtime"
+            COMPOSE_FILE="${RUNTIME_DIR}/compose.cookies.yml"
+            RUN_SCRIPT="${RUNTIME_DIR}/run_cookies_extractor.sh"
             IMAGE_REF="${{ needs.build_and_push.outputs.image_ref }}"
 
-            if [[ ! -f "$COMPOSE_FILE" ]]; then
-              echo "Missing compose file: $COMPOSE_FILE" >&2
-              exit 1
-            fi
+            cleanup_staging() {
+              rm -rf "$STAGING_ROOT"
+            }
+            trap cleanup_staging EXIT
+
+            mkdir -p "$RUNTIME_DIR" "$HOME/logs" "$HOME/firefox_profile"
+            mkdir -p "$EXTRACTOR_ROOT/YouTube" "$EXTRACTOR_ROOT/VK" "$EXTRACTOR_ROOT/Instagram" "$EXTRACTOR_ROOT/TikTok" "$EXTRACTOR_ROOT/Coub"
+
+            cp -f "$STAGING_ROOT/deploy/compose/compose.cookies.yml" "$COMPOSE_FILE"
+            cp -f "$STAGING_ROOT/deploy/cron/run_cookies_extractor.sh" "$RUN_SCRIPT"
+            chmod +x "$RUN_SCRIPT"
 
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ needs.build_and_push.outputs.owner_lc }}" --password-stdin
             /usr/bin/docker pull "$IMAGE_REF"
             COOKIES_IMAGE="$IMAGE_REF" /usr/bin/docker compose -f "$COMPOSE_FILE" config > /dev/null
+
             echo "cookies-extractor image is ready: $IMAGE_REF"
+            echo "runtime path: $RUNTIME_DIR"
