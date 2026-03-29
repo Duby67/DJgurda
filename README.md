@@ -1,4 +1,4 @@
-# DJgurda Telegram Bot
+﻿# DJgurda Telegram Bot
 
 Этот репозиторий подготавливает базу для Telegram-бота на Python.
 
@@ -10,14 +10,16 @@
 `${workspaceFolder}\venv\Scripts\activate.bat`
 3. Зависимости описаны в `requirements.txt`.
 
-## Документы в репозитории
+## Документы и структура
 
 - `README.md` - первичное знакомство (этот файл).
 - `ARCHITECTURE.md` - короткая карта структуры проекта.
 - `AGENTS.md` - правила и контекст для агентной работы.
-- `docs/` - дополнительные документы, которые будут появляться по мере развития проекта.
+- `docs/` - дополнительная документация.
 - `docs/deployment/` - политика веток, CI/CD, cron и cookies.
 - `deploy/` - каркас docker/compose/cron для запуска контуров.
+- `src/` - исходный код проекта.
+- `src/cookies_extractor/` - контур для извлечения cookies YouTube.
 
 ## Быстрый запуск (локально)
 

@@ -1,4 +1,4 @@
-# Архитектура репозитория
+﻿# Архитектура репозитория
 
 Короткая карта текущей структуры:
 
@@ -7,20 +7,21 @@
 - `docs/` - дополнительная проектная документация.
 - `docs/deployment/` - правила веток, CI/CD, cron и политика cookies.
 - `deploy/` - инфраструктурный каркас (docker/compose/cron).
-- `deploy/docker/` - 4 docker-контура:
-  - `bot-prod`
-  - `bot-dev`
-  - `bot-local`
-  - `cookies-extractor`
+- `deploy/docker/bot-prod/` - Docker-контур production.
+- `deploy/docker/bot-dev/` - Docker-контур dev.
+- `deploy/docker/bot-local/` - Docker-контур локального запуска.
+- `deploy/docker/cookies-extractor/` - Docker-контур экстрактора cookies.
 - `deploy/compose/` - шаблоны compose для `prod/dev/local/cookies`.
 - `deploy/cron/` - шаблон cron-задачи для cookies-extractor.
-- `.github/workflows/` - CI/CD workflow-файлы (папка подготовлена).
+- `src/` - исходный код проекта.
+- `src/cookies_extractor/` - рабочий контур скриптов извлечения cookies.
+- `deploy/local/cookies/` - локальная папка для тестовых cookie-файлов.
+- `.github/workflows/` - CI/CD workflow-файлы.
 - `requirements.txt` - зависимости Python-проекта.
 - `requirements-dev.txt` - зависимости разработки и тестирования.
-- `README.md` - документ для первичного ознакомления.
-- `AGENTS.md` - агентно-ориентированный контекст работы.
 
 Политика контуров:
 - `prod`, `dev` - только автодеплой.
 - `cookies` - автодеплой и локальный запуск.
 - `local` - только локальный запуск.
+
