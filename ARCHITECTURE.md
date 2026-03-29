@@ -15,7 +15,6 @@
 - `deploy/cron/` - шаблон cron-задачи для cookies-extractor.
 - `src/` - исходный код проекта.
 - `src/cookies_extractor/` - рабочий контур скриптов извлечения cookies.
-- `deploy/compose/cookies.env.example` - пример серверного env для cookies-extractor.
 - `.github/workflows/` - CI/CD workflow-файлы.
 - `requirements.txt` - зависимости Python-проекта.
 - `requirements-dev.txt` - зависимости разработки и тестирования.
@@ -24,5 +23,3 @@
 - `prod`, `dev` - только автодеплой.
 - `cookies` - только автодеплой (серверный запуск).
 - `local` - только локальный запуск.
-
-

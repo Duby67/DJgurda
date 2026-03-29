@@ -9,7 +9,7 @@
 - `~/bot_prod`
 
 Папки, необходимые для cookies-extractor:
-- `~/cookies` - выходные cookie-файлы.
-- `~/firefox-profile` - Firefox профиль с авторизацией YouTube.
+- `~/cookies/YouTube` - выходные cookie-файлы YouTube.
+- `~/firefox_profile` - Firefox профиль с авторизацией YouTube.
 
 Именно с этими папками взаимодействует контейнер `cookies-extractor`.
