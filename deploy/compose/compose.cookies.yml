@@ -4,3 +4,5 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/cookies-extractor/Dockerfile
+    volumes:
+      - ../local/cookies:/cookies_extractor/cookies:rw

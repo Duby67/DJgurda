@@ -7,6 +7,11 @@ import sys
 from http.cookiejar import MozillaCookieJar
 from pathlib import Path
 
+try:
+    from .config import load_config
+except ImportError:
+    from config import load_config
+
 
 class _SilentLogger:
     def debug(self, _message: str) -> None:
@@ -23,36 +28,37 @@ class _SilentLogger:
 
 
 def parse_args() -> argparse.Namespace:
+    cfg = load_config()
     parser = argparse.ArgumentParser(
         description=(
             "Extract fresh cookies for youtube.com from a local browser profile "
-            "and save them to deploy/local/cookies/www.youtube.com_cookies.txt."
+            "and save them to /cookies_extractor/cookies/www.youtube.com_cookies.txt."
         )
     )
     parser.add_argument(
         "--browser",
-        default="chrome",
+        default=cfg.browser,
         help="Browser name for yt-dlp cookies extraction (example: chrome, firefox).",
     )
     parser.add_argument(
         "--browser-profile",
-        default=None,
+        default=cfg.browser_profile,
         help="Optional browser profile name/path (if needed by yt-dlp).",
     )
     parser.add_argument(
         "--domain",
-        default="youtube.com",
-        help="Cookie domain to export. Default: youtube.com",
+        default=cfg.domain,
+        help=f"Cookie domain to export. Default: {cfg.domain}",
     )
     parser.add_argument(
         "--output-dir",
-        default="deploy/local/cookies",
-        help="Directory for output cookie file. Default: deploy/local/cookies",
+        default=str(cfg.output_dir),
+        help=f"Directory for output cookie file. Default: {cfg.output_dir}",
     )
     parser.add_argument(
         "--output-file",
-        default="www.youtube.com_cookies.txt",
-        help="Output file name. Default: www.youtube.com_cookies.txt",
+        default=cfg.output_file,
+        help=f"Output file name. Default: {cfg.output_file}",
     )
     return parser.parse_args()
 
@@ -72,7 +78,7 @@ def export_youtube_cookies(
         from yt_dlp.cookies import extract_cookies_from_browser
     except ImportError as exc:
         raise RuntimeError(
-            "yt-dlp is not installed. Install dependencies from requirements.txt first."
+            "yt-dlp is not installed. Install dependencies from requirements-cookies.txt first."
         ) from exc
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -125,4 +131,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

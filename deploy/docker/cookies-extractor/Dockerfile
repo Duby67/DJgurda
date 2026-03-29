@@ -1,8 +1,20 @@
 ﻿FROM python:3.11-slim
 
-WORKDIR /app
+WORKDIR /cookies_extractor
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV COOKIES_OUTPUT_DIR=/cookies_extractor/cookies
 
-CMD ["python", "--version"]
+COPY requirements-cookies.txt ./requirements-cookies.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements-cookies.txt
+
+COPY src/cookies_extractor/config.py ./config.py
+COPY src/cookies_extractor/extract_youtube_cookies.py ./extract_youtube_cookies.py
+COPY src/cookies_extractor/validate_youtube_cookies.py ./validate_youtube_cookies.py
+COPY src/cookies_extractor/run_extractor.py ./run_extractor.py
+
+RUN mkdir -p /cookies_extractor/cookies
+
+CMD ["python", "run_extractor.py"]
