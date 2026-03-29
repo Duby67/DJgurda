@@ -23,6 +23,9 @@ concurrency:
   group: cookies-extractor-deploy
   cancel-in-progress: false
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build_and_push:
     runs-on: ubuntu-latest
@@ -32,6 +35,7 @@ jobs:
     outputs:
       image_ref: ${{ steps.meta.outputs.image_ref }}
       owner_lc: ${{ steps.meta.outputs.owner_lc }}
+      repo_lc: ${{ steps.meta.outputs.repo_lc }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -41,8 +45,9 @@ jobs:
         shell: bash
         run: |
           echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
-          echo "image_ref=ghcr.io/${GITHUB_REPOSITORY,,}/cookies-extractor:cookies" >> "$GITHUB_OUTPUT"
-          echo "image_sha_ref=ghcr.io/${GITHUB_REPOSITORY,,}/cookies-extractor:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "repo_lc=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=ghcr.io/${GITHUB_REPOSITORY,,}:cookies" >> "$GITHUB_OUTPUT"
+          echo "image_sha_ref=ghcr.io/${GITHUB_REPOSITORY,,}:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -52,7 +57,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push cookies-extractor image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./deploy/docker/cookies-extractor/Dockerfile
@@ -111,6 +116,11 @@ jobs:
             cp -f "$STAGING_ROOT/deploy/compose/compose.cookies.yml" "$COMPOSE_FILE"
             cp -f "$STAGING_ROOT/deploy/cron/run_cookies_extractor.sh" "$RUN_SCRIPT"
             chmod +x "$RUN_SCRIPT"
+
+            if [[ -z "${{ secrets.GHCR_PAT }}" ]]; then
+              echo "Missing GHCR_PAT secret. Create a PAT with at least read:packages scope." >&2
+              exit 1
+            fi
 
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ needs.build_and_push.outputs.owner_lc }}" --password-stdin
             /usr/bin/docker pull "$IMAGE_REF"

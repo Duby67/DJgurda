@@ -1,7 +1,7 @@
-﻿version: "3.9"
+version: "3.9"
 services:
   cookies-extractor:
-    image: ${COOKIES_IMAGE:-ghcr.io/duby67/djgurda/cookies-extractor:cookies}
+    image: ${COOKIES_IMAGE:-ghcr.io/duby67/djgurda:cookies}
     environment:
       COOKIES_BROWSER: firefox
       COOKIES_BROWSER_PROFILE: /cookies_extractor/firefox_profile
