@@ -17,8 +17,13 @@ session-refresher.
 - Контейнер запускается от UID/GID пользователя хоста.
   Поэтому новые файлы и папки принадлежат `DJgurda`,
   а профиль не блокируется root-владельцем.
-- Логирование рекомендуется вести в
-  `$HOME/logs/session_refresher.log`.
+- Подробные логи запуска пишутся в
+  `$HOME/logs/cookies/session_refresher_<timestamp>.log`.
+- Актуальный лог дублируется в
+  `$HOME/logs/cookies/session_refresher.latest.log`.
+- Вывод `cron` пишется в `$HOME/logs/cookies/cron.log`.
+- В примере `crontab` добавлен `mkdir -p`, чтобы запуск не падал,
+  если папка логов отсутствовала до старта задания.
 
 Важно: `crontab` настраивается вручную
 после валидации ручного запуска.

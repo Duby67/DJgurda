@@ -9,7 +9,9 @@ RUN apt-get update \
        wget \
        gpg \
        xvfb \
+       dbus \
        dbus-x11 \
+       at-spi2-core \
        fontconfig \
        libpci3 \
        libegl1 \
@@ -24,6 +26,7 @@ RUN apt-get update \
        > /etc/apt/preferences.d/mozilla \
     && apt-get update \
     && apt-get install -y --no-install-recommends firefox \
+    && dbus-uuidgen > /etc/machine-id \
     && mkdir -p /tmp/.X11-unix \
     && chmod 1777 /tmp/.X11-unix \
     && rm -rf /var/lib/apt/lists/*

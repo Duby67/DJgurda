@@ -1,3 +1,3 @@
-﻿# Пример задания cron для session-refresher
+# Пример задания cron для session-refresher
 # minute hour day month day-of-week command
-0 */6 * * * $HOME/cookies/runtime/run_session_refresher.sh >> $HOME/logs/session_refresher.log 2>&1
+0 */6 * * * /bin/bash -lc 'mkdir -p "$HOME/logs/cookies" && "$HOME/cookies/runtime/run_session_refresher.sh" >> "$HOME/logs/cookies/cron.log" 2>&1'

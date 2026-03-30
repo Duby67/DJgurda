@@ -5,14 +5,14 @@
 ```bash
 mkdir -p ~/cookies/runtime
 mkdir -p ~/firefox_profile
-mkdir -p ~/logs
+mkdir -p ~/logs/cookies
 ```
 
 ## 2) Выдать безопасные права
 
 ```bash
 chmod 700 ~/firefox_profile
-chmod 755 ~/cookies ~/cookies/runtime ~/logs
+chmod 755 ~/cookies ~/cookies/runtime ~/logs ~/logs/cookies
 ```
 
 ## 3) Дождаться CI/CD доставки runtime-файлов
@@ -56,7 +56,13 @@ ls -la ~/cookies/runtime
 ls -la ~/firefox_profile | head
 ```
 
-## 7) Добавить cron вручную (опционально)
+## 7) Проверить логи
+
+```bash
+ls -la ~/logs/cookies
+```
+
+## 8) Добавить cron вручную (опционально)
 
 ```bash
 crontab -e
