@@ -1,4 +1,4 @@
-# Подготовка хоста для cookies-extractor (Ubuntu 24)
+# Подготовка хоста для cookies-контура (Ubuntu 24)
 
 ## 1) Создать директории
 
@@ -16,55 +16,53 @@ chmod 700 ~/firefox_profile
 chmod 755 ~/cookies ~/cookies/runtime ~/cookies/YouTube ~/cookies/VK ~/cookies/Instagram ~/cookies/TikTok ~/cookies/Coub
 ```
 
-## 3) Подготовить Firefox профиль с авторизациями
+## 3) Дождаться CI/CD доставки runtime-файлов
 
-```bash
-firefox --no-remote --profile ~/firefox_profile \
-  https://www.youtube.com \
-  https://vk.com \
-  https://www.instagram.com \
-  https://www.tiktok.com \
-  https://coub.com
-```
-
-В открывшемся окне войдите в аккаунты на всех 5 платформах и полностью закройте Firefox.
-
-## 4) Дождаться CI/CD доставки runtime-файлов
-
-После успешного запуска workflow `build-cookies.yml` в `~/cookies/runtime` должны появиться:
+После успешного запуска `build-cookies.yml` в `~/cookies/runtime` должны появиться:
 - `compose.cookies.yml`
+- `compose.cookies-refresh.yml`
 - `run_cookies_extractor.sh`
+- `run_session_refresher.sh`
+- `run_refresh_then_extract.sh`
+- `prepare_firefox_profile.sh`
+- `cookies.cron.example`
 
-Проверьте:
+Проверка:
 
 ```bash
 ls -la ~/cookies/runtime
 ```
 
-## 5) Тестовый запуск контейнера
+## 4) Восстановить Firefox профиль из архива
+
+```bash
+~/cookies/runtime/prepare_firefox_profile.sh ~/cookies/runtime/firProf.tar.gz ~/firefox_profile
+```
+
+## 5) Тестовый запуск автообновления сессии
+
+```bash
+~/cookies/runtime/run_session_refresher.sh
+```
+
+## 6) Тестовый запуск экстрактора
 
 ```bash
 ~/cookies/runtime/run_cookies_extractor.sh
 ```
 
-## 6) Проверить результаты
+## 7) Проверить владельца файлов
 
 ```bash
 ls -la ~/cookies/YouTube ~/cookies/VK ~/cookies/Instagram ~/cookies/TikTok ~/cookies/Coub
 ```
 
-## 6.1) Проверить владельца новых cookie-файлов
+Файлы должны принадлежать вашему пользователю, а не `root`.
 
-После запуска файлы должны принадлежать вашему пользователю (например `DJgurda`), а не `root`:
-
-```bash
-ls -la ~/cookies/YouTube ~/cookies/VK ~/cookies/Instagram ~/cookies/TikTok ~/cookies/Coub
-```
-
-## 7) Добавить cron
+## 8) Добавить cron
 
 ```bash
 crontab -e
 ```
 
-Используйте пример из `deploy/cron/cookies.cron.example`.
+Используйте пример из `~/cookies/runtime/cookies.cron.example`.

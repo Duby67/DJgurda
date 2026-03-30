@@ -1,4 +1,4 @@
-﻿# Политика веток, образов и тегов
+# Политика веток, образов и тегов
 
 ## Контуры
 
@@ -9,17 +9,17 @@
 
 ## Именование образов
 
-Рекомендуемый шаблон имени: `djgurda/<service>:<tag>`.
+Для текущего GHCR-потока используются теги в образе репозитория `ghcr.io/<owner>/<repo>`.
 
 Примеры:
-- `djgurda/bot-prod:prod`
-- `djgurda/bot-dev:dev`
-- `djgurda/bot-local:local`
-- `djgurda/cookies-extractor:cookies`
+- `ghcr.io/duby67/djgurda:prod`
+- `ghcr.io/duby67/djgurda:dev`
+- `ghcr.io/duby67/djgurda:cookies` (cookies-extractor)
+- `ghcr.io/duby67/djgurda:cookies-refresh` (session-refresher)
 
 ## Правила запуска по веткам
 
 - `main` -> пересборка и выкладка `bot-prod`.
 - `dev` -> пересборка и выкладка `bot-dev`.
-- ветка/джоба `cookies` -> пересборка `cookies-extractor`.
+- ветка/джоба `cookies` -> пересборка и выкладка образов `cookies` и `cookies-refresh`.
 - `local` контур в CI не деплоится на сервер.

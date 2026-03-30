@@ -1,15 +1,11 @@
 # Cron
 
-На сервере используется `cron` для периодических задач cookies-extractor.
+На сервере используется `cron` для периодических задач cookies-контура.
 
 Базовый подход:
-- CI/CD заранее доставляет свежий образ `cookies-extractor` на сервер (`docker pull`).
+- CI/CD заранее доставляет свежие образы `cookies` и `cookies-refresh` на сервер (`docker pull`).
 - CI/CD автоматически копирует runtime-файлы в `~/cookies/runtime`.
-- cron вызывает `~/cookies/runtime/run_cookies_extractor.sh`.
-- скрипт запускает `docker compose` с `~/cookies/runtime/compose.cookies.yml`.
-- контейнер запускается от UID/GID текущего пользователя хоста, поэтому новые cookie-файлы создаются не от `root`.
-- `compose.cookies.yml` использует готовый образ из GHCR (по умолчанию тег `cookies`).
-- cookies и Firefox-профиль монтируются из домашней директории пользователя (`${HOME}`).
-- один запуск обновляет cookies для: YouTube, VK, Instagram, TikTok, Coub.
+- cron вызывает `~/cookies/runtime/run_refresh_then_extract.sh`.
+- скрипт сначала выполняет `run_session_refresher.sh`, затем (после паузы) `run_cookies_extractor.sh`.
+- оба контейнера запускаются от UID/GID пользователя хоста, поэтому новые файлы создаются не от `root`.
 - логирование ведется в `$HOME/logs/cookies_extractor.log`.
-- при ошибке обновления используется предыдущий валидный cookie-файл.

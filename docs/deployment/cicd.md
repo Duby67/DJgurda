@@ -1,6 +1,6 @@
 # CI/CD
 
-Минимальный CI/CD для cookies-extractor реализован в `.github/workflows/build-cookies.yml`.
+Минимальный CI/CD для cookies-контура реализован в `.github/workflows/build-cookies.yml`.
 
 ## Триггеры
 
@@ -9,17 +9,23 @@
 
 ## Что делает workflow
 
-1. Собирает образ `cookies-extractor` из `deploy/docker/cookies-extractor/Dockerfile`.
-2. Публикует его в GHCR с тегами:
-   - `cookies` (стабильный тег для cron-запусков).
-   - `sha-<commit>` (аудит и откат).
-3. Автоматически копирует на сервер необходимые runtime-файлы:
-   - `deploy/compose/compose.cookies.yml`
-   - `deploy/cron/run_cookies_extractor.sh`
-4. Размещает их в `~/cookies/runtime`, подтягивает свежий образ (`docker pull`) и валидирует compose-конфигурацию.
+1. Собирает и публикует в GHCR образ `cookies-extractor` с тегами:
+   - `cookies`
+   - `cookies-sha-<commit>`
+2. Собирает и публикует в GHCR образ `cookies-session-refresher` с тегами:
+   - `cookies-refresh`
+   - `cookies-refresh-sha-<commit>`
+3. Автоматически копирует на сервер runtime-файлы в `~/cookies/runtime`:
+   - `compose.cookies.yml`
+   - `compose.cookies-refresh.yml`
+   - `run_cookies_extractor.sh`
+   - `run_session_refresher.sh`
+   - `run_refresh_then_extract.sh`
+   - `prepare_firefox_profile.sh`
+   - `cookies.cron.example`
+4. Делает `docker pull` обоих образов и валидирует compose-конфиги.
 
-Контур cookies-extractor полностью автономен и не использует `~/bot-prod` или `~/bot-dev`.
-Контейнер не запускается постоянно: запуск по расписанию выполняет `cron`.
+Контур полностью автономен и не использует `~/bot-prod` или `~/bot-dev`.
 
 ## Секреты workflow
 
