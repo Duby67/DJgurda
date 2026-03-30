@@ -1,0 +1,14 @@
+services:
+  cookies-session-refresher:
+    image: ${COOKIES_REFRESH_IMAGE:-ghcr.io/duby67/djgurda:cookies-refresh}
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      REFRESH_FIREFOX_PROFILE: /session_refresher/firefox_profile
+      REFRESH_TARGETS: https://www.youtube.com,https://vk.com,https://www.instagram.com,https://www.tiktok.com,https://coub.com
+      REFRESH_DURATION_SECONDS: 90
+      REFRESH_WARMUP_SECONDS: 3
+      REFRESH_DISPLAY: :99
+      REFRESH_XVFB_SCREEN: 1024x768x16
+    volumes:
+      - ${HOME}/firefox_profile:/session_refresher/firefox_profile:rw
+    restart: "no"
