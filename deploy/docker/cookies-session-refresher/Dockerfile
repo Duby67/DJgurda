@@ -3,11 +3,17 @@ FROM debian:bookworm-slim
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /session_refresher
 
+ARG GECKODRIVER_VERSION=0.36.0
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        ca-certificates \
        wget \
+       curl \
        gpg \
+       tar \
+       python3 \
+       python3-venv \
        xvfb \
        dbus \
        dbus-x11 \
@@ -15,7 +21,6 @@ RUN apt-get update \
        fontconfig \
        libpci3 \
        libegl1 \
-       sqlite3 \
        procps \
        util-linux \
     && install -d -m 0755 /etc/apt/keyrings \
@@ -27,6 +32,13 @@ RUN apt-get update \
        > /etc/apt/preferences.d/mozilla \
     && apt-get update \
     && apt-get install -y --no-install-recommends firefox \
+    && wget -q "https://github.com/mozilla/geckodriver/releases/download/v${GECKODRIVER_VERSION}/geckodriver-v${GECKODRIVER_VERSION}-linux64.tar.gz" \
+       -O /tmp/geckodriver.tar.gz \
+    && tar -xzf /tmp/geckodriver.tar.gz -C /usr/local/bin \
+    && chmod +x /usr/local/bin/geckodriver \
+    && rm -f /tmp/geckodriver.tar.gz \
+    && python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
     && dbus-uuidgen > /etc/machine-id \
     && mkdir -p /tmp/.X11-unix \
     && chmod 1777 /tmp/.X11-unix \
@@ -36,7 +48,14 @@ RUN apt-get update \
     && chown -R 1000:1000 /home/DJgurda \
     && rm -rf /var/lib/apt/lists/*
 
+ENV PATH="/opt/venv/bin:${PATH}"
+
+COPY src/session_refresher/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r ./requirements.txt
+
+COPY src/session_refresher/refresh_session.py ./refresh_session.py
 COPY src/session_refresher/refresh_session.sh ./refresh_session.sh
+
 RUN chmod +x ./refresh_session.sh \
     && mkdir -p /session_refresher/firefox_profile
 

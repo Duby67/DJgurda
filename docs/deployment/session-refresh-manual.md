@@ -48,7 +48,9 @@ sudo systemctl enable --now docker
 cat ~/cookies/runtime/refresh_sources.list
 ```
 
-Формат строки: `key|url|folder`.
+Формат строки: `source|folder|urls`.
+Поле `urls` содержит одну или несколько ссылок,
+разделенных `;`.
 
 ## 5) Проверить ручной запуск refresher
 
@@ -58,8 +60,10 @@ cat ~/cookies/runtime/refresh_sources.list
 
 Во время запуска скрипт:
 
-- сформирует `REFRESH_TARGETS` из `refresh_sources.list`,
+- разберет `refresh_sources.list` и соберет очередь URL,
 - создаст `~/cookies/<folder>` для каждого источника,
+- запустит single-process Firefox через Selenium + geckodriver,
+- пройдет URL последовательно с случайной длительностью на шаг,
 - запустит контейнер от UID/GID текущего пользователя.
 
 ## 6) Проверить, что профиль меняется и не блокируется root
