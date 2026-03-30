@@ -29,6 +29,10 @@ RUN apt-get update \
     && dbus-uuidgen > /etc/machine-id \
     && mkdir -p /tmp/.X11-unix \
     && chmod 1777 /tmp/.X11-unix \
+    && if ! getent group 1000 >/dev/null; then groupadd --gid 1000 DJgurda; fi \
+    && if ! getent passwd 1000 >/dev/null; then useradd --uid 1000 --gid 1000 --create-home --home-dir /home/DJgurda --shell /bin/bash DJgurda; fi \
+    && mkdir -p /home/DJgurda/.cache \
+    && chown -R 1000:1000 /home/DJgurda \
     && rm -rf /var/lib/apt/lists/*
 
 COPY src/session_refresher/refresh_session.sh ./refresh_session.sh

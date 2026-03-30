@@ -9,9 +9,9 @@ services:
       REFRESH_DURATION_SECONDS: 90
       REFRESH_WARMUP_SECONDS: 3
       REFRESH_DISPLAY: :99
-      REFRESH_XVFB_SCREEN: 1024x768x16
-      HOME: /tmp
-      XDG_CACHE_HOME: /tmp/.cache
+      REFRESH_XVFB_SCREEN: 800x600x16
+      HOME: /home/DJgurda
+      XDG_CACHE_HOME: /home/DJgurda/.cache
       MOZ_DISABLE_CONTENT_SANDBOX: "1"
     volumes:
       - ${HOME}/firefox_profile:/session_refresher/firefox_profile:rw
