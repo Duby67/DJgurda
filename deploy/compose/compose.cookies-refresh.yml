@@ -4,11 +4,17 @@ services:
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     environment:
       REFRESH_FIREFOX_PROFILE: /session_refresher/firefox_profile
+      REFRESH_FIREFOX_BIN: /usr/bin/firefox
       REFRESH_TARGETS: ${REFRESH_TARGETS:-https://www.youtube.com}
       REFRESH_DURATION_SECONDS: 90
       REFRESH_WARMUP_SECONDS: 3
       REFRESH_DISPLAY: :99
       REFRESH_XVFB_SCREEN: 1024x768x16
+      HOME: /tmp
+      XDG_CACHE_HOME: /tmp/.cache
+      MOZ_DISABLE_CONTENT_SANDBOX: "1"
     volumes:
       - ${HOME}/firefox_profile:/session_refresher/firefox_profile:rw
+    security_opt:
+      - seccomp=unconfined
     restart: "no"

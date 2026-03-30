@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PROFILE_DIR="${REFRESH_FIREFOX_PROFILE:-/session_refresher/firefox_profile}"
-FIREFOX_BIN="${REFRESH_FIREFOX_BIN:-/usr/bin/firefox-esr}"
+FIREFOX_BIN="${REFRESH_FIREFOX_BIN:-/usr/bin/firefox}"
 DISPLAY_NUM="${REFRESH_DISPLAY:-:99}"
 XVFB_SCREEN="${REFRESH_XVFB_SCREEN:-1024x768x16}"
 WARMUP_SECONDS="${REFRESH_WARMUP_SECONDS:-3}"
@@ -18,6 +18,12 @@ if [[ ! -x "$FIREFOX_BIN" ]]; then
   echo "Firefox binary not found or not executable: $FIREFOX_BIN" >&2
   exit 1
 fi
+
+# Keep cache/temp writable for non-root container user.
+export HOME="${HOME:-/tmp}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+mkdir -p "$XDG_CACHE_HOME" /tmp/.X11-unix
+chmod 1777 /tmp/.X11-unix || true
 
 LOCK_FILE="$PROFILE_DIR/.refresh.lock"
 exec 9>"$LOCK_FILE"
