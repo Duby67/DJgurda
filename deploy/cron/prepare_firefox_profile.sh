@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ARCHIVE_PATH="${1:-$HOME/cookies/runtime/firProf.tar.gz}"
+ARCHIVE_PATH="${1:-$HOME/cookies/runtime/firefox_profile.tar.gz}"
 PROFILE_DIR="${2:-$HOME/firefox_profile}"
 TMP_DIR="$(mktemp -d)"
 

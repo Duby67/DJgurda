@@ -123,10 +123,6 @@ jobs:
             cp -f "$STAGING_ROOT/deploy/cron/cookies.cron.example" "$CRON_EXAMPLE_FILE"
             chmod +x "$REFRESH_RUN_SCRIPT" "$PREPARE_PROFILE_SCRIPT"
 
-            rm -f "${RUNTIME_DIR}/compose.cookies.yml"
-            rm -f "${RUNTIME_DIR}/run_cookies_extractor.sh"
-            rm -f "${RUNTIME_DIR}/run_refresh_then_extract.sh"
-
             if [[ -z "${{ secrets.GHCR_PAT }}" ]]; then
               echo "Missing GHCR_PAT secret. Create a PAT with at least read:packages scope." >&2
               exit 1

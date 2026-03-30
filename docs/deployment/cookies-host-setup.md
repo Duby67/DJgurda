@@ -1,4 +1,4 @@
-﻿# Подготовка хоста для session-refresher (Ubuntu 24)
+# Подготовка хоста для session-refresher (Ubuntu 24)
 
 ## 1) Создать директории
 
@@ -32,7 +32,7 @@ ls -la ~/cookies/runtime
 ## 4) Восстановить Firefox профиль из архива
 
 ```bash
-~/cookies/runtime/prepare_firefox_profile.sh ~/cookies/runtime/firProf.tar.gz ~/firefox_profile
+~/cookies/runtime/prepare_firefox_profile.sh ~/cookies/runtime/firefox_profile.tar.gz ~/firefox_profile
 ```
 
 ## 5) Тестовый запуск автообновления сессии

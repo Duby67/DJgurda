@@ -1,13 +1,13 @@
-﻿# Ручной запуск session-refresh: пошагово
+# Ручной запуск session-refresh: пошагово
 
-Этот документ нужен для первичного ручного запуска, когда у вас есть архив профиля `deploy/local/firProf.tar.gz`.
+Этот документ нужен для первичного ручного запуска, когда у вас есть архив профиля `deploy/local/firefox_profile.tar.gz`.
 
 ## 1) Передать архив на хост
 
 С локальной машины:
 
 ```bash
-scp -P 228 deploy/local/firProf.tar.gz <SSH_USER>@<SSH_HOST>:~/cookies/runtime/firProf.tar.gz
+scp -P 228 deploy/local/firefox_profile.tar.gz <SSH_USER>@<SSH_HOST>:~/cookies/runtime/firefox_profile.tar.gz
 ```
 
 Для Windows PowerShell используйте аналогичный `scp` с Windows-путем.
@@ -17,7 +17,7 @@ scp -P 228 deploy/local/firProf.tar.gz <SSH_USER>@<SSH_HOST>:~/cookies/runtime/f
 На сервере:
 
 ```bash
-~/cookies/runtime/prepare_firefox_profile.sh ~/cookies/runtime/firProf.tar.gz ~/firefox_profile
+~/cookies/runtime/prepare_firefox_profile.sh ~/cookies/runtime/firefox_profile.tar.gz ~/firefox_profile
 ```
 
 Скрипт автоматически:
