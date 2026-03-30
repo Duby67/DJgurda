@@ -1,4 +1,4 @@
-# DJgurda Telegram Bot
+﻿# DJgurda Telegram Bot
 
 Этот репозиторий подготавливает базу для Telegram-бота на Python.
 
@@ -17,12 +17,11 @@
 - `AGENTS.md` - правила и контекст для агентной работы.
 - `docs/` - дополнительная документация.
 - `docs/deployment/` - политика веток, CI/CD, cron и cookies-контур.
-- `docs/deployment/cookies-host-setup.md` - подготовка Ubuntu-хоста под cookies-контур.
+- `docs/deployment/cookies-host-setup.md` - подготовка Ubuntu-хоста под session-refresher.
 - `docs/deployment/session-refresh-manual.md` - ручной сценарий восстановления Firefox-профиля и запуска автообновления сессии.
 - `deploy/` - каркас docker/compose/cron для запуска контуров.
 - `src/` - исходный код проекта.
-- `src/cookies_extractor/` - контур извлечения cookies в `cookies.txt`.
-- `src/session_refresher/` - контур обновления Firefox-сессии перед извлечением cookies.
+- `src/session_refresher/` - контур обновления Firefox-сессии.
 
 ## Быстрый запуск (локально)
 

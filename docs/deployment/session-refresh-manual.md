@@ -1,6 +1,6 @@
-# Ручной запуск session-refresh: пошагово
+﻿# Ручной запуск session-refresh: пошагово
 
-Этот документ нужен для первичного ручного запуска, когда у вас уже есть архив профиля `deploy/local/firProf.tar.gz`.
+Этот документ нужен для первичного ручного запуска, когда у вас есть архив профиля `deploy/local/firProf.tar.gz`.
 
 ## 1) Передать архив на хост
 
@@ -27,7 +27,7 @@ scp -P 228 deploy/local/firProf.tar.gz <SSH_USER>@<SSH_HOST>:~/cookies/runtime/f
 - удалит символические ссылки,
 - удалит `*.sqlite-shm` и `*.sqlite-wal`.
 
-## 3) Установить необходимые системные пакеты (если сервер "чистый")
+## 3) Установить необходимые пакеты на хосте (если сервер "чистый")
 
 ```bash
 sudo apt-get update
@@ -35,33 +35,19 @@ sudo apt-get install -y docker.io docker-compose-plugin cron
 sudo systemctl enable --now docker
 ```
 
-## 4) Настроить и проверить стек
-
-Одноразовый refresh:
+## 4) Проверить ручной запуск refresher
 
 ```bash
 ~/cookies/runtime/run_session_refresher.sh
 ```
 
-Одноразовый extractor:
+## 5) Проверить, что профиль изменяется и не блокируется root
 
 ```bash
-~/cookies/runtime/run_cookies_extractor.sh
+ls -la ~/firefox_profile | head
 ```
 
-Полный pipeline (refresh -> extract):
-
-```bash
-~/cookies/runtime/run_refresh_then_extract.sh
-```
-
-## 5) Проверить, что появились новые файлы
-
-```bash
-ls -la ~/cookies/YouTube ~/cookies/VK ~/cookies/Instagram ~/cookies/TikTok ~/cookies/Coub
-```
-
-## 6) Автоматизация через cron
+## 6) Автоматизация через cron (по вашему решению)
 
 ```bash
 crontab -e
@@ -72,7 +58,7 @@ crontab -e
 ## 7) Как контейнер попадает на сервер
 
 Это делает CI/CD workflow `build-cookies.yml`:
-- собирает образы `:cookies` и `:cookies-refresh`,
-- публикует их в GHCR,
+- собирает образ `:cookies-refresh`,
+- публикует его в GHCR,
 - копирует runtime-скрипты в `~/cookies/runtime`,
 - выполняет `docker pull` на сервере.

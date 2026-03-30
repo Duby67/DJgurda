@@ -1,7 +1,6 @@
-# Политика cookies
+﻿# Политика cookies
 
-Контур `cookies` предназначен для удаленного запуска на сервере и состоит из двух сервисов:
-- `cookies-extractor` - выгрузка cookies в `*_cookies.txt`.
+Контур `cookies` в текущей версии состоит из одного сервиса:
 - `cookies-session-refresher` - автообновление Firefox-профиля.
 
 ## Сервер
@@ -10,15 +9,9 @@
 - `~/bot-dev`
 - `~/bot-prod`
 
-Контур `cookies` автономен и работает только в пределах `~/cookies`.
-
-Папки и файлы, необходимые для cookies-контура:
-- `~/cookies/runtime` - runtime-файлы, которые автоматически доставляет CI/CD.
-- `~/cookies/YouTube` - выходные cookie-файлы YouTube.
-- `~/cookies/VK` - выходные cookie-файлы VK.
-- `~/cookies/Instagram` - выходные cookie-файлы Instagram.
-- `~/cookies/TikTok` - выходные cookie-файлы TikTok.
-- `~/cookies/Coub` - выходные cookie-файлы Coub.
-- `~/firefox_profile` - Firefox профиль с авторизацией.
+Cookies-контур автономен и работает только с:
+- `~/cookies/runtime` (runtime-файлы)
+- `~/firefox_profile` (профиль Firefox)
+- `~/logs` (логи запуска)
 
 Контур `cookies` не должен изменять файлы и директории `~/bot-dev` и `~/bot-prod`.

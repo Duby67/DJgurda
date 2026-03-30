@@ -1,10 +1,10 @@
-# Политика веток, образов и тегов
+﻿# Политика веток, образов и тегов
 
 ## Контуры
 
 - `prod` - только автодеплой.
 - `dev` - только автодеплой.
-- `cookies` - только автодеплой (серверный запуск).
+- `cookies` - только автодеплой (серверный запуск session-refresher).
 - `local` - только локальный запуск.
 
 ## Именование образов
@@ -14,12 +14,11 @@
 Примеры:
 - `ghcr.io/duby67/djgurda:prod`
 - `ghcr.io/duby67/djgurda:dev`
-- `ghcr.io/duby67/djgurda:cookies` (cookies-extractor)
 - `ghcr.io/duby67/djgurda:cookies-refresh` (session-refresher)
 
 ## Правила запуска по веткам
 
 - `main` -> пересборка и выкладка `bot-prod`.
 - `dev` -> пересборка и выкладка `bot-dev`.
-- ветка/джоба `cookies` -> пересборка и выкладка образов `cookies` и `cookies-refresh`.
+- ветка/джоба `cookies` -> пересборка и выкладка образа `cookies-refresh`.
 - `local` контур в CI не деплоится на сервер.
