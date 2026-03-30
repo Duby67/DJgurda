@@ -7,7 +7,7 @@ DISPLAY_NUM="${REFRESH_DISPLAY:-:99}"
 XVFB_SCREEN="${REFRESH_XVFB_SCREEN:-1024x768x16}"
 WARMUP_SECONDS="${REFRESH_WARMUP_SECONDS:-3}"
 RUN_SECONDS="${REFRESH_DURATION_SECONDS:-90}"
-TARGETS_RAW="${REFRESH_TARGETS:-https://www.youtube.com,https://vk.com,https://www.instagram.com,https://www.tiktok.com,https://coub.com}"
+TARGETS_RAW="${REFRESH_TARGETS:-https://www.youtube.com}"
 
 if [[ ! -d "$PROFILE_DIR" ]]; then
   echo "Firefox profile directory does not exist: $PROFILE_DIR" >&2

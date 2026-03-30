@@ -4,7 +4,7 @@ services:
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     environment:
       REFRESH_FIREFOX_PROFILE: /session_refresher/firefox_profile
-      REFRESH_TARGETS: https://www.youtube.com,https://vk.com,https://www.instagram.com,https://www.tiktok.com,https://coub.com
+      REFRESH_TARGETS: ${REFRESH_TARGETS:-https://www.youtube.com}
       REFRESH_DURATION_SECONDS: 90
       REFRESH_WARMUP_SECONDS: 3
       REFRESH_DISPLAY: :99

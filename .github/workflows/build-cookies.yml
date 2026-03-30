@@ -10,6 +10,7 @@ on:
       - "deploy/cron/cookies.cron.example"
       - "deploy/cron/run_session_refresher.sh"
       - "deploy/cron/prepare_firefox_profile.sh"
+      - "deploy/cron/refresh_sources.list"
       - "deploy/docker/cookies-session-refresher/**"
       - "src/session_refresher/**"
   workflow_dispatch:
@@ -85,7 +86,8 @@ jobs:
             deploy/compose/compose.cookies-refresh.yml,
             deploy/cron/cookies.cron.example,
             deploy/cron/run_session_refresher.sh,
-            deploy/cron/prepare_firefox_profile.sh
+            deploy/cron/prepare_firefox_profile.sh,
+            deploy/cron/refresh_sources.list
           target: "/tmp/djgurda-cookies-${{ github.run_id }}-${{ github.run_attempt }}"
           overwrite: true
           strip_components: 0
@@ -107,6 +109,7 @@ jobs:
             REFRESH_COMPOSE_FILE="${RUNTIME_DIR}/compose.cookies-refresh.yml"
             REFRESH_RUN_SCRIPT="${RUNTIME_DIR}/run_session_refresher.sh"
             PREPARE_PROFILE_SCRIPT="${RUNTIME_DIR}/prepare_firefox_profile.sh"
+            SOURCES_FILE="${RUNTIME_DIR}/refresh_sources.list"
             CRON_EXAMPLE_FILE="${RUNTIME_DIR}/cookies.cron.example"
             REFRESH_IMAGE_REF="${{ needs.build_and_push.outputs.refresher_image_ref }}"
 
@@ -120,6 +123,7 @@ jobs:
             cp -f "$STAGING_ROOT/deploy/compose/compose.cookies-refresh.yml" "$REFRESH_COMPOSE_FILE"
             cp -f "$STAGING_ROOT/deploy/cron/run_session_refresher.sh" "$REFRESH_RUN_SCRIPT"
             cp -f "$STAGING_ROOT/deploy/cron/prepare_firefox_profile.sh" "$PREPARE_PROFILE_SCRIPT"
+            cp -f "$STAGING_ROOT/deploy/cron/refresh_sources.list" "$SOURCES_FILE"
             cp -f "$STAGING_ROOT/deploy/cron/cookies.cron.example" "$CRON_EXAMPLE_FILE"
             chmod +x "$REFRESH_RUN_SCRIPT" "$PREPARE_PROFILE_SCRIPT"
 
