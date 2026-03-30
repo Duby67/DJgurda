@@ -7,9 +7,15 @@ DBUS_RUN_SESSION_BIN="${REFRESH_DBUS_RUN_SESSION_BIN:-/usr/bin/dbus-run-session}
 DISPLAY_NUM="${REFRESH_DISPLAY:-:99}"
 XVFB_SCREEN="${REFRESH_XVFB_SCREEN:-1024x768x16}"
 WARMUP_SECONDS="${REFRESH_WARMUP_SECONDS:-3}"
-RUN_SECONDS="${REFRESH_DURATION_SECONDS:-90}"
-HEARTBEAT_SECONDS="${REFRESH_HEARTBEAT_SECONDS:-30}"
+HEARTBEAT_SECONDS="${REFRESH_HEARTBEAT_SECONDS:-15}"
 TARGETS_RAW="${REFRESH_TARGETS:-https://www.youtube.com}"
+
+# Backward compatibility: fixed duration if REFRESH_DURATION_SECONDS is set.
+FIXED_DURATION_SECONDS="${REFRESH_DURATION_SECONDS:-}"
+URL_DURATION_MIN_RAW="${REFRESH_URL_DURATION_MIN:-}"
+URL_DURATION_MAX_RAW="${REFRESH_URL_DURATION_MAX:-}"
+URL_DURATION_MIN=""
+URL_DURATION_MAX=""
 
 COOKIES_DB=""
 COOKIE_DOMAINS=()
@@ -28,11 +34,74 @@ warn() {
   log "WARN: $*"
 }
 
+die() {
+  log "ERROR: $*"
+  dump_debug_logs
+  exit 1
+}
+
 trim() {
   local value="$1"
   value="${value#"${value%%[![:space:]]*}"}"
   value="${value%"${value##*[![:space:]]}"}"
   printf '%s' "$value"
+}
+
+is_positive_int() {
+  [[ "$1" =~ ^[1-9][0-9]*$ ]]
+}
+
+resolve_duration_bounds() {
+  local min_candidate="${URL_DURATION_MIN_RAW:-}"
+  local max_candidate="${URL_DURATION_MAX_RAW:-}"
+
+  if [[ -n "$FIXED_DURATION_SECONDS" ]]; then
+    if ! is_positive_int "$FIXED_DURATION_SECONDS"; then
+      die "REFRESH_DURATION_SECONDS must be a positive integer"
+    fi
+
+    if [[ -z "$min_candidate" ]]; then
+      min_candidate="$FIXED_DURATION_SECONDS"
+    fi
+
+    if [[ -z "$max_candidate" ]]; then
+      max_candidate="$FIXED_DURATION_SECONDS"
+    fi
+  fi
+
+  if [[ -z "$min_candidate" && -z "$max_candidate" ]]; then
+    min_candidate="60"
+    max_candidate="90"
+  elif [[ -z "$min_candidate" ]]; then
+    min_candidate="$max_candidate"
+  elif [[ -z "$max_candidate" ]]; then
+    max_candidate="$min_candidate"
+  fi
+
+  if ! is_positive_int "$min_candidate"; then
+    die "REFRESH_URL_DURATION_MIN must be a positive integer"
+  fi
+
+  if ! is_positive_int "$max_candidate"; then
+    die "REFRESH_URL_DURATION_MAX must be a positive integer"
+  fi
+
+  if (( min_candidate > max_candidate )); then
+    die "REFRESH_URL_DURATION_MIN cannot be greater than REFRESH_URL_DURATION_MAX"
+  fi
+
+  URL_DURATION_MIN="$min_candidate"
+  URL_DURATION_MAX="$max_candidate"
+}
+
+pick_random_duration() {
+  if (( URL_DURATION_MIN == URL_DURATION_MAX )); then
+    echo "$URL_DURATION_MIN"
+    return
+  fi
+
+  local span=$((URL_DURATION_MAX - URL_DURATION_MIN + 1))
+  echo $((URL_DURATION_MIN + RANDOM % span))
 }
 
 extract_host_from_url() {
@@ -57,7 +126,6 @@ build_cookie_domains() {
       seen["$host"]=1
     fi
 
-    # YouTube auth cookies often live on google.com.
     if [[ "$host" == *"youtube.com" ]] && [[ -z "${seen[google.com]:-}" ]]; then
       COOKIE_DOMAINS+=("google.com")
       seen["google.com"]=1
@@ -151,10 +219,56 @@ dump_debug_logs() {
   fi
 }
 
-die() {
-  log "ERROR: $*"
-  dump_debug_logs
-  exit 1
+run_single_target() {
+  local target="$1"
+  local step_index="$2"
+  local total_steps="$3"
+  local duration="$4"
+  local remaining="$duration"
+  local firefox_status=0
+
+  log "step_start index=$step_index/$total_steps target=$target duration_seconds=$duration"
+
+  "$DBUS_RUN_SESSION_BIN" -- "$FIREFOX_BIN" \
+    --no-remote \
+    --new-instance \
+    --profile "$PROFILE_DIR" \
+    "$target" >>/tmp/firefox-refresh.log 2>&1 &
+  FIREFOX_PID=$!
+
+  sleep 5
+  if ! kill -0 "$FIREFOX_PID" 2>/dev/null; then
+    die "Firefox exited too early for target=$target"
+  fi
+
+  while [[ "$remaining" -gt 0 ]]; do
+    local step="$HEARTBEAT_SECONDS"
+    if [[ "$step" -gt "$remaining" ]]; then
+      step="$remaining"
+    fi
+
+    sleep "$step"
+    remaining=$((remaining - step))
+
+    if ! kill -0 "$FIREFOX_PID" 2>/dev/null; then
+      die "Firefox exited before target window finished: target=$target remaining=${remaining}s"
+    fi
+
+    log "step_progress index=$step_index/$total_steps target=$target remaining=${remaining}s"
+  done
+
+  kill -TERM "$FIREFOX_PID" 2>/dev/null || true
+  set +e
+  wait "$FIREFOX_PID"
+  firefox_status=$?
+  set -e
+  unset FIREFOX_PID
+
+  if [[ "$firefox_status" -ne 0 && "$firefox_status" -ne 143 ]]; then
+    warn "Firefox exited with status $firefox_status for target=$target"
+  fi
+
+  log "step_done index=$step_index/$total_steps target=$target duration_seconds=$duration"
 }
 
 if [[ ! -d "$PROFILE_DIR" ]]; then
@@ -169,7 +283,16 @@ if [[ ! -x "$DBUS_RUN_SESSION_BIN" ]]; then
   die "dbus-run-session binary not found or not executable: $DBUS_RUN_SESSION_BIN"
 fi
 
-# Keep cache/temp writable for non-root container user.
+if ! is_positive_int "$WARMUP_SECONDS"; then
+  die "REFRESH_WARMUP_SECONDS must be a positive integer"
+fi
+
+if ! is_positive_int "$HEARTBEAT_SECONDS"; then
+  die "REFRESH_HEARTBEAT_SECONDS must be a positive integer"
+fi
+
+resolve_duration_bounds
+
 export HOME="${HOME:-/tmp}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
 export NO_AT_BRIDGE="${NO_AT_BRIDGE:-1}"
@@ -206,7 +329,8 @@ log "profile=$PROFILE_DIR"
 log "firefox_bin=$FIREFOX_BIN"
 log "dbus_run_session_bin=$DBUS_RUN_SESSION_BIN"
 log "display=$DISPLAY_NUM xvfb_screen=$XVFB_SCREEN"
-log "warmup_seconds=$WARMUP_SECONDS run_seconds=$RUN_SECONDS heartbeat_seconds=$HEARTBEAT_SECONDS"
+log "warmup_seconds=$WARMUP_SECONDS heartbeat_seconds=$HEARTBEAT_SECONDS"
+log "url_duration_min=$URL_DURATION_MIN url_duration_max=$URL_DURATION_MAX"
 
 Xvfb "$DISPLAY_NUM" -screen 0 "$XVFB_SCREEN" -nolisten tcp >/tmp/xvfb.log 2>&1 &
 XVFB_PID=$!
@@ -229,6 +353,8 @@ if [[ ${#TARGETS[@]} -eq 0 ]]; then
   die "No refresh targets provided"
 fi
 
+total_targets="${#TARGETS[@]}"
+log "targets_total=$total_targets"
 for target in "${TARGETS[@]}"; do
   log "target=$target"
 done
@@ -237,46 +363,12 @@ build_cookie_domains
 COOKIES_DB="$PROFILE_DIR/cookies.sqlite"
 capture_cookie_snapshot "before" COOKIES_BEFORE
 
-"$DBUS_RUN_SESSION_BIN" -- "$FIREFOX_BIN" \
-  --no-remote \
-  --new-instance \
-  --profile "$PROFILE_DIR" \
-  "${TARGETS[@]}" >/tmp/firefox-refresh.log 2>&1 &
-FIREFOX_PID=$!
-
-sleep 5
-if ! kill -0 "$FIREFOX_PID" 2>/dev/null; then
-  die "Firefox exited too early"
-fi
-
-remaining="$RUN_SECONDS"
-while [[ "$remaining" -gt 0 ]]; do
-  step="$HEARTBEAT_SECONDS"
-  if [[ "$step" -gt "$remaining" ]]; then
-    step="$remaining"
-  fi
-
-  sleep "$step"
-  remaining=$((remaining - step))
-
-  if ! kill -0 "$FIREFOX_PID" 2>/dev/null; then
-    die "Firefox exited before refresh window finished"
-  fi
-
-  log "heartbeat: firefox alive, remaining=${remaining}s"
+for idx in "${!TARGETS[@]}"; do
+  step_index=$((idx + 1))
+  target="${TARGETS[$idx]}"
+  duration="$(pick_random_duration)"
+  run_single_target "$target" "$step_index" "$total_targets" "$duration"
 done
-
-log "Stopping Firefox and flushing profile changes"
-kill -TERM "$FIREFOX_PID" 2>/dev/null || true
-set +e
-wait "$FIREFOX_PID"
-firefox_status=$?
-set -e
-unset FIREFOX_PID
-
-if [[ "$firefox_status" -ne 0 && "$firefox_status" -ne 143 ]]; then
-  warn "Firefox exited with status $firefox_status"
-fi
 
 capture_cookie_snapshot "after" COOKIES_AFTER
 compare_cookie_snapshots

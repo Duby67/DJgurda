@@ -64,12 +64,17 @@ if [[ -f "$SOURCES_FILE" ]]; then
     line="${raw%$'\r'}"
     [[ -z "$line" || "${line:0:1}" == "#" ]] && continue
 
-    IFS='|' read -r source_key source_url source_folder <<< "$line"
+    IFS='|' read -r source_key source_folder source_urls extra <<< "$line"
     source_key="$(trim "${source_key:-}")"
-    source_url="$(trim "${source_url:-}")"
     source_folder="$(trim "${source_folder:-}")"
+    source_urls="$(trim "${source_urls:-}")"
+    extra="$(trim "${extra:-}")"
 
-    if [[ -z "$source_key" || -z "$source_url" || -z "$source_folder" ]]; then
+    if [[ -n "$extra" ]]; then
+      die "Invalid source format in $SOURCES_FILE (too many fields): $line"
+    fi
+
+    if [[ -z "$source_key" || -z "$source_folder" || -z "$source_urls" ]]; then
       die "Invalid source line in $SOURCES_FILE: $line"
     fi
 
@@ -82,8 +87,26 @@ if [[ -f "$SOURCES_FILE" ]]; then
       die "Failed to create target directory: $target_dir"
     fi
 
-    log "source=$source_key url=$source_url folder=$target_dir"
-    targets+=("$source_url")
+    IFS=';' read -r -a source_url_items <<< "$source_urls"
+    source_target_count=0
+    for raw_url in "${source_url_items[@]}"; do
+      source_url="$(trim "$raw_url")"
+      [[ -z "$source_url" ]] && continue
+
+      if [[ "$source_url" != http://* && "$source_url" != https://* ]]; then
+        die "Invalid url in $SOURCES_FILE: $source_url"
+      fi
+
+      targets+=("$source_url")
+      source_target_count=$((source_target_count + 1))
+      log "source=$source_key folder=$target_dir url=$source_url"
+    done
+
+    if [[ "$source_target_count" -eq 0 ]]; then
+      die "No urls found for source '$source_key' in $SOURCES_FILE"
+    fi
+
+    log "source=$source_key urls_count=$source_target_count"
   done < "$SOURCES_FILE"
 else
   log "sources file not found, using REFRESH_TARGETS from environment"
@@ -96,6 +119,8 @@ if [[ -z "${REFRESH_TARGETS:-}" ]]; then
   REFRESH_TARGETS="$(IFS=,; echo "${targets[*]}")"
 fi
 
+resolved_count="$(awk -F',' '{print NF}' <<< "$REFRESH_TARGETS")"
+log "resolved_targets_count=$resolved_count"
 log "resolved_targets=$REFRESH_TARGETS"
 log "running docker compose refresher"
 

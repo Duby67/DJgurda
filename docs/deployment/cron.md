@@ -10,6 +10,13 @@ session-refresher.
 - CI/CD автоматически копирует runtime-файлы в `~/cookies/runtime`.
 - `~/cookies/runtime/run_session_refresher.sh` читает
   `~/cookies/runtime/refresh_sources.list`.
+- Формат `refresh_sources.list`: `source|folder|urls`.
+- Поле `urls` содержит одну или несколько ссылок,
+  разделенных `;`.
+- Контейнер проходит URL последовательно.
+- На каждый URL выбирается случайная длительность
+  в диапазоне `REFRESH_URL_DURATION_MIN..REFRESH_URL_DURATION_MAX`
+  (по умолчанию `60..90` секунд).
 - Перед запуском контейнера скрипт создает папки
   `~/cookies/<folder>` для каждого источника.
 - По расписанию запускается
