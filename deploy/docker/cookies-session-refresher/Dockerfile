@@ -15,6 +15,7 @@ RUN apt-get update \
        fontconfig \
        libpci3 \
        libegl1 \
+       sqlite3 \
        procps \
        util-linux \
     && install -d -m 0755 /etc/apt/keyrings \

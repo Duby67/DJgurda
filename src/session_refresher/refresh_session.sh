@@ -11,6 +11,11 @@ RUN_SECONDS="${REFRESH_DURATION_SECONDS:-90}"
 HEARTBEAT_SECONDS="${REFRESH_HEARTBEAT_SECONDS:-30}"
 TARGETS_RAW="${REFRESH_TARGETS:-https://www.youtube.com}"
 
+COOKIES_DB=""
+COOKIE_DOMAINS=()
+declare -A COOKIES_BEFORE=()
+declare -A COOKIES_AFTER=()
+
 timestamp() {
   date '+%Y-%m-%d %H:%M:%S'
 }
@@ -28,6 +33,110 @@ trim() {
   value="${value#"${value%%[![:space:]]*}"}"
   value="${value%"${value##*[![:space:]]}"}"
   printf '%s' "$value"
+}
+
+extract_host_from_url() {
+  local url="$1"
+  local host="${url#*://}"
+  host="${host%%/*}"
+  host="${host%%:*}"
+  printf '%s' "$(trim "$host")"
+}
+
+build_cookie_domains() {
+  declare -A seen=()
+  COOKIE_DOMAINS=()
+
+  for target in "${TARGETS[@]}"; do
+    local host
+    host="$(extract_host_from_url "$target")"
+    [[ -z "$host" ]] && continue
+
+    if [[ -z "${seen[$host]:-}" ]]; then
+      COOKIE_DOMAINS+=("$host")
+      seen["$host"]=1
+    fi
+
+    # YouTube auth cookies often live on google.com.
+    if [[ "$host" == *"youtube.com" ]] && [[ -z "${seen[google.com]:-}" ]]; then
+      COOKIE_DOMAINS+=("google.com")
+      seen["google.com"]=1
+    fi
+  done
+
+  for domain in "${COOKIE_DOMAINS[@]}"; do
+    log "cookie_domain_watch=$domain"
+  done
+}
+
+run_sqlite_query() {
+  local sql="$1"
+  local output=""
+  local status=0
+  local sqlite_error=""
+
+  set +e
+  output="$(sqlite3 -readonly "$COOKIES_DB" "$sql" 2>/tmp/sqlite-refresh.log)"
+  status=$?
+  set -e
+
+  if [[ $status -ne 0 ]]; then
+    sqlite_error="$(tr '\n' ' ' </tmp/sqlite-refresh.log 2>/dev/null || true)"
+    sqlite_error="$(trim "$sqlite_error")"
+    warn "sqlite query failed: ${sqlite_error:-unknown error}"
+    return 1
+  fi
+
+  printf '%s' "$output"
+}
+
+capture_cookie_snapshot() {
+  local label="$1"
+  local map_name="$2"
+  declare -n out_map="$map_name"
+
+  out_map=()
+
+  if [[ ! -f "$COOKIES_DB" ]]; then
+    warn "cookies sqlite database not found: $COOKIES_DB"
+    return
+  fi
+
+  if ! command -v sqlite3 >/dev/null 2>&1; then
+    warn "sqlite3 is not available in container"
+    return
+  fi
+
+  for domain in "${COOKIE_DOMAINS[@]}"; do
+    local domain_safe
+    local stats
+    domain_safe="$(printf '%s' "$domain" | tr -cd 'A-Za-z0-9.-')"
+    [[ -z "$domain_safe" ]] && continue
+
+    stats="$(run_sqlite_query "SELECT count(*), COALESCE(datetime(max(lastAccessed)/1000000,'unixepoch'),'n/a'), COALESCE(datetime(max(expiry),'unixepoch'),'n/a') FROM moz_cookies WHERE host LIKE '%${domain_safe}';")" || stats="query_error"
+    out_map["$domain"]="$stats"
+    log "cookies_${label} domain=$domain stats=$stats"
+  done
+
+  local all_stats
+  all_stats="$(run_sqlite_query "SELECT count(*), COALESCE(datetime(max(lastAccessed)/1000000,'unixepoch'),'n/a'), COALESCE(datetime(max(expiry),'unixepoch'),'n/a') FROM moz_cookies;")" || all_stats="query_error"
+  out_map["__all__"]="$all_stats"
+  log "cookies_${label} domain=__all__ stats=$all_stats"
+}
+
+compare_cookie_snapshots() {
+  for domain in "${COOKIE_DOMAINS[@]}" "__all__"; do
+    local before
+    local after
+    before="${COOKIES_BEFORE[$domain]:-n/a}"
+    after="${COOKIES_AFTER[$domain]:-n/a}"
+
+    if [[ "$before" == "$after" ]]; then
+      log "cookies_compare domain=$domain status=unchanged before=$before after=$after"
+    else
+      log "cookies_compare domain=$domain status=changed before=$before after=$after"
+    fi
+  done
 }
 
 dump_debug_logs() {
@@ -124,6 +233,10 @@ for target in "${TARGETS[@]}"; do
   log "target=$target"
 done
 
+build_cookie_domains
+COOKIES_DB="$PROFILE_DIR/cookies.sqlite"
+capture_cookie_snapshot "before" COOKIES_BEFORE
+
 "$DBUS_RUN_SESSION_BIN" -- "$FIREFOX_BIN" \
   --no-remote \
   --new-instance \
@@ -164,6 +277,9 @@ unset FIREFOX_PID
 if [[ "$firefox_status" -ne 0 && "$firefox_status" -ne 143 ]]; then
   warn "Firefox exited with status $firefox_status"
 fi
+
+capture_cookie_snapshot "after" COOKIES_AFTER
+compare_cookie_snapshots
 
 log "Session refresh completed"
 dump_debug_logs
