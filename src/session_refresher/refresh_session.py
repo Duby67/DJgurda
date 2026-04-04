@@ -62,6 +62,20 @@ return {
   element: target.tagName ? target.tagName.toLowerCase() : "n/a",
 };
 """
+YOUTUBE_AUTH_STATE_SCRIPT = """
+return {
+  hasAvatarButton: Boolean(
+    document.querySelector(
+      '#avatar-btn, button#avatar-btn, ytd-topbar-menu-button-renderer #avatar-btn',
+    ),
+  ),
+  hasSignInButton: Boolean(
+    document.querySelector(
+      'a[href*="ServiceLogin"], a[href*="/signin"], a[aria-label*="Sign in"]',
+    ),
+  ),
+};
+"""
 
 
 @dataclass
@@ -157,6 +171,19 @@ def parse_targets(raw_targets: str) -> List[str]:
 def extract_host(url: str) -> str:
     parsed = urlparse(url)
     return parsed.hostname or ""
+
+
+def normalize_url_for_match(url: str) -> tuple[str, str]:
+    parsed = urlparse((url or "").strip())
+    host = (parsed.hostname or "").lower()
+    path = parsed.path.rstrip("/") or "/"
+    return host, path
+
+
+def navigation_matches(target: str, current_url: str) -> bool:
+    target_host, target_path = normalize_url_for_match(target)
+    current_host, current_path = normalize_url_for_match(current_url)
+    return target_host == current_host and target_path == current_path
 
 
 def build_cookie_domains(targets: List[str]) -> List[str]:
@@ -278,21 +305,56 @@ def enforce_single_window(driver: webdriver.Firefox, preferred_handle: str | Non
     return active_handle
 
 
-def stop_page_loading(driver: webdriver.Firefox, target_safe: str, health: RunHealth) -> None:
+def stop_page_loading(driver: webdriver.Firefox, target_safe: str, health: RunHealth) -> str:
     try:
         ready_state = driver.execute_script(
             "window.stop(); return document.readyState || 'n/a';"
         )
+        ready_state = str(ready_state or "n/a")
         log(
             f"page_load_stop_done target={target_safe} "
-            f"ready_state={ready_state or 'n/a'}"
+            f"ready_state={ready_state}"
         )
+        return ready_state
     except (TimeoutException, WebDriverException, ReadTimeoutError) as exc:
         health.page_load_warnings += 1
         warn(
             f"page_load_stop_failed target={target_safe} "
             f"error={exc.__class__.__name__}"
         )
+        return "n/a"
+
+
+def probe_auth_state(driver: webdriver.Firefox, target_safe: str) -> str:
+    target_host = extract_host(target_safe)
+    if not target_host.endswith("youtube.com"):
+        return "n/a"
+
+    try:
+        auth_probe = driver.execute_script(YOUTUBE_AUTH_STATE_SCRIPT) or {}
+    except (TimeoutException, WebDriverException, ReadTimeoutError) as exc:
+        warn(
+            f"auth_probe_failed target={target_safe} "
+            f"error={exc.__class__.__name__}"
+        )
+        return "unknown"
+
+    has_avatar = bool(auth_probe.get("hasAvatarButton"))
+    has_sign_in = bool(auth_probe.get("hasSignInButton"))
+    if has_avatar and not has_sign_in:
+        auth_state = "signed_in"
+    elif has_sign_in and not has_avatar:
+        auth_state = "signed_out"
+    elif has_avatar and has_sign_in:
+        auth_state = "mixed"
+    else:
+        auth_state = "unknown"
+
+    log(
+        f"auth_probe target={target_safe} auth_state={auth_state} "
+        f"has_avatar={has_avatar} has_sign_in={has_sign_in}"
+    )
+    return auth_state
 
 
 def perform_human_action(driver: webdriver.Firefox, target_safe: str, health: RunHealth) -> None:
@@ -522,6 +584,8 @@ def run() -> int:
         for index, target in enumerate(targets, start=1):
             duration = random.randint(duration_min, duration_max)
             step_reached = False
+            page_load_timed_out = False
+            stop_ready_state = "n/a"
             target_safe = safe_url(target)
             log(
                 f"step_start index={index}/{total_steps} "
@@ -544,10 +608,9 @@ def run() -> int:
                     f"elapsed_seconds={time.monotonic() - page_get_monotonic:.3f}"
                 )
             except TimeoutException:
-                health.page_load_warnings += 1
                 step_reached = True
-                warn(f"page_load_timeout target={target_safe}")
-                stop_page_loading(driver, target_safe, health)
+                page_load_timed_out = True
+                stop_ready_state = stop_page_loading(driver, target_safe, health)
             except (WebDriverException, ReadTimeoutError) as exc:
                 health.page_load_warnings += 1
                 warn(f"webdriver_get_error target={target_safe} error={exc.__class__.__name__}")
@@ -565,14 +628,49 @@ def run() -> int:
             try:
                 current_url_raw = driver.current_url or ""
                 current_url = safe_url(current_url_raw) if current_url_raw else "n/a"
+                current_ready_state = str(
+                    driver.execute_script("return document.readyState || 'n/a';") or "n/a"
+                )
                 title = (driver.title or "").replace("\n", " ").strip()
                 if len(title) > 120:
                     title = title[:117] + "..."
+                navigation_match = navigation_matches(target, current_url_raw)
+                auth_state = probe_auth_state(driver, target_safe)
+                if page_load_timed_out:
+                    effective_ready_state = (
+                        stop_ready_state
+                        if stop_ready_state != "n/a"
+                        else current_ready_state
+                    )
+                    if navigation_match and effective_ready_state in {"interactive", "complete"}:
+                        log(
+                            f"page_load_timeout_soft index={index}/{total_steps} "
+                            f"target={target_safe} current_url={current_url} "
+                            f"ready_state={effective_ready_state}"
+                        )
+                    else:
+                        health.page_load_warnings += 1
+                        warn(
+                            f"page_load_timeout_hard index={index}/{total_steps} "
+                            f"target={target_safe} current_url={current_url} "
+                            f"ready_state={effective_ready_state} "
+                            f"navigation_match={navigation_match}"
+                        )
+                elif not navigation_match:
+                    health.page_load_warnings += 1
+                    warn(
+                        f"navigation_mismatch index={index}/{total_steps} "
+                        f"target={target_safe} current_url={current_url} "
+                        f"ready_state={current_ready_state}"
+                    )
+
                 if step_reached:
                     health.pages_loaded += 1
                 log(
                     f"step_loaded index={index}/{total_steps} "
-                    f"current_url={current_url} title={title or 'n/a'}"
+                    f"current_url={current_url} title={title or 'n/a'} "
+                    f"ready_state={current_ready_state} "
+                    f"navigation_match={navigation_match} auth_state={auth_state}"
                 )
             except (WebDriverException, ReadTimeoutError) as exc:
                 health.page_load_warnings += 1
