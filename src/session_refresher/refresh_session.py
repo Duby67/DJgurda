@@ -493,6 +493,82 @@ def configure_firefox_options(options: Options, profile_dir: Path, firefox_bin: 
     options.set_preference("webgl.disabled", True)
 
 
+def start_webdriver(
+    profile_dir: Path,
+    firefox_bin: str,
+    geckodriver_bin: str,
+    gecko_log_path: str,
+    page_load_timeout: int,
+    script_timeout: int,
+    health: RunHealth,
+) -> tuple[webdriver.Firefox, str]:
+    options = Options()
+    configure_firefox_options(options, profile_dir, firefox_bin)
+    service = Service(executable_path=geckodriver_bin, log_output=gecko_log_path)
+
+    log(
+        "webdriver_starting "
+        f"profile={profile_dir} firefox_bin={firefox_bin} "
+        f"geckodriver_bin={geckodriver_bin} geckodriver_log={gecko_log_path} "
+        "page_load_strategy=eager session_restore_disabled=true "
+        "webgl_disabled=true media_decode_disabled=true"
+    )
+    webdriver_start_monotonic = time.monotonic()
+    driver = webdriver.Firefox(service=service, options=options)
+    log(
+        "webdriver_created "
+        f"startup_elapsed_seconds={time.monotonic() - webdriver_start_monotonic:.3f}"
+    )
+    driver.set_page_load_timeout(page_load_timeout)
+    log(f"page_load_timeout_set seconds={page_load_timeout}")
+    driver.set_script_timeout(script_timeout)
+    log(f"script_timeout_set seconds={script_timeout}")
+    log("single_window_enforce_start stage=initial")
+    active_handle = enforce_single_window(driver, driver.current_window_handle, health)
+    log(
+        "webdriver_started single_process=true single_window=true "
+        f"active_handle={active_handle}"
+    )
+    return driver, active_handle
+
+
+def stop_webdriver(driver: webdriver.Firefox | None) -> None:
+    if driver is None:
+        return
+
+    try:
+        driver.quit()
+        log("webdriver_quit_ok")
+    except Exception as exc:  # noqa: BLE001
+        warn(f"webdriver_quit_failed error={exc.__class__.__name__}: {exc}")
+
+
+def restart_webdriver(
+    driver: webdriver.Firefox | None,
+    profile_dir: Path,
+    firefox_bin: str,
+    geckodriver_bin: str,
+    gecko_log_path: str,
+    page_load_timeout: int,
+    script_timeout: int,
+    health: RunHealth,
+    reason: str,
+) -> tuple[webdriver.Firefox, str]:
+    warn(f"webdriver_restart_start reason={reason}")
+    stop_webdriver(driver)
+    restarted_driver, active_handle = start_webdriver(
+        profile_dir=profile_dir,
+        firefox_bin=firefox_bin,
+        geckodriver_bin=geckodriver_bin,
+        gecko_log_path=gecko_log_path,
+        page_load_timeout=page_load_timeout,
+        script_timeout=script_timeout,
+        health=health,
+    )
+    log(f"webdriver_restart_done active_handle={active_handle}")
+    return restarted_driver, active_handle
+
+
 def run() -> int:
     profile_dir = Path(get_env("REFRESH_FIREFOX_PROFILE", "/session_refresher/firefox_profile"))
     firefox_bin = get_env("REFRESH_FIREFOX_BIN", "/usr/bin/firefox")
@@ -549,35 +625,16 @@ def run() -> int:
     active_handle: str | None = None
     fatal_error: str | None = None
     exit_code = 0
+    gecko_log_path = os.getenv("REFRESH_GECKODRIVER_LOG", "/tmp/geckodriver.log")
     try:
-        options = Options()
-        configure_firefox_options(options, profile_dir, firefox_bin)
-
-        gecko_log_path = os.getenv("REFRESH_GECKODRIVER_LOG", "/tmp/geckodriver.log")
-        service = Service(executable_path=geckodriver_bin, log_output=gecko_log_path)
-
-        log(
-            "webdriver_starting "
-            f"profile={profile_dir} firefox_bin={firefox_bin} "
-            f"geckodriver_bin={geckodriver_bin} geckodriver_log={gecko_log_path} "
-            "page_load_strategy=eager session_restore_disabled=true "
-            "webgl_disabled=true media_decode_disabled=true"
-        )
-        webdriver_start_monotonic = time.monotonic()
-        driver = webdriver.Firefox(service=service, options=options)
-        log(
-            "webdriver_created "
-            f"startup_elapsed_seconds={time.monotonic() - webdriver_start_monotonic:.3f}"
-        )
-        driver.set_page_load_timeout(page_load_timeout)
-        log(f"page_load_timeout_set seconds={page_load_timeout}")
-        driver.set_script_timeout(script_timeout)
-        log(f"script_timeout_set seconds={script_timeout}")
-        log("single_window_enforce_start stage=initial")
-        active_handle = enforce_single_window(driver, driver.current_window_handle, health)
-        log(
-            "webdriver_started single_process=true single_window=true "
-            f"active_handle={active_handle}"
+        driver, active_handle = start_webdriver(
+            profile_dir=profile_dir,
+            firefox_bin=firefox_bin,
+            geckodriver_bin=geckodriver_bin,
+            gecko_log_path=gecko_log_path,
+            page_load_timeout=page_load_timeout,
+            script_timeout=script_timeout,
+            health=health,
         )
 
         total_steps = len(targets)
@@ -614,6 +671,22 @@ def run() -> int:
             except (WebDriverException, ReadTimeoutError) as exc:
                 health.page_load_warnings += 1
                 warn(f"webdriver_get_error target={target_safe} error={exc.__class__.__name__}")
+                driver, active_handle = restart_webdriver(
+                    driver=driver,
+                    profile_dir=profile_dir,
+                    firefox_bin=firefox_bin,
+                    geckodriver_bin=geckodriver_bin,
+                    gecko_log_path=gecko_log_path,
+                    page_load_timeout=page_load_timeout,
+                    script_timeout=script_timeout,
+                    health=health,
+                    reason=f"webdriver_get_error:{exc.__class__.__name__}",
+                )
+                log(
+                    f"step_skipped index={index}/{total_steps} "
+                    f"target={target_safe} reason=webdriver_restarted"
+                )
+                continue
 
             if active_handle is not None:
                 try:
@@ -714,12 +787,7 @@ def run() -> int:
         fatal_error = f"webdriver_failed error={exc.__class__.__name__}: {exc}"
         exit_code = die(fatal_error)
     finally:
-        if driver is not None:
-            try:
-                driver.quit()
-                log("webdriver_quit_ok")
-            except Exception as exc:  # noqa: BLE001
-                warn(f"webdriver_quit_failed error={exc.__class__.__name__}: {exc}")
+        stop_webdriver(driver)
 
     after = capture_snapshot("after", cookies_db, domains, health)
     health.cookie_domains_changed = compare_snapshots(before, after, domains)
