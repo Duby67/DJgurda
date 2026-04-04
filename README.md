@@ -1,6 +1,7 @@
-﻿# DJgurda Telegram Bot
+# DJgurda Telegram Bot
 
-Этот репозиторий подготавливает базу для Telegram-бота на Python.
+Репозиторий содержит Telegram-бота на Python и отдельный
+cookies-контур для автообновления Firefox-сессии.
 
 ## С чего начать
 
@@ -8,7 +9,9 @@
 `C:\Users\Duby6\AppData\Local\Programs\Python\Python311\python.exe`
 2. В VSCode настроена автоактивация окружения через:
 `${workspaceFolder}\venv\Scripts\activate.bat`
-3. Зависимости описаны в `requirements.txt`.
+3. Зависимости бота описаны в `requirements.txt`.
+4. Зависимости cookies-refresher образа вынесены в
+`requirements-cookies.txt`.
 
 ## Документы и структура
 
@@ -18,12 +21,13 @@
 - `docs/` - дополнительная документация.
 - `docs/deployment/` - политика веток, CI/CD, cron и cookies-контур.
 - `docs/deployment/cookies-host-setup.md` - подготовка Ubuntu-хоста под session-refresher.
-- `docs/deployment/session-refresh-manual.md` - ручной сценарий восстановления Firefox-профиля и запуска автообновления сессии.
-- `deploy/` - каркас docker/compose/cron для запуска контуров.
+- `docs/deployment/session-refresh-manual.md` - ручной сценарий подготовки
+  Firefox-профилей и запуска session-refresher.
+- `deploy/` - docker/compose/cron обвязка контуров.
 - `src/` - исходный код проекта.
-- `src/session_refresher/` - контур обновления Firefox-сессии.
+- `src/session_refresher/` - контейнерный Selenium-раннер обновления Firefox-сессии.
 
-## Быстрый запуск (локально)
+## Быстрый запуск бота локально
 
 ```bat
 venv\Scripts\activate.bat

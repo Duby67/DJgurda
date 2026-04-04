@@ -5,13 +5,14 @@
 ```bash
 mkdir -p ~/cookies/runtime
 mkdir -p ~/firefox_profile
+mkdir -p ~/firefox_selenium_profile
 mkdir -p ~/logs/cookies
 ```
 
 ## 2) Выдать безопасные права
 
 ```bash
-chmod 700 ~/firefox_profile
+chmod 700 ~/firefox_profile ~/firefox_selenium_profile
 chmod 755 ~/cookies ~/cookies/runtime ~/logs ~/logs/cookies
 ```
 
@@ -23,6 +24,7 @@ chmod 755 ~/cookies ~/cookies/runtime ~/logs ~/logs/cookies
 - `compose.cookies-refresh.yml`
 - `run_session_refresher.sh`
 - `prepare_firefox_profile.sh`
+- `prepare_selenium_profile.sh`
 - `refresh_sources.list`
 - `cookies.cron.example`
 
@@ -32,12 +34,20 @@ chmod 755 ~/cookies ~/cookies/runtime ~/logs ~/logs/cookies
 ls -la ~/cookies/runtime
 ```
 
-## 4) Восстановить Firefox профиль из архива
+## 4) Восстановить основной Firefox профиль из архива
 
 ```bash
 ~/cookies/runtime/prepare_firefox_profile.sh \
   ~/cookies/runtime/firefox_profile.tar.gz \
   ~/firefox_profile
+```
+
+Если нужно вручную собрать Selenium-profile:
+
+```bash
+~/cookies/runtime/prepare_selenium_profile.sh \
+  ~/firefox_profile \
+  ~/firefox_selenium_profile
 ```
 
 ## 5) Тестовый запуск автообновления сессии
@@ -46,14 +56,16 @@ ls -la ~/cookies/runtime
 ~/cookies/runtime/run_session_refresher.sh
 ```
 
-`run_session_refresher.sh` сам создаст папки `~/cookies/<folder>`
-по данным `refresh_sources.list`.
-Вручную создавать их не нужно.
+`run_session_refresher.sh` сам создаст папки `~/cookies/<folder>`,
+соберет отдельный `~/firefox_selenium_profile`, запустит контейнер
+`DJgurda-cookies` и после успешного прогона синхронизирует
+cookie/storage файлы обратно в `~/firefox_profile`.
 
-## 6) Проверить состояние профиля
+## 6) Проверить состояние профилей
 
 ```bash
 ls -la ~/firefox_profile | head
+ls -la ~/firefox_selenium_profile | head
 ```
 
 ## 7) Проверить логи

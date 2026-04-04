@@ -2,7 +2,8 @@
 
 Контур `cookies` в текущей версии состоит из одного сервиса:
 
-- `cookies-session-refresher` - автообновление Firefox-профиля.
+- `cookies-session-refresher` - автообновление Firefox-профиля
+  в контейнере `DJgurda-cookies`.
 
 ## Сервер
 
@@ -15,7 +16,8 @@ Cookies-контур автономен и работает только с:
 
 - `~/cookies/runtime` (runtime-файлы)
 - `~/cookies/<folder>` (папки из `refresh_sources.list`)
-- `~/firefox_profile` (профиль Firefox)
+- `~/firefox_profile` (основной Firefox-профиль)
+- `~/firefox_selenium_profile` (отдельный профиль для Selenium-прогона)
 - `~/logs/cookies` (логи запуска и cron)
 
 Контур `cookies` не должен изменять файлы и директории

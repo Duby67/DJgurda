@@ -1,6 +1,17 @@
 # cookies-session-refresher Docker контур
 
-Контейнер запускает `Xvfb + Firefox + Selenium + geckodriver`
-и обновляет профиль `firefox_profile`.
+Образ собирается из `debian:bookworm-slim`, устанавливает
+Firefox, geckodriver и зависимости из `requirements-cookies.txt`
+в системный Python контейнера.
 
-Контур одноразового запуска (`docker compose run --rm`) и подходит для cron.
+Контейнер `DJgurda-cookies` запускает
+`Xvfb + DBus + Firefox + Selenium + geckodriver` и работает с
+примонтированным Selenium-профилем
+`~/firefox_selenium_profile`.
+
+Firefox стартует в облегченном Selenium-режиме:
+`page_load_strategy=eager`, без session restore, WebGL/GPU и
+тяжелого media decode/autoplay.
+
+Контур одноразового запуска (`docker compose run --rm`) и
+подходит для ручного запуска и cron.

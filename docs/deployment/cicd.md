@@ -19,11 +19,13 @@ CI/CD для cookies-контура реализован в
    - `compose.cookies-refresh.yml`
    - `run_session_refresher.sh`
    - `prepare_firefox_profile.sh`
+   - `prepare_selenium_profile.sh`
    - `refresh_sources.list`
    - `cookies.cron.example`
 3. Создает недостающие директории:
    - `~/cookies/runtime`
    - `~/firefox_profile`
+   - `~/firefox_selenium_profile`
    - `~/logs`
 4. Делает `docker pull` образа `cookies-refresh`.
 5. Валидирует compose-конфигурацию.
