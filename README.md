@@ -24,6 +24,8 @@ cookies-контур для автообновления Firefox-сессии.
 - `docs/deployment/session-refresh-manual.md` - ручной сценарий подготовки
   Firefox-профилей и запуска session-refresher.
 - `deploy/` - docker/compose/cron обвязка контуров.
+- `test/docker/` - локальные стенды для проверки Docker-образов
+  без ожидания выгрузки на сервер.
 - `src/` - исходный код проекта.
 - `src/session_refresher/` - контейнерный Selenium-раннер обновления Firefox-сессии.
 

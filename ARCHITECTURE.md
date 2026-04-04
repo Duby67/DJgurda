@@ -9,6 +9,8 @@
 - `docs/deployment/` - правила веток, CI/CD, cron и
   политика cookies-контура.
 - `deploy/` - инфраструктурный каркас (docker/compose/cron).
+- `test/docker/` - локальные Docker-стенды для быстрой проверки
+  образов и runtime-сценариев без серверного деплоя.
 - `deploy/docker/bot-prod/` - Docker-контур production.
 - `deploy/docker/bot-dev/` - Docker-контур dev.
 - `deploy/docker/bot-local/` - Docker-контур локального запуска.

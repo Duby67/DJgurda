@@ -1,0 +1,28 @@
+services:
+  cookies-session-refresher-local:
+    container_name: DJgurda-cookies-local
+    image: djgurda-cookies-session-refresher:local-test
+    build:
+      context: ../../..
+      dockerfile: deploy/docker/cookies-session-refresher/Dockerfile
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      REFRESH_FIREFOX_PROFILE: /session_refresher/firefox_profile
+      REFRESH_FIREFOX_BIN: /usr/bin/firefox
+      REFRESH_TARGETS: ${REFRESH_TARGETS:-https://www.youtube.com/,https://www.youtube.com/feed/subscriptions,https://www.youtube.com/feed/library}
+      REFRESH_URL_DURATION_MIN: ${REFRESH_URL_DURATION_MIN:-60}
+      REFRESH_URL_DURATION_MAX: ${REFRESH_URL_DURATION_MAX:-70}
+      REFRESH_HEARTBEAT_SECONDS: ${REFRESH_HEARTBEAT_SECONDS:-15}
+      REFRESH_WARMUP_SECONDS: 3
+      REFRESH_DISPLAY: :99
+      REFRESH_XVFB_SCREEN: 800x600x16
+      HOME: /home/DJgurda
+      XDG_CACHE_HOME: /home/DJgurda/.cache
+      MOZ_DISABLE_CONTENT_SANDBOX: "1"
+      NO_AT_BRIDGE: "1"
+      TZ: ${TZ:-Europe/Moscow}
+    volumes:
+      - ./local/firefox_selenium_profile:/session_refresher/firefox_profile:rw
+    security_opt:
+      - seccomp=unconfined
+    restart: "no"
