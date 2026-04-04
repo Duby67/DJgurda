@@ -1,44 +1,60 @@
 # Cron
 
-На сервере используется `cron` для периодических запусков
-session-refresher.
+На сервере `cron` запускает контейнерный session-refresher
+через единый хостовый wrapper
+`~/cookies/runtime/run_session_refresher.sh`.
 
-Базовый подход:
+## Цепочка запуска
 
 - CI/CD заранее доставляет свежий образ `cookies-refresh`
-  на сервер (`docker pull`).
-- CI/CD автоматически копирует runtime-файлы в `~/cookies/runtime`.
+  на сервер (`docker pull`) и копирует runtime-файлы в
+  `~/cookies/runtime`.
+- Образ `cookies-refresh` уже содержит Firefox, geckodriver
+  и Python-зависимости из `requirements-cookies.txt`,
+  установленные в системный Python контейнера.
+- Cron вызывает `~/cookies/runtime/run_session_refresher.sh`.
+- Этот же хостовый wrapper используется для ручного запуска
+  контейнера с хоста.
+- `run_session_refresher.sh` создает backup профиля,
+  читает `~/cookies/runtime/refresh_sources.list`, собирает
+  `REFRESH_TARGETS` и запускает `docker compose run --rm
+  cookies-session-refresher`.
+- Внутри контейнера `refresh_session.sh` поднимает Xvfb/DBus
+  и запускает `refresh_session.py`.
+- `refresh_session.py` последовательно открывает URL в одном
+  Firefox-окне, выполняет легкие `scroll/hover` действия,
+  обновляет `cookies.sqlite` в примонтированном профиле и
+  пишет `health_verdict=healthy|degraded|failed`.
+
+## Источники URL
+
 - `~/cookies/runtime/run_session_refresher.sh` читает
   `~/cookies/runtime/refresh_sources.list`.
 - Формат `refresh_sources.list`: `source|folder|urls`.
 - Поле `urls` содержит одну или несколько ссылок,
   разделенных `;`.
-- Контейнер проходит URL последовательно.
 - На каждый URL выбирается случайная длительность
   в диапазоне `REFRESH_URL_DURATION_MIN..REFRESH_URL_DURATION_MAX`
   (по умолчанию `30..45` секунд).
+
+## Файлы и права
+
 - Перед запуском контейнера скрипт создает папки
   `~/cookies/<folder>` для каждого источника.
 - Перед запуском контейнера скрипт делает один ротационный
   backup профиля Firefox в
   `~/cookies/runtime/firefox_profile.backup.tar.gz` (поверх старого).
-- По расписанию запускается
-  `~/cookies/runtime/run_session_refresher.sh`.
-- Во время жизни каждой страницы Selenium выполняет легкие
-  человекоподобные действия (scroll/hover) и удерживает только
-  одно активное окно Firefox.
-- В конце прогона в лог пишется итоговый
-  `health_verdict=healthy|degraded|failed`.
 - Контейнер запускается от UID/GID пользователя хоста.
   Поэтому новые файлы и папки принадлежат `DJgurda`,
   а профиль не блокируется root-владельцем.
+
+## Логи
+
 - Подробные логи запуска пишутся в
   `$HOME/logs/cookies/session_refresher_<timestamp>.log`.
 - Актуальный лог дублируется в
   `$HOME/logs/cookies/session_refresher.latest.log`.
 - Вывод `cron` пишется в `$HOME/logs/cookies/cron.log`.
-- В примере `crontab` добавлен `mkdir -p`, чтобы запуск не падал,
-  если папка логов отсутствовала до старта задания.
 
-Важно: `crontab` настраивается вручную
-после валидации ручного запуска.
+Важно: `crontab` настраивается вручную после валидации
+ручного запуска.

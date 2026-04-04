@@ -5,9 +5,8 @@ PROFILE_DIR="${REFRESH_FIREFOX_PROFILE:-/session_refresher/firefox_profile}"
 DISPLAY_NUM="${REFRESH_DISPLAY:-:99}"
 XVFB_SCREEN="${REFRESH_XVFB_SCREEN:-800x600x16}"
 WARMUP_SECONDS="${REFRESH_WARMUP_SECONDS:-3}"
-HEARTBEAT_SECONDS="${REFRESH_HEARTBEAT_SECONDS:-15}"
 DBUS_RUN_SESSION_BIN="${REFRESH_DBUS_RUN_SESSION_BIN:-/usr/bin/dbus-run-session}"
-PYTHON_BIN="${REFRESH_PYTHON_BIN:-/opt/venv/bin/python}"
+PYTHON_BIN="${REFRESH_PYTHON_BIN:-/usr/bin/python3}"
 REFRESH_SCRIPT="${REFRESH_SCRIPT:-/session_refresher/refresh_session.py}"
 
 timestamp() {
@@ -69,11 +68,6 @@ if ! is_positive_int "$WARMUP_SECONDS"; then
   die "REFRESH_WARMUP_SECONDS must be a positive integer"
 fi
 
-if ! is_positive_int "$HEARTBEAT_SECONDS"; then
-  die "REFRESH_HEARTBEAT_SECONDS must be a positive integer"
-fi
-
-# Keep cache/temp writable for non-root container user.
 export HOME="${HOME:-/home/DJgurda}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
 export NO_AT_BRIDGE="${NO_AT_BRIDGE:-1}"

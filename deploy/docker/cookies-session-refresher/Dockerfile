@@ -12,7 +12,7 @@ RUN apt-get update \
        gpg \
        tar \
        python3 \
-       python3-venv \
+       python3-pip \
        xvfb \
        dbus \
        dbus-x11 \
@@ -35,8 +35,6 @@ RUN apt-get update \
     && tar -xzf /tmp/geckodriver.tar.gz -C /usr/local/bin \
     && chmod +x /usr/local/bin/geckodriver \
     && rm -f /tmp/geckodriver.tar.gz \
-    && python3 -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
     && dbus-uuidgen > /etc/machine-id \
     && mkdir -p /tmp/.X11-unix \
     && chmod 1777 /tmp/.X11-unix \
@@ -46,10 +44,9 @@ RUN apt-get update \
     && chown -R 1000:1000 /home/DJgurda \
     && rm -rf /var/lib/apt/lists/*
 
-ENV PATH="/opt/venv/bin:${PATH}"
 
 COPY requirements-cookies.txt ./requirements.txt
-RUN pip install --no-cache-dir -r ./requirements.txt
+RUN python3 -m pip install --break-system-packages --no-cache-dir -r ./requirements.txt
 
 COPY src/session_refresher/refresh_session.py ./refresh_session.py
 COPY src/session_refresher/refresh_session.sh ./refresh_session.sh

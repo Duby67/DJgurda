@@ -1,7 +1,13 @@
 # Ручной запуск session-refresh: пошагово
 
-Этот документ нужен для первичного ручного запуска,
-когда у вас есть архив профиля
+Этот документ описывает 2 ручных сценария:
+
+- запуск контейнера с хоста через
+  `~/cookies/runtime/run_session_refresher.sh`;
+- запуск контейнерного wrapper внутри контейнера через
+  `/session_refresher/refresh_session.sh`.
+
+Для первичного запуска нужен архив профиля
 `deploy/local/firefox_profile.tar.gz`.
 
 ## 1) Передать архив на хост
@@ -52,21 +58,25 @@ cat ~/cookies/runtime/refresh_sources.list
 Поле `urls` содержит одну или несколько ссылок,
 разделенных `;`.
 
-## 5) Проверить ручной запуск refresher
+## 5) Ручной запуск контейнера с хоста
 
 ```bash
 ~/cookies/runtime/run_session_refresher.sh
 ```
 
-Во время запуска скрипт:
+Хостовый wrapper делает только host-level работу:
 
-- разберет `refresh_sources.list` и соберет очередь URL,
-- создаст `~/cookies/<folder>` для каждого источника,
-- создаст/обновит backup профиля
+- создает/обновляет backup профиля
   `~/cookies/runtime/firefox_profile.backup.tar.gz`,
-- запустит single-process Firefox через Selenium + geckodriver,
-- пройдет URL последовательно с случайной длительностью на шаг,
-- запустит контейнер от UID/GID текущего пользователя.
+- разбирает `refresh_sources.list`, создает `~/cookies/<folder>`
+  и собирает очередь URL,
+- запускает контейнер `cookies-session-refresher`
+  от UID/GID текущего пользователя.
+
+Дальше внутри контейнера `refresh_session.sh` поднимает
+Xvfb/DBus и запускает `refresh_session.py`, который
+последовательно открывает URL и обновляет cookie прямо в
+примонтированном Firefox profile.
 
 ## 6) Проверить, что профиль меняется и не блокируется root
 
@@ -74,15 +84,31 @@ cat ~/cookies/runtime/refresh_sources.list
 ls -la ~/firefox_profile | head
 ```
 
-## 7) Автоматизация через cron (по вашему решению)
+## 7) Ручной запуск wrapper внутри контейнера
+
+Если нужно проверить именно контейнерный runtime-wrapper без
+хостового `run_session_refresher.sh`, запустите контейнер
+через compose:
+
+```bash
+docker compose -f ~/cookies/runtime/compose.cookies-refresh.yml \
+  run --rm cookies-session-refresher
+```
+
+`CMD` образа автоматически вызывает
+`/session_refresher/refresh_session.sh`.
+
+## 8) Автоматический запуск контейнера через cron
 
 ```bash
 crontab -e
 ```
 
 Добавьте строку из `~/cookies/runtime/cookies.cron.example`.
+Cron будет запускать тот же
+`~/cookies/runtime/run_session_refresher.sh`.
 
-## 8) Как контейнер попадает на сервер
+## 9) Как контейнер попадает на сервер
 
 Это делает CI/CD workflow `build-cookies.yml`:
 

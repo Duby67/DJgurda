@@ -1,17 +1,32 @@
 # session_refresher
 
-Контур автообновления Firefox-сессии для профиля `~/firefox_profile`.
+Контейнерный контур обновления Firefox-сессии для профиля
+`/session_refresher/firefox_profile`.
 
-Назначение:
+## Роль этого контура
 
-- периодически запускать Firefox через Selenium + geckodriver,
-- проходить URL последовательно в одном процессе и одном активном окне Firefox,
-- во время жизни страницы выполнять легкие человекоподобные действия (scroll/hover),
-- сохранять обновления сессии обратно в профиль,
-- писать итоговый `health_verdict` в конце прогона.
+- `refresh_session.sh` поднимает Xvfb/DBus внутри контейнера,
+  проверяет lock профиля и запускает Python-раннер.
+- `refresh_session.py` открывает URL в одном Firefox-процессе,
+  выполняет легкие human-like действия и обновляет
+  `cookies.sqlite` прямо в примонтированном профиле.
+- `../../requirements-cookies.txt` описывает Python-зависимости,
+  которые устанавливаются в системный Python контейнера при сборке образа.
 
-Файлы:
+## Сценарии запуска
 
-- `refresh_session.sh` - оболочка запуска Xvfb/DBus и Python-раннера.
-- `refresh_session.py` - основной single-process сценарий Selenium.
-- `../../requirements-cookies.txt` - отдельные Python-зависимости контура session-refresher.
+- Ручной запуск внутри контейнера:
+  `bash /session_refresher/refresh_session.sh`.
+- Ручной запуск контейнера с хоста:
+  `~/cookies/runtime/run_session_refresher.sh`.
+- Автоматический запуск контейнера:
+  cron вызывает тот же `~/cookies/runtime/run_session_refresher.sh`.
+
+## Поведение
+
+- URL обходятся последовательно в одном процессе и одном
+  активном окне Firefox.
+- Во время жизни страницы выполняются легкие действия
+  `scroll/hover`.
+- В конце прогона логируется итоговый
+  `health_verdict=healthy|degraded|failed`.
