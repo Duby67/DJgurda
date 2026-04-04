@@ -256,6 +256,11 @@ def compare_snapshots(before: Dict[str, str], after: Dict[str, str], domains: Li
 
 def enforce_single_window(driver: webdriver.Firefox, preferred_handle: str | None, health: RunHealth) -> str:
     handles = driver.window_handles
+    log(
+        "window_handles_check "
+        f"handles_count={len(handles)} "
+        f"preferred_found={preferred_handle in handles if preferred_handle else False}"
+    )
     if not handles:
         raise WebDriverException("Firefox returned zero window handles")
 
@@ -439,14 +444,34 @@ def run() -> int:
         options.set_preference("browser.shell.checkDefaultBrowser", False)
         options.set_preference("browser.startup.homepage", "about:blank")
         options.set_preference("browser.startup.page", 0)
+        options.set_preference("browser.sessionstore.resume_from_crash", False)
+        options.set_preference("browser.sessionstore.restore_on_demand", False)
+        options.set_preference("browser.sessionstore.restore_tabs_lazily", False)
+        options.set_preference("browser.sessionstore.max_resumed_crashes", 0)
 
         gecko_log_path = os.getenv("REFRESH_GECKODRIVER_LOG", "/tmp/geckodriver.log")
         service = Service(executable_path=geckodriver_bin, log_output=gecko_log_path)
 
+        log(
+            "webdriver_starting "
+            f"profile={profile_dir} firefox_bin={firefox_bin} "
+            f"geckodriver_bin={geckodriver_bin} geckodriver_log={gecko_log_path} "
+            "session_restore_disabled=true"
+        )
+        webdriver_start_monotonic = time.monotonic()
         driver = webdriver.Firefox(service=service, options=options)
+        log(
+            "webdriver_created "
+            f"startup_elapsed_seconds={time.monotonic() - webdriver_start_monotonic:.3f}"
+        )
         driver.set_page_load_timeout(page_load_timeout)
+        log(f"page_load_timeout_set seconds={page_load_timeout}")
+        log("single_window_enforce_start stage=initial")
         active_handle = enforce_single_window(driver, driver.current_window_handle, health)
-        log("webdriver_started single_process=true single_window=true")
+        log(
+            "webdriver_started single_process=true single_window=true "
+            f"active_handle={active_handle}"
+        )
 
         total_steps = len(targets)
         for index, target in enumerate(targets, start=1):
@@ -459,9 +484,19 @@ def run() -> int:
 
             try:
                 if active_handle is not None:
+                    log(
+                        f"single_window_enforce_start stage=before_get index={index}/{total_steps} "
+                        f"target={target_safe}"
+                    )
                     active_handle = enforce_single_window(driver, active_handle, health)
+                log(f"webdriver_get_start index={index}/{total_steps} target={target_safe}")
+                page_get_monotonic = time.monotonic()
                 driver.get(target)
                 health.pages_loaded += 1
+                log(
+                    f"webdriver_get_done index={index}/{total_steps} target={target_safe} "
+                    f"elapsed_seconds={time.monotonic() - page_get_monotonic:.3f}"
+                )
             except TimeoutException:
                 health.page_load_warnings += 1
                 warn(f"page_load_timeout target={target_safe}")
@@ -486,6 +521,10 @@ def run() -> int:
             log(f"step_loaded index={index}/{total_steps} current_url={current_url} title={title or 'n/a'}")
 
             if active_handle is not None:
+                log(
+                    f"page_lifetime_start index={index}/{total_steps} "
+                    f"target={target_safe} duration_seconds={duration}"
+                )
                 active_handle = keep_page_alive(
                     driver=driver,
                     target_safe=target_safe,
@@ -502,7 +541,11 @@ def run() -> int:
                 f"target={target_safe} duration_seconds={duration}"
             )
 
-        log("webdriver_sequence_completed")
+        log(
+            "webdriver_sequence_completed "
+            f"pages_loaded={health.pages_loaded}/{health.pages_total} "
+            f"extra_windows_closed={health.extra_windows_closed}"
+        )
     except Exception as exc:  # noqa: BLE001
         fatal_error = f"webdriver_failed error={exc.__class__.__name__}: {exc}"
         exit_code = die(fatal_error)

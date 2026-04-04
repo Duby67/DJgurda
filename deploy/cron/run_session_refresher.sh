@@ -12,6 +12,7 @@ LATEST_LOG_FILE="${LATEST_LOG_FILE:-$LOG_ROOT/session_refresher.latest.log}"
 HOST_UID="${HOST_UID:-$(id -u)}"
 HOST_GID="${HOST_GID:-$(id -g)}"
 FIREFOX_PROFILE_DIR="${FIREFOX_PROFILE_DIR:-$HOME/firefox_profile}"
+PREPARE_PROFILE_SCRIPT="${PREPARE_PROFILE_SCRIPT:-$RUNTIME_DIR/prepare_firefox_profile.sh}"
 PROFILE_BACKUP_FILE="${PROFILE_BACKUP_FILE:-$RUNTIME_DIR/firefox_profile.backup.tar.gz}"
 PROFILE_BACKUP_TMP="${PROFILE_BACKUP_TMP:-${PROFILE_BACKUP_FILE}.tmp}"
 
@@ -61,6 +62,25 @@ backup_profile() {
   log "profile_backup_done file=$PROFILE_BACKUP_FILE size_bytes=$backup_size_bytes"
 }
 
+prepare_profile() {
+  if [[ ! -x "$PREPARE_PROFILE_SCRIPT" ]]; then
+    die "Prepare profile script not found or not executable: $PREPARE_PROFILE_SCRIPT"
+  fi
+
+  log "profile_prepare_start script=$PREPARE_PROFILE_SCRIPT archive_file=$PROFILE_BACKUP_FILE profile_dir=$FIREFOX_PROFILE_DIR"
+  if ! "$PREPARE_PROFILE_SCRIPT" "$PROFILE_BACKUP_FILE" "$FIREFOX_PROFILE_DIR"; then
+    die "Failed to prepare firefox profile from archive: $PROFILE_BACKUP_FILE"
+  fi
+  log "profile_prepare_done profile_dir=$FIREFOX_PROFILE_DIR"
+}
+
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
 if ! mkdir -p "$LOG_ROOT"; then
   echo "Failed to create log directory: $LOG_ROOT" >&2
   exit 1
@@ -80,6 +100,7 @@ log "compose_file=$COMPOSE_FILE"
 log "sources_file=$SOURCES_FILE"
 log "firefox_profile_dir=$FIREFOX_PROFILE_DIR"
 log "profile_backup_file=$PROFILE_BACKUP_FILE"
+log "prepare_profile_script=$PREPARE_PROFILE_SCRIPT"
 
 if [[ ! -f "$COMPOSE_FILE" ]]; then
   die "Missing compose file: $COMPOSE_FILE"
@@ -89,17 +110,14 @@ if [[ "$HOST_UID" -eq 0 || "$HOST_GID" -eq 0 ]]; then
   die "Do not run as root. Use DJgurda user context."
 fi
 
+log "host_preflight_ok host_uid=$HOST_UID host_gid=$HOST_GID"
 backup_profile
-
-trim() {
-  local value="$1"
-  value="${value#"${value%%[![:space:]]*}"}"
-  value="${value%"${value##*[![:space:]]}"}"
-  printf '%s' "$value"
-}
+prepare_profile
+log "profile_ready profile_dir=$FIREFOX_PROFILE_DIR archive_file=$PROFILE_BACKUP_FILE"
 
 targets=()
 if [[ -f "$SOURCES_FILE" ]]; then
+  log "sources_parse_start file=$SOURCES_FILE"
   while IFS= read -r raw || [[ -n "$raw" ]]; do
     line="${raw%$'\r'}"
     [[ -z "$line" || "${line:0:1}" == "#" ]] && continue
@@ -148,8 +166,9 @@ if [[ -f "$SOURCES_FILE" ]]; then
 
     log "source=$source_key urls_count=$source_target_count"
   done < "$SOURCES_FILE"
+  log "sources_parse_done file=$SOURCES_FILE total_targets=${#targets[@]}"
 else
-  log "sources file not found, using REFRESH_TARGETS from environment"
+  log "sources_parse_mode=env reason=sources_file_not_found"
 fi
 
 if [[ -z "${REFRESH_TARGETS:-}" ]]; then
@@ -162,11 +181,11 @@ fi
 resolved_count="$(awk -F',' '{print NF}' <<< "$REFRESH_TARGETS")"
 log "resolved_targets_count=$resolved_count"
 log "resolved_targets=$REFRESH_TARGETS"
-log "running docker compose refresher"
+log "compose_run_start container_name=DJgurda-cookies service=cookies-session-refresher compose_file=$COMPOSE_FILE"
 
 export HOST_UID HOST_GID REFRESH_TARGETS
 set +e
-/usr/bin/docker compose -f "$COMPOSE_FILE" run --rm cookies-session-refresher
+/usr/bin/docker compose -f "$COMPOSE_FILE" run --rm --name DJgurda-cookies cookies-session-refresher
 compose_status=$?
 set -e
 
@@ -174,4 +193,5 @@ if [[ $compose_status -ne 0 ]]; then
   die "docker compose run failed with exit code $compose_status"
 fi
 
+log "compose_run_done container_name=DJgurda-cookies exit_code=0"
 log "session refresher run finished successfully"

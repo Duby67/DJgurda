@@ -32,6 +32,9 @@ scp -P 228 deploy/local/firefox_profile.tar.gz \
   ~/firefox_profile
 ```
 
+Первый аргумент — путь к архиву профиля, второй аргумент —
+путь к директории Firefox-профиля на хосте.
+
 Скрипт автоматически:
 
 - распакует архив,
@@ -68,15 +71,21 @@ cat ~/cookies/runtime/refresh_sources.list
 
 - создает/обновляет backup профиля
   `~/cookies/runtime/firefox_profile.backup.tar.gz`,
+- восстанавливает и очищает профиль через
+  `~/cookies/runtime/prepare_firefox_profile.sh` из свежего
+  backup-архива,
 - разбирает `refresh_sources.list`, создает `~/cookies/<folder>`
   и собирает очередь URL,
-- запускает контейнер `cookies-session-refresher`
-  от UID/GID текущего пользователя.
+- запускает контейнер `DJgurda-cookies` от UID/GID
+  текущего пользователя.
 
 Дальше внутри контейнера `refresh_session.sh` поднимает
 Xvfb/DBus и запускает `refresh_session.py`, который
 последовательно открывает URL и обновляет cookie прямо в
 примонтированном Firefox profile.
+
+Timezone контейнера берется с хоста через `/etc/localtime`
+и `/etc/timezone`.
 
 ## 6) Проверить, что профиль меняется и не блокируется root
 
@@ -92,10 +101,11 @@ ls -la ~/firefox_profile | head
 
 ```bash
 docker compose -f ~/cookies/runtime/compose.cookies-refresh.yml \
-  run --rm cookies-session-refresher
+  run --rm --name DJgurda-cookies cookies-session-refresher
 ```
 
-`CMD` образа автоматически вызывает
+Контейнер создается с именем `DJgurda-cookies`, а `CMD`
+образа автоматически вызывает
 `/session_refresher/refresh_session.sh`.
 
 ## 8) Автоматический запуск контейнера через cron
