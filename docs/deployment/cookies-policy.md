@@ -16,8 +16,8 @@ Cookies-контур автономен и работает только с:
 
 - `~/cookies/runtime` (runtime-файлы)
 - `~/cookies/<folder>` (папки из `refresh_sources.list`)
-- `~/firefox_profile` (основной Firefox-профиль)
-- `~/firefox_selenium_profile` (отдельный профиль для Selenium-прогона)
+- `~/firefox_selenium_profile` (рабочий Firefox-профиль
+  для Selenium-прогона)
 - `~/logs/cookies` (логи запуска и cron)
 
 Контур `cookies` не должен изменять файлы и директории

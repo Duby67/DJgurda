@@ -596,6 +596,11 @@ def run() -> int:
                     active_handle=active_handle,
                     health=health,
                 )
+                log(
+                    f"page_transition_stop_start index={index}/{total_steps} "
+                    f"target={target_safe}"
+                )
+                stop_page_loading(driver, target_safe, health)
 
             log(
                 f"step_done index={index}/{total_steps} "

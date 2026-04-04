@@ -15,22 +15,19 @@
 - Cron вызывает `~/cookies/runtime/run_session_refresher.sh`.
 - Этот же хостовый wrapper используется для ручного запуска
   контейнера с хоста.
-- `run_session_refresher.sh` сначала делает backup основного
-  профиля в `~/cookies/runtime/firefox_profile.backup.tar.gz`,
-  затем вызывает `~/cookies/runtime/prepare_firefox_profile.sh
-  <archive_path> <profile_dir>`, собирает отдельный
-  `~/firefox_selenium_profile` через
-  `~/cookies/runtime/prepare_selenium_profile.sh`, читает
+- `run_session_refresher.sh` сначала делает backup
+  `~/firefox_selenium_profile` в
+  `~/cookies/runtime/firefox_profile.backup.tar.gz`, затем
+  вызывает `~/cookies/runtime/prepare_firefox_profile.sh
+  <archive_path> <profile_dir>`, читает
   `~/cookies/runtime/refresh_sources.list`, собирает
   `REFRESH_TARGETS` и запускает контейнер `DJgurda-cookies`
-  через `docker compose run --rm --name DJgurda-cookies cookies-session-refresher`.
+  через `docker compose run --rm --name DJgurda-cookies
+  cookies-session-refresher`.
 - Внутри контейнера `refresh_session.sh` поднимает Xvfb/DBus
   и запускает `refresh_session.py`.
 - Timezone контейнера берется с хоста через bind-mount
   `/etc/localtime` и `/etc/timezone`.
-- После успешного Selenium-прогона обновленные cookie/storage
-  файлы синхронизируются из `~/firefox_selenium_profile`
-  обратно в `~/firefox_profile`.
 - `refresh_session.py` последовательно открывает URL в одном
   Firefox-окне, выполняет легкие `scroll/hover` действия,
   обновляет `cookies.sqlite` в примонтированном профиле и
@@ -45,15 +42,16 @@
   разделенных `;`.
 - На каждый URL выбирается случайная длительность
   в диапазоне `REFRESH_URL_DURATION_MIN..REFRESH_URL_DURATION_MAX`
-  (по умолчанию `30..45` секунд).
+  (по умолчанию `60..70` секунд).
 
 ## Файлы и права
 
 - Перед запуском контейнера скрипт создает папки
   `~/cookies/<folder>` для каждого источника.
 - Перед запуском контейнера скрипт делает один ротационный
-  backup профиля Firefox в
-  `~/cookies/runtime/firefox_profile.backup.tar.gz` (поверх старого).
+  backup Selenium-профиля Firefox в
+  `~/cookies/runtime/firefox_profile.backup.tar.gz`
+  (поверх старого).
 - Контейнер запускается от UID/GID пользователя хоста.
   Поэтому новые файлы и папки принадлежат `DJgurda`,
   а профиль не блокируется root-владельцем.

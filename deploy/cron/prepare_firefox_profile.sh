@@ -2,8 +2,27 @@
 set -euo pipefail
 
 ARCHIVE_PATH="${1:-$HOME/cookies/runtime/firefox_profile.tar.gz}"
-PROFILE_DIR="${2:-$HOME/firefox_profile}"
+PROFILE_DIR="${2:-$HOME/firefox_selenium_profile}"
 TMP_DIR="$(mktemp -d)"
+
+PROFILE_FILES=(
+  cookies.sqlite
+  permissions.sqlite
+  content-prefs.sqlite
+  key4.db
+  cert9.db
+  pkcs11.txt
+  logins.json
+  formhistory.sqlite
+  storage.sqlite
+  webappsstore.sqlite
+  handlers.json
+  places.sqlite
+)
+
+PROFILE_DIRS=(
+  storage
+)
 
 timestamp() {
   date '+%Y-%m-%d %H:%M:%S'
@@ -22,6 +41,22 @@ cleanup_tmp() {
   rm -rf "$TMP_DIR"
 }
 trap cleanup_tmp EXIT
+
+copy_profile_item() {
+  local item_name="$1"
+  local source_path="$SOURCE_DIR/$item_name"
+  local target_path="$PROFILE_DIR_ABS/$item_name"
+
+  if [[ ! -e "$source_path" ]]; then
+    log "prepare_profile_skip_missing item=$item_name"
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$target_path")"
+  cp -a "$source_path" "$target_path"
+  copied_items=$((copied_items + 1))
+  log "prepare_profile_item_copied item=$item_name"
+}
 
 log "prepare_profile_start archive_path=$ARCHIVE_PATH profile_dir=$PROFILE_DIR tmp_dir=$TMP_DIR"
 
@@ -59,8 +94,15 @@ log "prepare_profile_source_resolved source_dir=$SOURCE_DIR profile_dir=$PROFILE
 
 log "prepare_profile_replace_start profile_dir=$PROFILE_DIR_ABS"
 find "$PROFILE_DIR_ABS" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-cp -a "$SOURCE_DIR"/. "$PROFILE_DIR_ABS"/
-log "prepare_profile_replace_done profile_dir=$PROFILE_DIR_ABS"
+copied_items=0
+for item_name in "${PROFILE_FILES[@]}"; do
+  copy_profile_item "$item_name"
+done
+
+for item_name in "${PROFILE_DIRS[@]}"; do
+  copy_profile_item "$item_name"
+done
+log "prepare_profile_replace_done profile_dir=$PROFILE_DIR_ABS copied_items=$copied_items"
 
 log "prepare_profile_cleanup_start profile_dir=$PROFILE_DIR_ABS"
 rm -f "$PROFILE_DIR_ABS/.parentlock" "$PROFILE_DIR_ABS/.startup-incomplete" "$PROFILE_DIR_ABS/lock"
@@ -78,5 +120,5 @@ chmod 700 "$PROFILE_DIR_ABS"
 chown -R "$(id -u):$(id -g)" "$PROFILE_DIR_ABS" 2>/dev/null || true
 
 profile_items_count="$(find "$PROFILE_DIR_ABS" -mindepth 1 -maxdepth 1 | wc -l | tr -d '[:space:]' || echo unknown)"
-log "prepare_profile_done profile_dir=$PROFILE_DIR_ABS profile_items_count=$profile_items_count"
-echo "Firefox profile restored and cleaned: $PROFILE_DIR_ABS"
+log "prepare_profile_done profile_dir=$PROFILE_DIR_ABS copied_items=$copied_items profile_items_count=$profile_items_count"
+echo "Firefox Selenium profile restored and cleaned: $PROFILE_DIR_ABS"
