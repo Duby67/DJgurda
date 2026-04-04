@@ -16,6 +16,7 @@ from selenium import webdriver
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
+from urllib3.exceptions import ReadTimeoutError
 
 LOG_FILE = Path(os.getenv("REFRESH_INTERNAL_LOG", "/tmp/firefox-refresh.log"))
 HUMAN_ACTION_SCRIPT = """
@@ -277,20 +278,36 @@ def enforce_single_window(driver: webdriver.Firefox, preferred_handle: str | Non
     return active_handle
 
 
+def stop_page_loading(driver: webdriver.Firefox, target_safe: str, health: RunHealth) -> None:
+    try:
+        ready_state = driver.execute_script(
+            "window.stop(); return document.readyState || 'n/a';"
+        )
+        log(
+            f"page_load_stop_done target={target_safe} "
+            f"ready_state={ready_state or 'n/a'}"
+        )
+    except (TimeoutException, WebDriverException, ReadTimeoutError) as exc:
+        health.page_load_warnings += 1
+        warn(
+            f"page_load_stop_failed target={target_safe} "
+            f"error={exc.__class__.__name__}"
+        )
+
+
 def perform_human_action(driver: webdriver.Firefox, target_safe: str, health: RunHealth) -> None:
     action = random.choice(["scroll", "scroll", "hover", "pause"])
     if action == "pause":
         return
 
-    viewport_width = max(driver.execute_script("return window.innerWidth || 0;") or 0, 1)
-    viewport_height = max(driver.execute_script("return window.innerHeight || 0;") or 0, 1)
-    x = random.randint(0, max(viewport_width - 1, 0))
-    y = random.randint(0, max(viewport_height - 1, 0))
-    scroll_delta = random.randint(-260, 520)
-
     try:
+        viewport_width = max(driver.execute_script("return window.innerWidth || 0;") or 0, 1)
+        viewport_height = max(driver.execute_script("return window.innerHeight || 0;") or 0, 1)
+        x = random.randint(0, max(viewport_width - 1, 0))
+        y = random.randint(0, max(viewport_height - 1, 0))
+        scroll_delta = random.randint(-260, 520)
         result = driver.execute_script(HUMAN_ACTION_SCRIPT, action, x, y, scroll_delta) or {}
-    except WebDriverException as exc:
+    except (TimeoutException, WebDriverException, ReadTimeoutError) as exc:
         health.human_action_warnings += 1
         warn(
             f"human_action_failed target={target_safe} "
@@ -335,7 +352,7 @@ def keep_page_alive(
         try:
             active_handle = enforce_single_window(driver, active_handle, health)
             perform_human_action(driver, target_safe, health)
-        except WebDriverException as exc:
+        except (WebDriverException, ReadTimeoutError) as exc:
             health.human_action_warnings += 1
             warn(
                 f"human_activity_loop_failed target={target_safe} "
@@ -427,6 +444,9 @@ def run() -> int:
         page_load_timeout = parse_positive_int(
             "REFRESH_PAGE_LOAD_TIMEOUT_SECONDS", get_env("REFRESH_PAGE_LOAD_TIMEOUT_SECONDS"), 45
         )
+        script_timeout = parse_positive_int(
+            "REFRESH_SCRIPT_TIMEOUT_SECONDS", get_env("REFRESH_SCRIPT_TIMEOUT_SECONDS"), 15
+        )
         duration_min, duration_max = resolve_duration_bounds()
         targets = parse_targets(targets_raw)
     except ValueError as exc:
@@ -452,7 +472,8 @@ def run() -> int:
     log(
         "duration_mode=random "
         f"url_duration_min={duration_min} url_duration_max={duration_max} "
-        f"heartbeat_seconds={heartbeat_seconds} page_load_timeout={page_load_timeout}"
+        f"heartbeat_seconds={heartbeat_seconds} page_load_timeout={page_load_timeout} "
+        f"script_timeout={script_timeout}"
     )
     domains = build_cookie_domains(targets)
     for domain in domains:
@@ -488,6 +509,8 @@ def run() -> int:
         )
         driver.set_page_load_timeout(page_load_timeout)
         log(f"page_load_timeout_set seconds={page_load_timeout}")
+        driver.set_script_timeout(script_timeout)
+        log(f"script_timeout_set seconds={script_timeout}")
         log("single_window_enforce_start stage=initial")
         active_handle = enforce_single_window(driver, driver.current_window_handle, health)
         log(
@@ -498,6 +521,7 @@ def run() -> int:
         total_steps = len(targets)
         for index, target in enumerate(targets, start=1):
             duration = random.randint(duration_min, duration_max)
+            step_reached = False
             target_safe = safe_url(target)
             log(
                 f"step_start index={index}/{total_steps} "
@@ -514,33 +538,48 @@ def run() -> int:
                 log(f"webdriver_get_start index={index}/{total_steps} target={target_safe}")
                 page_get_monotonic = time.monotonic()
                 driver.get(target)
-                health.pages_loaded += 1
+                step_reached = True
                 log(
                     f"webdriver_get_done index={index}/{total_steps} target={target_safe} "
                     f"elapsed_seconds={time.monotonic() - page_get_monotonic:.3f}"
                 )
             except TimeoutException:
                 health.page_load_warnings += 1
+                step_reached = True
                 warn(f"page_load_timeout target={target_safe}")
-            except WebDriverException as exc:
+                stop_page_loading(driver, target_safe, health)
+            except (WebDriverException, ReadTimeoutError) as exc:
                 health.page_load_warnings += 1
                 warn(f"webdriver_get_error target={target_safe} error={exc.__class__.__name__}")
 
             if active_handle is not None:
                 try:
                     active_handle = enforce_single_window(driver, active_handle, health)
-                except WebDriverException as exc:
+                except (WebDriverException, ReadTimeoutError) as exc:
                     health.page_load_warnings += 1
                     warn(
                         f"single_window_enforce_failed target={target_safe} "
                         f"error={exc.__class__.__name__}"
                     )
 
-            current_url = safe_url(driver.current_url) if driver.current_url else "n/a"
-            title = (driver.title or "").replace("\n", " ").strip()
-            if len(title) > 120:
-                title = title[:117] + "..."
-            log(f"step_loaded index={index}/{total_steps} current_url={current_url} title={title or 'n/a'}")
+            try:
+                current_url_raw = driver.current_url or ""
+                current_url = safe_url(current_url_raw) if current_url_raw else "n/a"
+                title = (driver.title or "").replace("\n", " ").strip()
+                if len(title) > 120:
+                    title = title[:117] + "..."
+                if step_reached:
+                    health.pages_loaded += 1
+                log(
+                    f"step_loaded index={index}/{total_steps} "
+                    f"current_url={current_url} title={title or 'n/a'}"
+                )
+            except (WebDriverException, ReadTimeoutError) as exc:
+                health.page_load_warnings += 1
+                warn(
+                    f"step_metadata_failed index={index}/{total_steps} "
+                    f"target={target_safe} error={exc.__class__.__name__}"
+                )
 
             if active_handle is not None:
                 log(

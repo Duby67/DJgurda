@@ -1,6 +1,6 @@
 # source|folder|urls
 youtube|YouTube|https://www.youtube.com/;https://www.youtube.com/feed/subscriptions;https://www.youtube.com/feed/library
-vk|VK|https://vk.com/;https://vk.com/feed;https://vk.com/video
-instagram|Instagram|https://www.instagram.com/;https://www.instagram.com/reels/;https://www.instagram.com/direct/inbox/
-tiktok|TikTok|https://www.tiktok.com/;https://www.tiktok.com/following;https://www.tiktok.com/foryou
-coub|Coub|https://coub.com/;https://coub.com/fresh;https://coub.com/community/featured
+# vk|VK|https://vk.com/;https://vk.com/feed;https://vk.com/video
+# instagram|Instagram|https://www.instagram.com/;https://www.instagram.com/reels/;https://www.instagram.com/direct/inbox/
+# tiktok|TikTok|https://www.tiktok.com/;https://www.tiktok.com/following;https://www.tiktok.com/foryou
+# coub|Coub|https://coub.com/;https://coub.com/fresh;https://coub.com/community/featured
