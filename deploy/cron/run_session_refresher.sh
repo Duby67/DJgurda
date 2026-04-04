@@ -11,6 +11,9 @@ RUN_LOG_FILE="${RUN_LOG_FILE:-$LOG_ROOT/session_refresher_${RUN_ID}.log}"
 LATEST_LOG_FILE="${LATEST_LOG_FILE:-$LOG_ROOT/session_refresher.latest.log}"
 HOST_UID="${HOST_UID:-$(id -u)}"
 HOST_GID="${HOST_GID:-$(id -g)}"
+FIREFOX_PROFILE_DIR="${FIREFOX_PROFILE_DIR:-$HOME/firefox_profile}"
+PROFILE_BACKUP_FILE="${PROFILE_BACKUP_FILE:-$RUNTIME_DIR/firefox_profile.backup.tar.gz}"
+PROFILE_BACKUP_TMP="${PROFILE_BACKUP_TMP:-${PROFILE_BACKUP_FILE}.tmp}"
 
 timestamp() {
   date '+%Y-%m-%d %H:%M:%S'
@@ -23,6 +26,39 @@ log() {
 die() {
   log "ERROR: $*"
   exit 1
+}
+
+backup_profile() {
+  if [[ ! -d "$FIREFOX_PROFILE_DIR" ]]; then
+    die "Firefox profile directory does not exist: $FIREFOX_PROFILE_DIR"
+  fi
+
+  if ! mkdir -p "$(dirname "$PROFILE_BACKUP_FILE")"; then
+    die "Failed to create backup directory for: $PROFILE_BACKUP_FILE"
+  fi
+
+  log "profile_backup_start profile_dir=$FIREFOX_PROFILE_DIR backup_file=$PROFILE_BACKUP_FILE"
+  rm -f "$PROFILE_BACKUP_TMP"
+
+  if ! tar -C "$FIREFOX_PROFILE_DIR" \
+    --exclude='.parentlock' \
+    --exclude='.startup-incomplete' \
+    --exclude='lock' \
+    --exclude='*.sqlite-shm' \
+    --exclude='*.sqlite-wal' \
+    -czf "$PROFILE_BACKUP_TMP" .; then
+    rm -f "$PROFILE_BACKUP_TMP"
+    die "Failed to create firefox profile backup"
+  fi
+
+  if ! mv -f "$PROFILE_BACKUP_TMP" "$PROFILE_BACKUP_FILE"; then
+    rm -f "$PROFILE_BACKUP_TMP"
+    die "Failed to rotate firefox profile backup"
+  fi
+
+  chmod 600 "$PROFILE_BACKUP_FILE" 2>/dev/null || true
+  backup_size_bytes="$(wc -c < "$PROFILE_BACKUP_FILE" | tr -d '[:space:]' || echo unknown)"
+  log "profile_backup_done file=$PROFILE_BACKUP_FILE size_bytes=$backup_size_bytes"
 }
 
 if ! mkdir -p "$LOG_ROOT"; then
@@ -42,6 +78,8 @@ log "Starting run_session_refresher"
 log "run_log_file=$RUN_LOG_FILE"
 log "compose_file=$COMPOSE_FILE"
 log "sources_file=$SOURCES_FILE"
+log "firefox_profile_dir=$FIREFOX_PROFILE_DIR"
+log "profile_backup_file=$PROFILE_BACKUP_FILE"
 
 if [[ ! -f "$COMPOSE_FILE" ]]; then
   die "Missing compose file: $COMPOSE_FILE"
@@ -50,6 +88,8 @@ fi
 if [[ "$HOST_UID" -eq 0 || "$HOST_GID" -eq 0 ]]; then
   die "Do not run as root. Use DJgurda user context."
 fi
+
+backup_profile
 
 trim() {
   local value="$1"

@@ -1,5 +1,7 @@
 **
 
+!requirements-cookies.txt
 !src/
 !src/session_refresher/
+!src/session_refresher/refresh_session.py
 !src/session_refresher/refresh_session.sh

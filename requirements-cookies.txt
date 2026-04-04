@@ -1,0 +1,2 @@
+# Зависимости cookies session-refresher (отдельно от зависимостей бота).
+selenium==4.40.0

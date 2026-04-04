@@ -62,6 +62,8 @@ cat ~/cookies/runtime/refresh_sources.list
 
 - разберет `refresh_sources.list` и соберет очередь URL,
 - создаст `~/cookies/<folder>` для каждого источника,
+- создаст/обновит backup профиля
+  `~/cookies/runtime/firefox_profile.backup.tar.gz`,
 - запустит single-process Firefox через Selenium + geckodriver,
 - пройдет URL последовательно с случайной длительностью на шаг,
 - запустит контейнер от UID/GID текущего пользователя.

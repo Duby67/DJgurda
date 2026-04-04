@@ -19,6 +19,9 @@ session-refresher.
   (по умолчанию `30..60` секунд).
 - Перед запуском контейнера скрипт создает папки
   `~/cookies/<folder>` для каждого источника.
+- Перед запуском контейнера скрипт делает один ротационный
+  backup профиля Firefox в
+  `~/cookies/runtime/firefox_profile.backup.tar.gz` (поверх старого).
 - По расписанию запускается
   `~/cookies/runtime/run_session_refresher.sh`.
 - Контейнер запускается от UID/GID пользователя хоста.

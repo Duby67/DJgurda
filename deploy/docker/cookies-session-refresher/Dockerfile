@@ -9,7 +9,6 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        ca-certificates \
        wget \
-       curl \
        gpg \
        tar \
        python3 \
@@ -21,7 +20,6 @@ RUN apt-get update \
        fontconfig \
        libpci3 \
        libegl1 \
-       procps \
        util-linux \
     && install -d -m 0755 /etc/apt/keyrings \
     && wget -q https://packages.mozilla.org/apt/repo-signing-key.gpg -O- \
@@ -50,7 +48,7 @@ RUN apt-get update \
 
 ENV PATH="/opt/venv/bin:${PATH}"
 
-COPY src/session_refresher/requirements.txt ./requirements.txt
+COPY requirements-cookies.txt ./requirements.txt
 RUN pip install --no-cache-dir -r ./requirements.txt
 
 COPY src/session_refresher/refresh_session.py ./refresh_session.py

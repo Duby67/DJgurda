@@ -12,4 +12,4 @@
 
 - `refresh_session.sh` - оболочка запуска Xvfb/DBus и Python-раннера.
 - `refresh_session.py` - основной single-process сценарий Selenium.
-- `requirements.txt` - Python-зависимости контура session-refresher.
+- `../../requirements-cookies.txt` - отдельные Python-зависимости контура session-refresher.

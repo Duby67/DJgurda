@@ -1,4 +1,4 @@
-﻿# Архитектура репозитория
+# Архитектура репозитория
 
 Короткая карта текущей структуры:
 
@@ -18,6 +18,7 @@
 - `.github/workflows/` - CI/CD workflow-файлы.
 - `requirements.txt` - зависимости Python-проекта.
 - `requirements-dev.txt` - зависимости разработки и тестирования.
+- `requirements-cookies.txt` - отдельные зависимости cookies session-refresher.
 
 Политика контуров:
 - `prod`, `dev` - только автодеплой.

@@ -13,6 +13,7 @@ on:
       - "deploy/cron/refresh_sources.list"
       - "deploy/docker/cookies-session-refresher/**"
       - "src/session_refresher/**"
+      - "requirements-cookies.txt"
   workflow_dispatch:
     inputs:
       deploy_to_server:
