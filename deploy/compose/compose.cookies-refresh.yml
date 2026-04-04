@@ -17,7 +17,7 @@ services:
       XDG_CACHE_HOME: /home/DJgurda/.cache
       MOZ_DISABLE_CONTENT_SANDBOX: "1"
     volumes:
-      - ${HOME}/firefox_profile:/session_refresher/firefox_profile:rw
+      - ${SELENIUM_PROFILE_DIR:-/home/DJgurda/firefox_selenium_profile}:/session_refresher/firefox_profile:rw
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
     security_opt:

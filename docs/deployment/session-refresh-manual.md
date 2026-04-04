@@ -71,9 +71,12 @@ cat ~/cookies/runtime/refresh_sources.list
 
 - создает/обновляет backup профиля
   `~/cookies/runtime/firefox_profile.backup.tar.gz`,
-- восстанавливает и очищает профиль через
+- восстанавливает и очищает основной профиль через
   `~/cookies/runtime/prepare_firefox_profile.sh` из свежего
   backup-архива,
+- собирает отдельный Selenium-profile
+  `~/firefox_selenium_profile` через
+  `~/cookies/runtime/prepare_selenium_profile.sh`,
 - разбирает `refresh_sources.list`, создает `~/cookies/<folder>`
   и собирает очередь URL,
 - запускает контейнер `DJgurda-cookies` от UID/GID
@@ -81,8 +84,18 @@ cat ~/cookies/runtime/refresh_sources.list
 
 Дальше внутри контейнера `refresh_session.sh` поднимает
 Xvfb/DBus и запускает `refresh_session.py`, который
-последовательно открывает URL и обновляет cookie прямо в
-примонтированном Firefox profile.
+последовательно открывает URL и обновляет cookie в
+примонтированном `~/firefox_selenium_profile`, после чего
+хостовый wrapper переносит обновленные cookie/storage файлы
+обратно в `~/firefox_profile`.
+
+Если нужно вручную собрать Selenium-profile:
+
+```bash
+~/cookies/runtime/prepare_selenium_profile.sh \
+  ~/firefox_profile \
+  ~/firefox_selenium_profile
+```
 
 Timezone контейнера берется с хоста через `/etc/localtime`
 и `/etc/timezone`.

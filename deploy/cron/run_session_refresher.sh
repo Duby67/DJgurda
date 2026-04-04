@@ -12,9 +12,30 @@ LATEST_LOG_FILE="${LATEST_LOG_FILE:-$LOG_ROOT/session_refresher.latest.log}"
 HOST_UID="${HOST_UID:-$(id -u)}"
 HOST_GID="${HOST_GID:-$(id -g)}"
 FIREFOX_PROFILE_DIR="${FIREFOX_PROFILE_DIR:-$HOME/firefox_profile}"
+SELENIUM_PROFILE_DIR="${SELENIUM_PROFILE_DIR:-$HOME/firefox_selenium_profile}"
 PREPARE_PROFILE_SCRIPT="${PREPARE_PROFILE_SCRIPT:-$RUNTIME_DIR/prepare_firefox_profile.sh}"
+PREPARE_SELENIUM_PROFILE_SCRIPT="${PREPARE_SELENIUM_PROFILE_SCRIPT:-$RUNTIME_DIR/prepare_selenium_profile.sh}"
 PROFILE_BACKUP_FILE="${PROFILE_BACKUP_FILE:-$RUNTIME_DIR/firefox_profile.backup.tar.gz}"
 PROFILE_BACKUP_TMP="${PROFILE_BACKUP_TMP:-${PROFILE_BACKUP_FILE}.tmp}"
+
+SELENIUM_SYNC_FILES=(
+  cookies.sqlite
+  permissions.sqlite
+  content-prefs.sqlite
+  key4.db
+  cert9.db
+  pkcs11.txt
+  logins.json
+  formhistory.sqlite
+  storage.sqlite
+  webappsstore.sqlite
+  handlers.json
+  places.sqlite
+)
+
+SELENIUM_SYNC_DIRS=(
+  storage
+)
 
 timestamp() {
   date '+%Y-%m-%d %H:%M:%S'
@@ -74,6 +95,54 @@ prepare_profile() {
   log "profile_prepare_done profile_dir=$FIREFOX_PROFILE_DIR"
 }
 
+prepare_selenium_profile() {
+  if [[ ! -x "$PREPARE_SELENIUM_PROFILE_SCRIPT" ]]; then
+    die "Prepare Selenium profile script not found or not executable: $PREPARE_SELENIUM_PROFILE_SCRIPT"
+  fi
+
+  log "selenium_profile_prepare_start script=$PREPARE_SELENIUM_PROFILE_SCRIPT source_profile_dir=$FIREFOX_PROFILE_DIR selenium_profile_dir=$SELENIUM_PROFILE_DIR"
+  if ! "$PREPARE_SELENIUM_PROFILE_SCRIPT" "$FIREFOX_PROFILE_DIR" "$SELENIUM_PROFILE_DIR"; then
+    die "Failed to prepare Selenium Firefox profile: $SELENIUM_PROFILE_DIR"
+  fi
+  log "selenium_profile_prepare_done selenium_profile_dir=$SELENIUM_PROFILE_DIR"
+}
+
+sync_selenium_profile_item() {
+  local item_name="$1"
+  local source_path="$SELENIUM_PROFILE_DIR/$item_name"
+  local target_path="$FIREFOX_PROFILE_DIR/$item_name"
+
+  if [[ ! -e "$source_path" ]]; then
+    log "selenium_profile_sync_skip_missing item=$item_name"
+    return 0
+  fi
+
+  rm -rf "$target_path"
+  mkdir -p "$(dirname "$target_path")"
+  cp -a "$source_path" "$target_path"
+  log "selenium_profile_sync_item_done item=$item_name"
+}
+
+sync_selenium_profile() {
+  if [[ ! -d "$SELENIUM_PROFILE_DIR" ]]; then
+    die "Selenium Firefox profile directory does not exist: $SELENIUM_PROFILE_DIR"
+  fi
+
+  log "selenium_profile_sync_start selenium_profile_dir=$SELENIUM_PROFILE_DIR profile_dir=$FIREFOX_PROFILE_DIR"
+  for item_name in "${SELENIUM_SYNC_FILES[@]}"; do
+    sync_selenium_profile_item "$item_name"
+  done
+
+  for item_name in "${SELENIUM_SYNC_DIRS[@]}"; do
+    sync_selenium_profile_item "$item_name"
+  done
+
+  find "$FIREFOX_PROFILE_DIR" -type f \( -name '*.sqlite-shm' -o -name '*.sqlite-wal' \) -delete
+  chmod 700 "$FIREFOX_PROFILE_DIR"
+  chown -R "$(id -u):$(id -g)" "$FIREFOX_PROFILE_DIR" 2>/dev/null || true
+  log "selenium_profile_sync_done profile_dir=$FIREFOX_PROFILE_DIR"
+}
+
 trim() {
   local value="$1"
   value="${value#"${value%%[![:space:]]*}"}"
@@ -99,8 +168,10 @@ log "run_log_file=$RUN_LOG_FILE"
 log "compose_file=$COMPOSE_FILE"
 log "sources_file=$SOURCES_FILE"
 log "firefox_profile_dir=$FIREFOX_PROFILE_DIR"
+log "selenium_profile_dir=$SELENIUM_PROFILE_DIR"
 log "profile_backup_file=$PROFILE_BACKUP_FILE"
 log "prepare_profile_script=$PREPARE_PROFILE_SCRIPT"
+log "prepare_selenium_profile_script=$PREPARE_SELENIUM_PROFILE_SCRIPT"
 
 if [[ ! -f "$COMPOSE_FILE" ]]; then
   die "Missing compose file: $COMPOSE_FILE"
@@ -113,7 +184,8 @@ fi
 log "host_preflight_ok host_uid=$HOST_UID host_gid=$HOST_GID"
 backup_profile
 prepare_profile
-log "profile_ready profile_dir=$FIREFOX_PROFILE_DIR archive_file=$PROFILE_BACKUP_FILE"
+prepare_selenium_profile
+log "profile_ready profile_dir=$FIREFOX_PROFILE_DIR selenium_profile_dir=$SELENIUM_PROFILE_DIR archive_file=$PROFILE_BACKUP_FILE"
 
 targets=()
 if [[ -f "$SOURCES_FILE" ]]; then
@@ -183,7 +255,7 @@ log "resolved_targets_count=$resolved_count"
 log "resolved_targets=$REFRESH_TARGETS"
 log "compose_run_start container_name=DJgurda-cookies service=cookies-session-refresher compose_file=$COMPOSE_FILE"
 
-export HOST_UID HOST_GID REFRESH_TARGETS
+export HOST_UID HOST_GID REFRESH_TARGETS SELENIUM_PROFILE_DIR
 set +e
 /usr/bin/docker compose -f "$COMPOSE_FILE" run --rm --name DJgurda-cookies cookies-session-refresher
 compose_status=$?
@@ -194,4 +266,5 @@ if [[ $compose_status -ne 0 ]]; then
 fi
 
 log "compose_run_done container_name=DJgurda-cookies exit_code=0"
+sync_selenium_profile
 log "session refresher run finished successfully"
