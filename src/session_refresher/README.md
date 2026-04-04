@@ -9,6 +9,9 @@
 
 ## Роль этого контура
 
+- `prepare_runtime_profile.sh` очищает рабочий профиль от
+  lock/session/cache/sqlite-sidecar файлов прямо внутри контейнера
+  перед стартом Selenium.
 - `refresh_session.sh` поднимает Xvfb/DBus внутри контейнера,
   проверяет lock профиля и запускает Python-раннер.
 - `refresh_session.py` открывает URL в одном Firefox-процессе,

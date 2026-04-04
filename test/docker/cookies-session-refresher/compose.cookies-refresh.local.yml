@@ -22,7 +22,7 @@ services:
       NO_AT_BRIDGE: "1"
       TZ: ${TZ:-Europe/Moscow}
     volumes:
-      - ./local/firefox_selenium_profile:/session_refresher/firefox_profile:rw
+      - ./FirefoxProfile:/session_refresher/firefox_profile:rw
     security_opt:
       - seccomp=unconfined
     restart: "no"

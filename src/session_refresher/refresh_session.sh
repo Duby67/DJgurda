@@ -8,6 +8,7 @@ WARMUP_SECONDS="${REFRESH_WARMUP_SECONDS:-3}"
 DBUS_RUN_SESSION_BIN="${REFRESH_DBUS_RUN_SESSION_BIN:-/usr/bin/dbus-run-session}"
 PYTHON_BIN="${REFRESH_PYTHON_BIN:-/usr/bin/python3}"
 REFRESH_SCRIPT="${REFRESH_SCRIPT:-/session_refresher/refresh_session.py}"
+PREPARE_PROFILE_SCRIPT="${PREPARE_PROFILE_SCRIPT:-/session_refresher/prepare_runtime_profile.sh}"
 
 timestamp() {
   date '+%Y-%m-%d %H:%M:%S'
@@ -52,6 +53,10 @@ if [[ ! -d "$PROFILE_DIR" ]]; then
   die "Firefox profile directory does not exist: $PROFILE_DIR"
 fi
 
+if [[ ! -x "$PREPARE_PROFILE_SCRIPT" ]]; then
+  die "Prepare profile script not found or not executable: $PREPARE_PROFILE_SCRIPT"
+fi
+
 if [[ ! -x "$DBUS_RUN_SESSION_BIN" ]]; then
   die "dbus-run-session binary not found or not executable: $DBUS_RUN_SESSION_BIN"
 fi
@@ -77,6 +82,9 @@ mkdir -p /tmp/.X11-unix 2>/dev/null || true
 if [[ ! -w "$XDG_CACHE_HOME" ]]; then
   warn "cache directory is not writable: $XDG_CACHE_HOME"
 fi
+
+log "prepare_profile_script=$PREPARE_PROFILE_SCRIPT"
+"$PREPARE_PROFILE_SCRIPT" "$PROFILE_DIR"
 
 LOCK_FILE="$PROFILE_DIR/.refresh.lock"
 exec 9>"$LOCK_FILE"

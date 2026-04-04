@@ -5,36 +5,37 @@
 
 ## Где лежат локальные данные
 
-Все runtime-данные стенда находятся в `local/`:
+Все runtime-данные стенда находятся прямо в
+`test/docker/cookies-session-refresher/`:
 
-- `local/firefox_profile.tar.gz` - входной архив профиля Firefox;
-- `local/firefox_selenium_profile/` - профиль, который монтируется
-  в контейнер;
-- `local/logs/` - логи локальных прогонов.
+- `FirefoxProfile/` - рабочий Firefox-профиль, который монтируется
+  в контейнер и получает обновленные cookies-файлы;
+- `FirefoxProfile.7z` - локальный backup того же профиля;
+- `logs/` - логи локальных прогонов.
 
-Файлы из `local/` не должны попадать в git.
+Файлы профиля, архивы и логи не должны попадать в git.
 
 ## Быстрый запуск
 
-1. Положите архив профиля в
-   `test/docker/cookies-session-refresher/local/firefox_profile.tar.gz`.
+1. Убедитесь, что рабочий профиль лежит в
+   `test/docker/cookies-session-refresher/FirefoxProfile`.
 2. Запустите локальный прогон:
 
 ```powershell
 .\test\docker\cookies-session-refresher\run_local_refresher.ps1
 ```
 
-Скрипт пересобирает локальный образ из текущего кода репозитория,
-готовит `local/firefox_selenium_profile` из архива и запускает
-одноразовый контейнер `DJgurda-cookies-local`.
+Скрипт пересобирает локальный образ из текущего кода репозитория и
+запускает одноразовый контейнер `DJgurda-cookies-local`, который
+работает напрямую с `FirefoxProfile/`.
 
-## Повторный прогон без пересборки профиля
+## Кастомный путь к профилю
 
-Если нужно не пересоздавать профиль из архива, а прогнать контейнер
-на уже существующем `local/firefox_selenium_profile`, используйте:
+Если нужно использовать другую локальную папку профиля:
 
 ```powershell
-.\test\docker\cookies-session-refresher\run_local_refresher.ps1 -SkipProfilePrepare
+.\test\docker\cookies-session-refresher\run_local_refresher.ps1 `
+  -ProfileDir .\some\other\FirefoxProfile
 ```
 
 ## Кастомные URL

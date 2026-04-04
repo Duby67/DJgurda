@@ -5,8 +5,8 @@ WORKDIR /session_refresher
 
 ARG GECKODRIVER_VERSION=0.36.0
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+RUN apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 install -y --fix-missing --no-install-recommends \
        ca-certificates \
        wget \
        gpg \
@@ -28,8 +28,8 @@ RUN apt-get update \
        > /etc/apt/sources.list.d/mozilla.list \
     && printf 'Package: *\nPin: origin packages.mozilla.org\nPin-Priority: 1000\n' \
        > /etc/apt/preferences.d/mozilla \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends firefox \
+    && apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 install -y --fix-missing --no-install-recommends firefox \
     && wget -q "https://github.com/mozilla/geckodriver/releases/download/v${GECKODRIVER_VERSION}/geckodriver-v${GECKODRIVER_VERSION}-linux64.tar.gz" \
        -O /tmp/geckodriver.tar.gz \
     && tar -xzf /tmp/geckodriver.tar.gz -C /usr/local/bin \
@@ -50,8 +50,9 @@ RUN python3 -m pip install --break-system-packages --no-cache-dir -r ./requireme
 
 COPY src/session_refresher/refresh_session.py ./refresh_session.py
 COPY src/session_refresher/refresh_session.sh ./refresh_session.sh
+COPY src/session_refresher/prepare_runtime_profile.sh ./prepare_runtime_profile.sh
 
-RUN chmod +x ./refresh_session.sh \
+RUN chmod +x ./refresh_session.sh ./prepare_runtime_profile.sh \
     && mkdir -p /session_refresher/firefox_profile
 
 CMD ["bash", "./refresh_session.sh"]

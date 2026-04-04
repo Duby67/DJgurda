@@ -9,6 +9,10 @@ Firefox, geckodriver и зависимости из `requirements-cookies.txt`
 примонтированным Selenium-профилем
 `~/firefox_selenium_profile`.
 
+Перед Selenium-стартом контейнер прогоняет
+`prepare_runtime_profile.sh`, который удаляет lock/session/cache и
+`*.sqlite-wal`/`*.sqlite-shm` из примонтированного рабочего профиля.
+
 Firefox стартует в облегченном Selenium-режиме:
 `page_load_strategy=eager`, без session restore, WebGL/GPU и
 тяжелого media decode/autoplay.
