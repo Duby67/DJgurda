@@ -384,6 +384,36 @@ def emit_health_verdict(health: RunHealth, fatal_error: str | None) -> None:
     )
 
 
+def configure_firefox_options(options: Options, profile_dir: Path, firefox_bin: str) -> None:
+    options.binary_location = firefox_bin
+    options.page_load_strategy = "eager"
+    options.add_argument("-profile")
+    options.add_argument(str(profile_dir))
+
+    options.set_preference("accessibility.force_disabled", 1)
+    options.set_preference("browser.shell.checkDefaultBrowser", False)
+    options.set_preference("browser.startup.homepage", "about:blank")
+    options.set_preference("browser.startup.homepage_override.mstone", "ignore")
+    options.set_preference("browser.startup.page", 0)
+    options.set_preference("browser.sessionstore.resume_from_crash", False)
+    options.set_preference("browser.sessionstore.restore_on_demand", False)
+    options.set_preference("browser.sessionstore.restore_tabs_lazily", False)
+    options.set_preference("browser.sessionstore.max_resumed_crashes", 0)
+
+    # Keep the container runtime lightweight and avoid GPU/WebGL/media crashes.
+    options.set_preference("gfx.webrender.all", False)
+    options.set_preference("gfx.webrender.enabled", False)
+    options.set_preference("layers.acceleration.disabled", True)
+    options.set_preference("media.autoplay.default", 5)
+    options.set_preference("media.autoplay.allow-muted", False)
+    options.set_preference("media.eme.enabled", False)
+    options.set_preference("media.ffmpeg.vaapi.enabled", False)
+    options.set_preference("media.hardware-video-decoding.enabled", False)
+    options.set_preference("media.mp4.enabled", False)
+    options.set_preference("media.webm.enabled", False)
+    options.set_preference("webgl.disabled", True)
+
+
 def run() -> int:
     profile_dir = Path(get_env("REFRESH_FIREFOX_PROFILE", "/session_refresher/firefox_profile"))
     firefox_bin = get_env("REFRESH_FIREFOX_BIN", "/usr/bin/firefox")
@@ -438,16 +468,7 @@ def run() -> int:
     exit_code = 0
     try:
         options = Options()
-        options.binary_location = firefox_bin
-        options.add_argument("-profile")
-        options.add_argument(str(profile_dir))
-        options.set_preference("browser.shell.checkDefaultBrowser", False)
-        options.set_preference("browser.startup.homepage", "about:blank")
-        options.set_preference("browser.startup.page", 0)
-        options.set_preference("browser.sessionstore.resume_from_crash", False)
-        options.set_preference("browser.sessionstore.restore_on_demand", False)
-        options.set_preference("browser.sessionstore.restore_tabs_lazily", False)
-        options.set_preference("browser.sessionstore.max_resumed_crashes", 0)
+        configure_firefox_options(options, profile_dir, firefox_bin)
 
         gecko_log_path = os.getenv("REFRESH_GECKODRIVER_LOG", "/tmp/geckodriver.log")
         service = Service(executable_path=geckodriver_bin, log_output=gecko_log_path)
@@ -456,7 +477,8 @@ def run() -> int:
             "webdriver_starting "
             f"profile={profile_dir} firefox_bin={firefox_bin} "
             f"geckodriver_bin={geckodriver_bin} geckodriver_log={gecko_log_path} "
-            "session_restore_disabled=true"
+            "page_load_strategy=eager session_restore_disabled=true "
+            "webgl_disabled=true media_decode_disabled=true"
         )
         webdriver_start_monotonic = time.monotonic()
         driver = webdriver.Firefox(service=service, options=options)
