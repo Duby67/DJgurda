@@ -3,9 +3,10 @@
 Контейнерный контур обновления Firefox-сессии для профиля
 `/session_refresher/firefox_profile`.
 
-На хосте этот путь монтируется из
-`~/firefox_selenium_profile`, который подготавливается
-`~/cookies/runtime/prepare_firefox_profile.sh`.
+На хосте этот путь монтируется из `~/firefox_profile`.
+Хостовый wrapper `~/cookies/runtime/run_session_refresher.sh`
+может при необходимости развернуть новый профиль прямо из
+архива перед запуском контейнера.
 
 ## Роль этого контура
 
@@ -16,7 +17,7 @@
   проверяет lock профиля и запускает Python-раннер.
 - `refresh_session.py` открывает URL в одном Firefox-процессе,
   выполняет легкие human-like действия и обновляет
-  `cookies.sqlite` прямо в примонтированном Selenium-профиле.
+  `cookies.sqlite` прямо в примонтированном Firefox-профиле.
 - `../../requirements-cookies.txt` описывает Python-зависимости,
   которые устанавливаются в системный Python контейнера
   при сборке образа.
@@ -27,6 +28,8 @@
   `bash /session_refresher/refresh_session.sh`.
 - Ручной запуск контейнера с хоста:
   `~/cookies/runtime/run_session_refresher.sh`.
+- Ручной запуск контейнера с заменой профиля из архива:
+  `~/cookies/runtime/run_session_refresher.sh <archive_path>`.
 - Автоматический запуск контейнера:
   cron вызывает тот же
   `~/cookies/runtime/run_session_refresher.sh`.

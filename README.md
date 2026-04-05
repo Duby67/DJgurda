@@ -21,8 +21,8 @@ cookies-контур для автообновления Firefox-сессии.
 - `docs/` - дополнительная документация.
 - `docs/deployment/` - политика веток, CI/CD, cron и cookies-контур.
 - `docs/deployment/cookies-host-setup.md` - подготовка Ubuntu-хоста под session-refresher.
-- `docs/deployment/session-refresh-manual.md` - ручной сценарий подготовки
-  Firefox-профилей и запуска session-refresher.
+- `docs/deployment/session-refresh-manual.md` - ручной сценарий работы с Firefox-профилем
+  и запуска session-refresher.
 - `deploy/` - docker/compose/cron обвязка контуров.
 - `test/docker/` - локальные стенды для проверки Docker-образов
   без ожидания выгрузки на сервер.

@@ -4,14 +4,14 @@
 
 ```bash
 mkdir -p ~/cookies/runtime
-mkdir -p ~/firefox_selenium_profile
+mkdir -p ~/firefox_profile
 mkdir -p ~/logs/cookies
 ```
 
 ## 2) Выдать безопасные права
 
 ```bash
-chmod 700 ~/firefox_selenium_profile
+chmod 700 ~/firefox_profile
 chmod 755 ~/cookies ~/cookies/runtime ~/logs ~/logs/cookies
 ```
 
@@ -22,7 +22,6 @@ chmod 755 ~/cookies ~/cookies/runtime ~/logs ~/logs/cookies
 
 - `compose.cookies-refresh.yml`
 - `run_session_refresher.sh`
-- `prepare_firefox_profile.sh`
 - `refresh_sources.list`
 - `cookies.cron.example`
 
@@ -32,29 +31,53 @@ chmod 755 ~/cookies ~/cookies/runtime ~/logs ~/logs/cookies
 ls -la ~/cookies/runtime
 ```
 
-## 4) Восстановить Selenium Firefox профиль из архива
+## 4) При необходимости передать архив профиля на хост
+
+Поддерживаемые форматы:
+
+- `*.tar.gz`
+- `*.tgz`
+- `*.tar`
+- `*.7z` при установленном `7z`/`7za`
+
+Пример:
 
 ```bash
-~/cookies/runtime/prepare_firefox_profile.sh \
-  ~/cookies/runtime/firefox_profile.tar.gz \
-  ~/firefox_selenium_profile
+scp ./FirefoxProfile.7z <SSH_USER>@<SSH_HOST>:~/cookies/runtime/FirefoxProfile.7z
 ```
 
 ## 5) Тестовый запуск автообновления сессии
+
+Без замены профиля:
 
 ```bash
 ~/cookies/runtime/run_session_refresher.sh
 ```
 
-`run_session_refresher.sh` сам создаст папки
-`~/cookies/<folder>`, пересоберет
-`~/firefox_selenium_profile` из backup-архива и запустит
-контейнер `DJgurda-cookies` с этим профилем.
+С заменой профиля из архива:
+
+```bash
+~/cookies/runtime/run_session_refresher.sh ~/cookies/runtime/FirefoxProfile.7z
+```
+
+Хостовый wrapper теперь делает только host-level шаги:
+
+- создает ротационный backup текущего `~/firefox_profile`;
+- при переданном архиве полностью разворачивает его в
+  `~/firefox_profile`;
+- разбирает `refresh_sources.list`, создает `~/cookies/<folder>`
+  и собирает очередь URL;
+- запускает контейнер `DJgurda-cookies` от UID/GID
+  текущего пользователя.
+
+Очистка lock/cache/session/sqlite-sidecar файлов теперь всегда
+происходит только внутри контейнера через
+`prepare_runtime_profile.sh`.
 
 ## 6) Проверить состояние профиля
 
 ```bash
-ls -la ~/firefox_selenium_profile | head
+ls -la ~/firefox_profile | head
 ```
 
 ## 7) Проверить логи

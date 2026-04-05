@@ -16,18 +16,24 @@
 - Этот же хостовый wrapper используется для ручного запуска
   контейнера с хоста.
 - `run_session_refresher.sh` сначала делает backup
-  `~/firefox_selenium_profile` в
-  `~/cookies/runtime/firefox_profile.backup.tar.gz`, затем
-  вызывает `~/cookies/runtime/prepare_firefox_profile.sh
-  <archive_path> <profile_dir>`, читает
-  `~/cookies/runtime/refresh_sources.list`, собирает
-  `REFRESH_TARGETS` и запускает контейнер `DJgurda-cookies`
-  через `docker compose run --rm --name DJgurda-cookies
+  `~/firefox_profile` в
+  `~/cookies/runtime/firefox_profile.backup.tar.gz`.
+- Если скрипту передан путь к архиву профиля, он полностью
+  разворачивает архив в `~/firefox_profile` и использует его
+  как новый origin-профиль.
+- Затем wrapper читает `~/cookies/runtime/refresh_sources.list`,
+  собирает `REFRESH_TARGETS` и запускает контейнер
+  `DJgurda-cookies` через
+  `docker compose run --rm --name DJgurda-cookies
   cookies-session-refresher`.
 - Внутри контейнера `refresh_session.sh` поднимает Xvfb/DBus
   и запускает `refresh_session.py`.
 - Timezone контейнера берется с хоста через bind-mount
   `/etc/localtime` и `/etc/timezone`.
+- Контейнер всегда прогоняет обязательный
+  `prepare_runtime_profile.sh`, который удаляет lock/session/
+  cache/sqlite-sidecar файлы уже в примонтированном
+  `~/firefox_profile`.
 - `refresh_session.py` последовательно открывает URL в одном
   Firefox-окне, выполняет легкие `scroll/hover` действия,
   обновляет `cookies.sqlite` в примонтированном профиле и
@@ -52,7 +58,7 @@
 - Перед запуском контейнера скрипт создает папки
   `~/cookies/<folder>` для каждого источника.
 - Перед запуском контейнера скрипт делает один ротационный
-  backup Selenium-профиля Firefox в
+  backup Firefox-профиля в
   `~/cookies/runtime/firefox_profile.backup.tar.gz`
   (поверх старого).
 - Контейнер запускается от UID/GID пользователя хоста.

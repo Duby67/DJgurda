@@ -7,45 +7,22 @@
 - запуск контейнерного wrapper внутри контейнера через
   `/session_refresher/refresh_session.sh`.
 
-Для первичного запуска нужен архив профиля
-`deploy/local/firefox_profile.tar.gz`.
+Для первичного запуска можно использовать архив профиля
+`FirefoxProfile.7z` или `firefox_profile.tar.gz`.
 
 ## 1) Передать архив на хост
 
 С локальной машины:
 
 ```bash
-scp -P 228 deploy/local/firefox_profile.tar.gz \
-  <SSH_USER>@<SSH_HOST>:~/cookies/runtime/firefox_profile.tar.gz
+scp -P 228 ./FirefoxProfile.7z \
+  <SSH_USER>@<SSH_HOST>:~/cookies/runtime/FirefoxProfile.7z
 ```
 
 Для Windows PowerShell используйте аналогичный `scp`
 с Windows-путем.
 
-## 2) Восстановить Selenium-профиль и очистить кеш/ссылки
-
-На сервере:
-
-```bash
-~/cookies/runtime/prepare_firefox_profile.sh \
-  ~/cookies/runtime/firefox_profile.tar.gz \
-  ~/firefox_selenium_profile
-```
-
-Первый аргумент - путь к архиву профиля, второй аргумент -
-путь к директории Selenium Firefox-профиля на хосте.
-
-Скрипт автоматически:
-
-- распакует архив,
-- перенесет только нужные `cookies/auth/storage` файлы,
-- удалит lock-файлы (`.parentlock`, `.startup-incomplete`, `lock`),
-- удалит кеш-папки (`cache2`, `startupCache`, `crashes`,
-  `minidumps`),
-- удалит символические ссылки,
-- удалит `*.sqlite-shm` и `*.sqlite-wal`.
-
-## 3) Установить необходимые пакеты на хосте
+## 2) Установить необходимые пакеты на хосте
 
 ```bash
 sudo apt-get update
@@ -53,7 +30,13 @@ sudo apt-get install -y docker.io docker-compose-plugin cron
 sudo systemctl enable --now docker
 ```
 
-## 4) Проверить список источников
+Для `*.7z` архивов дополнительно:
+
+```bash
+sudo apt-get install -y p7zip-full
+```
+
+## 3) Проверить список источников
 
 ```bash
 cat ~/cookies/runtime/refresh_sources.list
@@ -63,39 +46,48 @@ cat ~/cookies/runtime/refresh_sources.list
 Поле `urls` содержит одну или несколько ссылок,
 разделенных `;`.
 
-## 5) Ручной запуск контейнера с хоста
+## 4) Ручной запуск контейнера с хоста
+
+Без замены профиля:
 
 ```bash
 ~/cookies/runtime/run_session_refresher.sh
 ```
 
+С заменой профиля из архива:
+
+```bash
+~/cookies/runtime/run_session_refresher.sh \
+  ~/cookies/runtime/FirefoxProfile.7z
+```
+
 Хостовый wrapper делает только host-level работу:
 
 - создает/обновляет backup профиля
-  `~/cookies/runtime/firefox_profile.backup.tar.gz`,
-- восстанавливает и очищает `~/firefox_selenium_profile`
-  через `~/cookies/runtime/prepare_firefox_profile.sh`
-  из свежего backup-архива,
+  `~/cookies/runtime/firefox_profile.backup.tar.gz`;
+- при переданном архиве полностью разворачивает его в
+  `~/firefox_profile`;
 - разбирает `refresh_sources.list`, создает `~/cookies/<folder>`
-  и собирает очередь URL,
+  и собирает очередь URL;
 - запускает контейнер `DJgurda-cookies` от UID/GID
   текущего пользователя.
 
 Дальше внутри контейнера `refresh_session.sh` поднимает
-Xvfb/DBus и запускает `refresh_session.py`, который
-последовательно открывает URL и обновляет cookie в
-примонтированном `~/firefox_selenium_profile`.
+Xvfb/DBus и запускает `refresh_session.py`, а обязательный
+`prepare_runtime_profile.sh` очищает lock/session/cache/
+sqlite-sidecar файлы уже внутри примонтированного
+`~/firefox_profile`.
 
 Timezone контейнера берется с хоста через `/etc/localtime`
 и `/etc/timezone`.
 
-## 6) Проверить, что профиль меняется и не блокируется root
+## 5) Проверить, что профиль меняется и не блокируется root
 
 ```bash
-ls -la ~/firefox_selenium_profile | head
+ls -la ~/firefox_profile | head
 ```
 
-## 7) Ручной запуск wrapper внутри контейнера
+## 6) Ручной запуск wrapper внутри контейнера
 
 Если нужно проверить именно контейнерный runtime-wrapper без
 хостового `run_session_refresher.sh`, запустите контейнер
@@ -110,7 +102,7 @@ docker compose -f ~/cookies/runtime/compose.cookies-refresh.yml \
 образа автоматически вызывает
 `/session_refresher/refresh_session.sh`.
 
-## 8) Автоматический запуск контейнера через cron
+## 7) Автоматический запуск контейнера через cron
 
 ```bash
 crontab -e
@@ -120,7 +112,7 @@ crontab -e
 Cron будет запускать тот же
 `~/cookies/runtime/run_session_refresher.sh`.
 
-## 9) Как контейнер попадает на сервер
+## 8) Как контейнер попадает на сервер
 
 Это делает CI/CD workflow `build-cookies.yml`:
 

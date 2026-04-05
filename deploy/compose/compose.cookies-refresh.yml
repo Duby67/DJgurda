@@ -18,7 +18,7 @@ services:
       MOZ_DISABLE_CONTENT_SANDBOX: "1"
       NO_AT_BRIDGE: "1"
     volumes:
-      - ${SELENIUM_PROFILE_DIR:-/home/DJgurda/firefox_selenium_profile}:/session_refresher/firefox_profile:rw
+      - ${FIREFOX_PROFILE_DIR:-/home/DJgurda/firefox_profile}:/session_refresher/firefox_profile:rw
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
     security_opt:

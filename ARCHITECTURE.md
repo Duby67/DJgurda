@@ -19,8 +19,8 @@
 - `deploy/compose/` - compose-шаблоны для
   `prod/dev/local/cookies`.
 - `deploy/cron/` - runtime-скрипты cookies-контура:
-  `run_session_refresher.sh`, `prepare_firefox_profile.sh`,
-  `refresh_sources.list`.
+  `run_session_refresher.sh`, `refresh_sources.list`,
+  `cookies.cron.example`.
 - `src/` - исходный код проекта.
 - `src/session_refresher/` - контейнерный Selenium
   runtime-wrapper и Python-раннер.
