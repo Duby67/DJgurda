@@ -63,12 +63,31 @@ return {
 };
 """
 YOUTUBE_AUTH_STATE_SCRIPT = """
+const ytcfgLoggedIn = Boolean(
+  window.ytcfg && (
+    (typeof window.ytcfg.get === "function" && window.ytcfg.get("LOGGED_IN")) ||
+    (window.ytcfg.data_ && window.ytcfg.data_.LOGGED_IN)
+  ),
+);
+const hasTopbarButtons = Boolean(
+  document.querySelector(
+    'ytd-topbar-menu-button-renderer #button, ytd-notification-topbar-button-renderer',
+  ),
+);
 return {
+  loggedInConfig: ytcfgLoggedIn,
   hasAvatarButton: Boolean(
     document.querySelector(
       '#avatar-btn, button#avatar-btn, ytd-topbar-menu-button-renderer #avatar-btn',
     ),
   ),
+  hasNotificationButton: Boolean(
+    document.querySelector('ytd-notification-topbar-button-renderer'),
+  ),
+  hasCreateButton: Boolean(
+    document.querySelector('ytd-topbar-menu-button-renderer, button[aria-label*="Create"]'),
+  ),
+  hasTopbarButtons,
   hasSignInButton: Boolean(
     document.querySelector(
       'a[href*="ServiceLogin"], a[href*="/signin"], a[aria-label*="Sign in"]',
@@ -88,6 +107,23 @@ class RunHealth:
     snapshot_warnings: int = 0
     cookie_domains_changed: int = 0
     cookie_domains_total: int = 0
+    auth_warnings: int = 0
+    youtube_targets_present: bool = False
+    youtube_auth_confirmed: bool = False
+    youtube_auth_cookie_present: bool = False
+    youtube_auth_cookie_refreshed: bool = False
+
+
+YOUTUBE_AUTH_COOKIE_NAMES: tuple[str, ...] = (
+    "SID",
+    "HSID",
+    "SSID",
+    "APISID",
+    "SAPISID",
+    "LOGIN_INFO",
+    "__Secure-1PSID",
+    "__Secure-3PSID",
+)
 
 
 def ts() -> str:
@@ -190,15 +226,20 @@ def build_cookie_domains(targets: List[str]) -> List[str]:
     seen = set()
     result: List[str] = []
 
+    def add_domain(domain: str) -> None:
+        if domain and domain not in seen:
+            seen.add(domain)
+            result.append(domain)
+
     for target in targets:
         host = extract_host(target)
-        if host and host not in seen:
-            seen.add(host)
-            result.append(host)
+        add_domain(host)
 
-        if host.endswith("youtube.com") and "google.com" not in seen:
-            seen.add("google.com")
-            result.append("google.com")
+        if host.endswith("youtube.com"):
+            add_domain("youtube.com")
+            add_domain("google.com")
+        elif host.endswith("google.com"):
+            add_domain("google.com")
 
     return result
 
@@ -282,6 +323,81 @@ def compare_snapshots(before: Dict[str, str], after: Dict[str, str], domains: Li
     return changed_total
 
 
+def query_named_cookie_summary(
+    db_path: Path,
+    names: tuple[str, ...],
+    host_suffixes: tuple[str, ...],
+) -> Dict[str, object]:
+    if not db_path.exists():
+        return {"status": "db_missing", "names": [], "last_access": "n/a"}
+
+    try:
+        conn = sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
+    except sqlite3.Error as exc:
+        return {"status": f"query_error:{exc.__class__.__name__}", "names": [], "last_access": "n/a"}
+
+    try:
+        cursor = conn.cursor()
+        name_placeholders = ",".join("?" for _ in names)
+        host_clause = " OR ".join("host LIKE ?" for _ in host_suffixes)
+        params = [*names, *[f"%{suffix}" for suffix in host_suffixes]]
+        cursor.execute(
+            f"""
+            SELECT DISTINCT name
+            FROM moz_cookies
+            WHERE name IN ({name_placeholders})
+              AND ({host_clause})
+            ORDER BY name
+            """,
+            params,
+        )
+        found_names = [str(row[0]) for row in cursor.fetchall()]
+        cursor.execute(
+            f"""
+            SELECT max(lastAccessed)
+            FROM moz_cookies
+            WHERE name IN ({name_placeholders})
+              AND ({host_clause})
+            """,
+            params,
+        )
+        last_accessed = cursor.fetchone()
+        max_last_accessed = last_accessed[0] if last_accessed else None
+        return {
+            "status": "ok",
+            "names": found_names,
+            "last_access": format_access_micro(max_last_accessed),
+        }
+    except sqlite3.Error as exc:
+        return {"status": f"query_error:{exc.__class__.__name__}", "names": [], "last_access": "n/a"}
+    finally:
+        conn.close()
+
+
+def capture_youtube_auth_cookie_summary(
+    label: str,
+    db_path: Path,
+    health: RunHealth,
+) -> Dict[str, object]:
+    summary = query_named_cookie_summary(
+        db_path=db_path,
+        names=YOUTUBE_AUTH_COOKIE_NAMES,
+        host_suffixes=("youtube.com", "google.com"),
+    )
+    status = str(summary.get("status", "unknown"))
+    if status != "ok":
+        health.snapshot_warnings += 1
+
+    names = list(summary.get("names", []))
+    names_text = ",".join(names) if names else "n/a"
+    log(
+        f"youtube_auth_cookies_{label} status={status} "
+        f"count={len(names)} names={names_text} "
+        f"last_access={summary.get('last_access', 'n/a')}"
+    )
+    return summary
+
+
 def enforce_single_window(driver: webdriver.Firefox, preferred_handle: str | None, health: RunHealth) -> str:
     handles = driver.window_handles
     log(
@@ -339,20 +455,32 @@ def probe_auth_state(driver: webdriver.Firefox, target_safe: str) -> str:
         )
         return "unknown"
 
+    logged_in_config = bool(auth_probe.get("loggedInConfig"))
     has_avatar = bool(auth_probe.get("hasAvatarButton"))
     has_sign_in = bool(auth_probe.get("hasSignInButton"))
-    if has_avatar and not has_sign_in:
+    has_notification = bool(auth_probe.get("hasNotificationButton"))
+    has_create = bool(auth_probe.get("hasCreateButton"))
+    has_topbar_buttons = bool(auth_probe.get("hasTopbarButtons"))
+
+    has_signed_in_ui = has_avatar or logged_in_config or (
+        has_notification and (has_create or has_topbar_buttons)
+    )
+
+    if has_signed_in_ui and not has_sign_in:
         auth_state = "signed_in"
-    elif has_sign_in and not has_avatar:
+    elif has_sign_in and not has_signed_in_ui:
         auth_state = "signed_out"
-    elif has_avatar and has_sign_in:
+    elif has_signed_in_ui and has_sign_in:
         auth_state = "mixed"
     else:
         auth_state = "unknown"
 
     log(
         f"auth_probe target={target_safe} auth_state={auth_state} "
-        f"has_avatar={has_avatar} has_sign_in={has_sign_in}"
+        f"logged_in_config={logged_in_config} "
+        f"has_avatar={has_avatar} has_sign_in={has_sign_in} "
+        f"has_notification={has_notification} has_create={has_create} "
+        f"has_topbar_buttons={has_topbar_buttons}"
     )
     return auth_state
 
@@ -441,12 +569,19 @@ def emit_health_verdict(health: RunHealth, fatal_error: str | None) -> None:
     elif health.pages_loaded == 0:
         verdict = "failed"
         reason = "no_pages_loaded"
+    elif health.youtube_targets_present and not health.youtube_auth_confirmed and not health.youtube_auth_cookie_present:
+        verdict = "degraded"
+        reason = "youtube_auth_not_confirmed"
+    elif health.youtube_targets_present and not health.youtube_auth_cookie_refreshed:
+        verdict = "degraded"
+        reason = "youtube_auth_cookies_not_refreshed"
     elif health.page_load_warnings or health.human_action_warnings or health.snapshot_warnings:
         verdict = "degraded"
         reason = (
             f"page_load_warnings={health.page_load_warnings} "
             f"human_action_warnings={health.human_action_warnings} "
-            f"snapshot_warnings={health.snapshot_warnings}"
+            f"snapshot_warnings={health.snapshot_warnings} "
+            f"auth_warnings={health.auth_warnings}"
         )
     else:
         verdict = "healthy"
@@ -459,7 +594,11 @@ def emit_health_verdict(health: RunHealth, fatal_error: str | None) -> None:
         f"human_action_warnings={health.human_action_warnings} "
         f"extra_windows_closed={health.extra_windows_closed} "
         f"cookie_domains_changed={health.cookie_domains_changed}/{health.cookie_domains_total} "
-        f"snapshot_warnings={health.snapshot_warnings}"
+        f"snapshot_warnings={health.snapshot_warnings} "
+        f"auth_warnings={health.auth_warnings} "
+        f"youtube_auth_confirmed={health.youtube_auth_confirmed} "
+        f"youtube_auth_cookie_present={health.youtube_auth_cookie_present} "
+        f"youtube_auth_cookie_refreshed={health.youtube_auth_cookie_refreshed}"
     )
 
 
@@ -619,7 +758,9 @@ def run() -> int:
 
     cookies_db = profile_dir / "cookies.sqlite"
     health = RunHealth(pages_total=len(targets), cookie_domains_total=len(domains) + 1)
+    health.youtube_targets_present = any(extract_host(target).endswith("youtube.com") for target in targets)
     before = capture_snapshot("before", cookies_db, domains, health)
+    youtube_auth_before = capture_youtube_auth_cookie_summary("before", cookies_db, health)
 
     driver: webdriver.Firefox | None = None
     active_handle: str | None = None
@@ -709,6 +850,10 @@ def run() -> int:
                     title = title[:117] + "..."
                 navigation_match = navigation_matches(target, current_url_raw)
                 auth_state = probe_auth_state(driver, target_safe)
+                if auth_state == "signed_in":
+                    health.youtube_auth_confirmed = True
+                elif auth_state in {"signed_out", "mixed", "unknown"} and extract_host(target).endswith("youtube.com"):
+                    health.auth_warnings += 1
                 if page_load_timed_out:
                     effective_ready_state = (
                         stop_ready_state
@@ -790,7 +935,17 @@ def run() -> int:
         stop_webdriver(driver)
 
     after = capture_snapshot("after", cookies_db, domains, health)
+    youtube_auth_after = capture_youtube_auth_cookie_summary("after", cookies_db, health)
     health.cookie_domains_changed = compare_snapshots(before, after, domains)
+    health.youtube_auth_cookie_present = bool(youtube_auth_after.get("names"))
+    health.youtube_auth_cookie_refreshed = (
+        youtube_auth_before.get("status") == "ok"
+        and youtube_auth_after.get("status") == "ok"
+        and (
+            youtube_auth_before.get("names") != youtube_auth_after.get("names")
+            or youtube_auth_before.get("last_access") != youtube_auth_after.get("last_access")
+        )
+    )
     emit_health_verdict(health, fatal_error)
 
     log("Session refresh completed")
