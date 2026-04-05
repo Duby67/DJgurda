@@ -11,6 +11,7 @@
 - `FirefoxProfile/` - рабочий Firefox-профиль, который монтируется
   в контейнер и получает обновленные cookies-файлы;
 - `FirefoxProfile.7z` - локальный backup того же профиля;
+- `refresh_sources.list` - локальный список URL для прогона;
 - `logs/` - логи локальных прогонов.
 
 Файлы профиля, архивы и логи не должны попадать в git.
@@ -19,15 +20,18 @@
 
 1. Убедитесь, что рабочий профиль лежит в
    `test/docker/cookies-session-refresher/FirefoxProfile`.
-2. Запустите локальный прогон:
+2. При необходимости отредактируйте
+   `test/docker/cookies-session-refresher/refresh_sources.list`.
+3. Запустите локальный прогон:
 
 ```powershell
 .\test\docker\cookies-session-refresher\run_local_refresher.ps1
 ```
 
-Скрипт пересобирает локальный образ из текущего кода репозитория и
-запускает одноразовый контейнер `DJgurda-cookies-local`, который
-работает напрямую с `FirefoxProfile/`.
+Скрипт пересобирает локальный образ из текущего кода репозитория,
+читает URL из `refresh_sources.list` и запускает одноразовый
+контейнер `DJgurda-cookies-local`, который работает напрямую с
+`FirefoxProfile/`.
 
 ## Кастомный путь к профилю
 
@@ -40,8 +44,8 @@
 
 ## Кастомные URL
 
-По умолчанию стенд открывает YouTube URL из compose-файла. Для
-разового override можно передать `-RefreshTargets`:
+Если нужно разово переопределить URL без изменения
+`refresh_sources.list`, передайте `-RefreshTargets`:
 
 ```powershell
 .\test\docker\cookies-session-refresher\run_local_refresher.ps1 `
