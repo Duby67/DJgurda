@@ -34,11 +34,13 @@
 ## Поведение
 
 - Firefox запускается с `page_load_strategy=eager`,
-  отключенным session restore, WebGL/GPU и тяжелым
-  media decode.
+  отключенным session restore, WebGL/GPU, Firefox Sync/FxA,
+  BackupService и тяжелым media decode.
 - URL обходятся последовательно в одном процессе и одном
   активном окне Firefox.
 - Во время жизни страницы выполняются легкие действия
   `scroll/hover`.
-- В конце прогона логируется итоговый
-  `health_verdict=healthy|degraded|failed`.
+- В конце прогона логируются два независимых итога:
+  `health_verdict=healthy|degraded|failed` для технического
+  состояния прогона и `auth_verdict=authenticated|partial|
+  unauthenticated|blocked|n/a` для состояния YouTube-авторизации.

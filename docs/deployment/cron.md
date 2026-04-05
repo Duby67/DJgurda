@@ -31,7 +31,10 @@
 - `refresh_session.py` последовательно открывает URL в одном
   Firefox-окне, выполняет легкие `scroll/hover` действия,
   обновляет `cookies.sqlite` в примонтированном профиле и
-  пишет `health_verdict=healthy|degraded|failed`.
+  пишет два итоговых статуса:
+  `health_verdict=healthy|degraded|failed` и
+  `auth_verdict=authenticated|partial|unauthenticated|
+  blocked|n/a`.
 
 ## Источники URL
 

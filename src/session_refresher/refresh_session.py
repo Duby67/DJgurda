@@ -108,7 +108,11 @@ class RunHealth:
     cookie_domains_changed: int = 0
     cookie_domains_total: int = 0
     auth_warnings: int = 0
+    consent_warnings: int = 0
     youtube_targets_present: bool = False
+    consent_detected: bool = False
+    sign_in_required: bool = False
+    challenge_required: bool = False
     youtube_auth_confirmed: bool = False
     youtube_auth_cookie_present: bool = False
     youtube_auth_cookie_refreshed: bool = False
@@ -485,6 +489,32 @@ def probe_auth_state(driver: webdriver.Firefox, target_safe: str) -> str:
     return auth_state
 
 
+def probe_consent_state(target_safe: str, current_url_raw: str, title: str) -> str:
+    target_host = extract_host(target_safe)
+    if not (target_host.endswith("youtube.com") or target_host.endswith("google.com")):
+        return "n/a"
+
+    current_url_safe = safe_url(current_url_raw) if current_url_raw else "n/a"
+    current_host, current_path = normalize_url_for_match(current_url_raw)
+    current_url_lower = (current_url_raw or "").lower()
+    title_lower = (title or "").lower()
+
+    if current_host.startswith("consent.") or "before you continue" in title_lower:
+        consent_state = "consent_required"
+    elif "challenge" in current_url_lower or "verify it's you" in title_lower or "verify it is you" in title_lower:
+        consent_state = "challenge_required"
+    elif current_host == "accounts.google.com" or "servicelogin" in current_url_lower or "/signin" in current_path or title_lower.startswith("sign in"):
+        consent_state = "sign_in_required"
+    else:
+        consent_state = "clear"
+
+    log(
+        f"consent_probe target={target_safe} current_url={current_url_safe} "
+        f"consent_state={consent_state}"
+    )
+    return consent_state
+
+
 def perform_human_action(driver: webdriver.Firefox, target_safe: str, health: RunHealth) -> None:
     action = random.choice(["scroll", "scroll", "hover", "pause"])
     if action == "pause":
@@ -569,19 +599,12 @@ def emit_health_verdict(health: RunHealth, fatal_error: str | None) -> None:
     elif health.pages_loaded == 0:
         verdict = "failed"
         reason = "no_pages_loaded"
-    elif health.youtube_targets_present and not health.youtube_auth_confirmed and not health.youtube_auth_cookie_present:
-        verdict = "degraded"
-        reason = "youtube_auth_not_confirmed"
-    elif health.youtube_targets_present and not health.youtube_auth_cookie_refreshed:
-        verdict = "degraded"
-        reason = "youtube_auth_cookies_not_refreshed"
     elif health.page_load_warnings or health.human_action_warnings or health.snapshot_warnings:
         verdict = "degraded"
         reason = (
             f"page_load_warnings={health.page_load_warnings} "
             f"human_action_warnings={health.human_action_warnings} "
-            f"snapshot_warnings={health.snapshot_warnings} "
-            f"auth_warnings={health.auth_warnings}"
+            f"snapshot_warnings={health.snapshot_warnings}"
         )
     else:
         verdict = "healthy"
@@ -596,9 +619,49 @@ def emit_health_verdict(health: RunHealth, fatal_error: str | None) -> None:
         f"cookie_domains_changed={health.cookie_domains_changed}/{health.cookie_domains_total} "
         f"snapshot_warnings={health.snapshot_warnings} "
         f"auth_warnings={health.auth_warnings} "
+        f"consent_warnings={health.consent_warnings} "
         f"youtube_auth_confirmed={health.youtube_auth_confirmed} "
         f"youtube_auth_cookie_present={health.youtube_auth_cookie_present} "
         f"youtube_auth_cookie_refreshed={health.youtube_auth_cookie_refreshed}"
+    )
+
+
+def emit_auth_verdict(health: RunHealth) -> None:
+    if not health.youtube_targets_present:
+        verdict = "n/a"
+        reason = "no_youtube_targets"
+    elif health.challenge_required:
+        verdict = "blocked"
+        reason = "challenge_required"
+    elif health.sign_in_required:
+        verdict = "unauthenticated"
+        reason = "sign_in_required"
+    elif health.consent_detected:
+        verdict = "unauthenticated"
+        reason = "consent_required"
+    elif health.youtube_auth_confirmed and health.youtube_auth_cookie_present and health.youtube_auth_cookie_refreshed:
+        verdict = "authenticated"
+        reason = "confirmed_and_refreshed"
+    elif health.youtube_auth_confirmed and health.youtube_auth_cookie_present:
+        verdict = "partial"
+        reason = "confirmed_without_cookie_refresh"
+    elif health.youtube_auth_cookie_present:
+        verdict = "partial"
+        reason = "cookies_present_without_ui_confirmation"
+    else:
+        verdict = "unauthenticated"
+        reason = "auth_not_confirmed"
+
+    log(
+        f"auth_verdict={verdict} reason={reason} "
+        f"consent_detected={health.consent_detected} "
+        f"sign_in_required={health.sign_in_required} "
+        f"challenge_required={health.challenge_required} "
+        f"youtube_auth_confirmed={health.youtube_auth_confirmed} "
+        f"youtube_auth_cookie_present={health.youtube_auth_cookie_present} "
+        f"youtube_auth_cookie_refreshed={health.youtube_auth_cookie_refreshed} "
+        f"auth_warnings={health.auth_warnings} "
+        f"consent_warnings={health.consent_warnings}"
     )
 
 
@@ -617,6 +680,18 @@ def configure_firefox_options(options: Options, profile_dir: Path, firefox_bin: 
     options.set_preference("browser.sessionstore.restore_on_demand", False)
     options.set_preference("browser.sessionstore.restore_tabs_lazily", False)
     options.set_preference("browser.sessionstore.max_resumed_crashes", 0)
+    options.set_preference("identity.fxaccounts.enabled", False)
+    options.set_preference("services.sync.enabled", False)
+    options.set_preference("services.sync.engine.addons", False)
+    options.set_preference("services.sync.engine.addresses", False)
+    options.set_preference("services.sync.engine.bookmarks", False)
+    options.set_preference("services.sync.engine.creditcards", False)
+    options.set_preference("services.sync.engine.history", False)
+    options.set_preference("services.sync.engine.passwords", False)
+    options.set_preference("services.sync.engine.prefs", False)
+    options.set_preference("services.sync.engine.tabs", False)
+    options.set_preference("browser.backup.enabled", False)
+    options.set_preference("browser.backup.scheduled.enabled", False)
 
     # Keep the container runtime lightweight and avoid GPU/WebGL/media crashes.
     options.set_preference("gfx.webrender.all", False)
@@ -650,7 +725,7 @@ def start_webdriver(
         f"profile={profile_dir} firefox_bin={firefox_bin} "
         f"geckodriver_bin={geckodriver_bin} geckodriver_log={gecko_log_path} "
         "page_load_strategy=eager session_restore_disabled=true "
-        "webgl_disabled=true media_decode_disabled=true"
+        "webgl_disabled=true media_decode_disabled=true fxa_sync_disabled=true backup_service_disabled=true"
     )
     webdriver_start_monotonic = time.monotonic()
     driver = webdriver.Firefox(service=service, options=options)
@@ -850,10 +925,22 @@ def run() -> int:
                     title = title[:117] + "..."
                 navigation_match = navigation_matches(target, current_url_raw)
                 auth_state = probe_auth_state(driver, target_safe)
+                consent_state = probe_consent_state(target_safe, current_url_raw, title)
                 if auth_state == "signed_in":
                     health.youtube_auth_confirmed = True
-                elif auth_state in {"signed_out", "mixed", "unknown"} and extract_host(target).endswith("youtube.com"):
+                elif extract_host(target).endswith("youtube.com") and consent_state == "clear":
                     health.auth_warnings += 1
+
+                if consent_state == "consent_required":
+                    health.consent_detected = True
+                    health.consent_warnings += 1
+                elif consent_state == "sign_in_required":
+                    health.sign_in_required = True
+                    health.auth_warnings += 1
+                elif consent_state == "challenge_required":
+                    health.challenge_required = True
+                    health.auth_warnings += 1
+
                 if page_load_timed_out:
                     effective_ready_state = (
                         stop_ready_state
@@ -888,7 +975,8 @@ def run() -> int:
                     f"step_loaded index={index}/{total_steps} "
                     f"current_url={current_url} title={title or 'n/a'} "
                     f"ready_state={current_ready_state} "
-                    f"navigation_match={navigation_match} auth_state={auth_state}"
+                    f"navigation_match={navigation_match} auth_state={auth_state} "
+                    f"consent_state={consent_state}"
                 )
             except (WebDriverException, ReadTimeoutError) as exc:
                 health.page_load_warnings += 1
@@ -947,6 +1035,7 @@ def run() -> int:
         )
     )
     emit_health_verdict(health, fatal_error)
+    emit_auth_verdict(health)
 
     log("Session refresh completed")
     return exit_code
