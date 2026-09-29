@@ -13,6 +13,8 @@ Hard rules; stop and report instead of working around them.
   task-specific detail to a skill or a doc and link to it. Never add text the agent already knows,
   text implied by the file itself (its audience, purpose, or language), or copies of other files.
 - **Git actions belong to the developer:** commit, push, PR, and merge.
+- **Branch isolation:** create a task branch from `development` before editing. Never work or
+  commit directly on `development` or `main`; changes enter these branches through pull requests.
 - **No silent fallback:** fail with an actionable error instead of substituting a default.
 - **Secrets** come from the environment; never commit them or put them in logs, reports, or session
   files.

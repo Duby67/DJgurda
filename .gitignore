@@ -34,3 +34,14 @@ Thumbs.db
 !.vscode/settings.json
 !.vscode/extensions.json
 *.code-workspace
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.ruff_cache/
+.pytest_cache/
