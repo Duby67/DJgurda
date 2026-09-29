@@ -21,6 +21,8 @@ Hard rules; stop and report instead of working around them.
 - **Honest evidence:** never report an unrun or skipped check as passed; completion needs checks run
   after the last change.
 - **No delegation:** only the operator starts agents.
+- **Focused tests:** prefer a few tests of meaningful behavior and real regressions. Avoid
+  repetitive micro-cases, implementation-mirroring, and raise coverage tests.
 
 When docs, config, code, and tests disagree, report the contradiction instead of choosing.
 

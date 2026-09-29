@@ -12,6 +12,12 @@ dependencies = [
 [project.scripts]
 djgurda = "djgurda.__main__:main"
 
+[dependency-groups]
+dev = ["pytest>=9,<10"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [build-system]
 requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
