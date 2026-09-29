@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skill Authoring"
+  short_description: "Create and review focused repository skills"
+  default_prompt: "Use $kit-skill-authoring to create or rework a repository skill."

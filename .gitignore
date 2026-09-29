@@ -1,67 +1,36 @@
-# Локальные секреты и окружение
+# Environment files and local secrets
 .env
-test/handlers/YandexMusic/.env.yandex_music_tests
-*_cookies.txt
-deploy/cookies/*
-!deploy/cookies/README.md
-!deploy/cookies/AGENTS.md
-deploy/sync_cookies.env
+.env.*
+!.env.example
+*.local.env
+*.local.json
+*.local.yaml
+*.local.yml
+*.pem
+*.key
 
-# Виртуальные окружения Python
-.venv/
-venv/
-env/
+# Local agent session files (protocol: AGENTS.md)
+/.agents/tasks.md
+/.agents/handoff.md
 
-# Кеши и артефакты Python/тестов
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-.coverage.*
-htmlcov/
+# Local agent tool settings; project rules live in AGENTS.md and Skills/
+/.codex/
+/.serena/
+/.mcp.json
+/.claude/settings.local.json
 
-# Сборка и упаковка Python
-build/
-dist/
-*.egg-info/
-pip-wheel-metadata/
-
-# IDE и редакторы
-.idea/
-.vscode/*
-!.vscode/tasks.json
-!.vscode/settings.json
-*.iml
-
-# Локальные логи и временные файлы
+# Logs and temporary files
 *.log
-*.out
-*.err
-*.pid
-*.pid.lock
+tmp/
 *.tmp
-*.temp
+*.bak
+*.swp
 
-# Временные файлы операционных систем
+# OS and editor files
 .DS_Store
 Thumbs.db
-Desktop.ini
-
-# Локальные runtime-артефакты проекта
-src/data/db/*
-!src/data/db/README.md
-!src/data/db/AGENTS.md
-src/data/runtime/*
-!src/data/runtime/README.md
-!src/data/runtime/AGENTS.md
-src/data/cookies/*
-!src/data/cookies/README.md
-!src/data/cookies/AGENTS.md
-
-runs/*
-!runs/README.md
-!runs/AGENTS.md
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.code-workspace

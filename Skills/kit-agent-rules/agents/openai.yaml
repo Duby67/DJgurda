@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Rules"
+  short_description: "Keep agent rules, routing and checks consistent"
+  default_prompt: "Use $kit-agent-rules to change agent rules or the skill registry."

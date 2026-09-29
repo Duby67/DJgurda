@@ -1,0 +1,4 @@
+interface:
+  display_name: "Docs"
+  short_description: "Keep human docs in sync with verified behavior"
+  default_prompt: "Use $kit-docs to synchronize documentation with verified behavior."
