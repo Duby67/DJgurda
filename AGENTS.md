@@ -1,118 +1,37 @@
-# AGENTS
+# Agents
 
-## Purpose
+## Project
 
-Это корневой policy-файл для агентной работы в репозитории.
+DJgurda is a Telegram bot being rewritten to transfer media from links into chats.
+Scope and branch lifecycle are defined in [README.md](README.md).
 
-Репозиторий содержит два рабочих контура:
+## Rules
 
-- application runtime бота в `src/`;
-- swarm automation contour в `scripts/agents/`, `docs/swarm-runtime.md` и связанных policy/docs.
+Hard rules; stop and report instead of working around them.
 
-Агент должен сначала понять, в каком контуре находится задача, и не смешивать их без необходимости.
+- **Keep this file minimal.** It is loaded on every request. Add only rules every task needs; move
+  task-specific detail to a skill or a doc and link to it. Never add text the agent already knows,
+  text implied by the file itself (its audience, purpose, or language), or copies of other files.
+- **Git actions belong to the developer:** commit, push, PR, and merge.
+- **No silent fallback:** fail with an actionable error instead of substituting a default.
+- **Secrets** come from the environment; never commit them or put them in logs, reports, or session
+  files.
+- **Honest evidence:** never report an unrun or skipped check as passed; completion needs checks run
+  after the last change.
+- **No delegation:** only the operator starts agents.
 
-## Reading Order
+When docs, config, code, and tests disagree, report the contradiction instead of choosing.
 
-Базовый reading path для любой нетривиальной задачи:
+## Work
 
-1. `AGENTS.md`
-2. `ARCHITECTURE.md`
+Trace the real flow, then make the smallest correct change. Prefer, in order: no change, existing
+code, the standard library, an installed dependency, new code. Stay in scope. Read narrowly:
+focused search, bounded reads, `git diff --stat` before diffs, quiet test output.
 
-Если задача затрагивает swarm automation, orchestration, sandbox, approvals, MCP/CLI, run artifacts или VSCode task wrappers, читать дальше в таком порядке:
+For multi-session work keep `.agents/handoff.md` (current findings and evidence) and
+`.agents/tasks.md` (the operator's checklist; mark results, add no tasks); both are git-ignored.
 
-3. `scripts/AGENTS.md`
-4. `docs/swarm-runtime.md`
-5. `docs/swarm-usage.md`
-6. нужный policy-документ из:
-   - `docs/testing-policy.md`
-   - `docs/sandbox-execution.md`
-   - `docs/commit-policy.md`
-   - `docs/SECURITY.md`
-7. код и тесты только для затронутой области в `scripts/agents/`, `.github/workflows/`, `test/scripts/`, `test/docker/`
+## Report
 
-Если задача затрагивает application runtime бота, читать дальше в таком порядке:
-
-3. нужный файл из `docs/product-specs/`
-4. нужный файл из `docs/design-docs/`
-5. нужный файл из `docs/exec-plans/`
-6. код и тесты только для затронутой области в `src/`, `deploy/`, `test/`
-
-## Source Of Truth
-
-- Основной источник истины по поведению application runtime: `src/`.
-- Основной источник истины по поведению swarm automation contour:
-  - `scripts/agents/`
-  - `docs/swarm-runtime.md`
-  - связанные tracked policy/docs
-- Основной источник истины по правилам работы: tracked-документы, а не untracked legacy/scratch материалы.
-- `README.md` считать обзорным human-facing документом, а не source of truth для агента.
-- Не использовать untracked legacy/scratch/archive материалы без явного запроса пользователя.
-- При расхождении между кодом и устаревшим markdown приоритет у кода.
-
-## Context Loading Rules
-
-- Не читать весь репозиторий по умолчанию.
-- Начинать с минимального context pack.
-- Расширять контекст только если:
-  - зависимость реально пересекает модуль;
-  - тест или ошибка указывает на соседнюю область;
-  - локальный policy требует прочитать соседний контракт;
-  - задача пересекает application runtime и swarm contour.
-- Не использовать обзорные и архивные документы как замену чтению целевого кода.
-- Не подменять чтение swarm runtime-доков чтением bot-only архитектурных документов, если задача лежит в `scripts/agents/`.
-
-## Change Rules
-
-- Предпочитать локальные изменения внутри одной подсистемы.
-- Если изменение пересекает несколько подсистем, явно описывать причину.
-- При изменении поведения синхронизировать релевантные docs.
-- Если меняется swarm command surface, lifecycle contract, artifact schema или sandbox behavior, синхронизировать:
-  - `docs/swarm-runtime.md`
-  - `docs/swarm-usage.md`
-  - при необходимости `scripts/AGENTS.md`
-- Не подключать новые runtime-handlers без явной проверки readiness и env-зависимостей.
-
-## Test And Check Rules
-
-- Любые тесты и smoke-проверки запускать только после явного подтверждения пользователя.
-- Для локальных Python-команд, включая `pytest`, smoke-checks и verification-команды, использовать только проектный `venv`.
-- Запускать тесты через system `python`, `py` или другой интерпретатор вне проектного `venv` нельзя.
-- Environment-sensitive проверки предпочитать в изолированной среде.
-- Handler smoke-тесты считать специальным исключением из общего правила, что tests не равны source of truth.
-- Для swarm contour учитывать, что:
-  - `local_dry_run` не заменяет реальный execution backend;
-  - `docker` и `github_actions` являются отдельными sandbox backend'ами со своими ограничениями.
-
-## Approval Rules
-
-- Никогда не предполагать approval на `push`, merge, release или операции с секретами.
-- Если для продолжения нужны clarification, выбор стратегии или решение с нетривиальными последствиями, агент не должен молча выбирать спорный путь и закрывать run; он должен остановиться, коротко объяснить развилку и запросить решение пользователя.
-- Если для продолжения нужны тесты, smoke-checks, `commit`, `push`, release, sandbox с environment-sensitive проверками или действия с секретами, агент должен остановить автономный проход на этой boundary, показать текущий статус и явно запросить approval пользователя перед продолжением.
-- Перед любым `push` всегда отдельно запрашивать явное подтверждение пользователя; если для `push` нужно повышение прав, запрашивать его сразу перед выполнением команды.
-- Перед финальным approval показывать измененные файлы, проведенные проверки и остаточные риски.
-- Удаленный доступ к серверу остается действием пользователя, а не агента.
-
-## Swarm Default Mode
-
-- По умолчанию агент должен работать в `swarm`-режиме как orchestrator, а не как одиночный исполнитель.
-- Для любой нетривиальной пользовательской задачи агент должен считать swarm contour своим основным operational mode: принять prompt, классифицировать задачу, собрать context pack, распараллелить работу через субагентов где это уместно, провести verification и довести run до следующей human boundary.
-- Обход swarm-подхода допустим только для тривиальных одношаговых действий, где orchestration объективно избыточна.
-- Для любой нетривиальной задачи агент должен сначала оценить, какие части работы можно безопасно распараллелить, и при необходимости самостоятельно поднимать субагентов без отдельного запроса пользователя.
-- Агент может выполнять задачу без субагентов только если шаг тривиальный, узколокальный или находится на критическом пути и делегирование замедлит выполнение.
-- Субагентам нужно выдавать четкие и ограниченные зоны ответственности, чтобы не размывать source of truth и не создавать конфликтующие правки.
-- В пользовательских progress-update агент должен явно показывать, какие workstreams сейчас идут, какие подзадачи решаются локально, а какие отданы субагентам.
-- Если в ходе swarm-run появляется вопрос к пользователю, агент должен задавать его прямо и коротко, по возможности с несколькими безопасными вариантами ответа, а не скрывать uncertainty за молчаливым выбором.
-- Даже в `swarm`-режиме действуют все остальные approval-границы этого репозитория: тесты, smoke checks, `commit`, `push`, release и действия с секретами требуют отдельного подтверждения пользователя.
-- До получения ответа пользователя на clarification или approval-вопрос swarm-run считается приостановленным на human boundary, а не завершенным.
-- Если задача затрагивает несколько подсистем, агент должен предпочитать orchestration через subagents с последующей сборкой итогового решения и явным описанием границ изменений.
-
-## Read Next
-
-- `ARCHITECTURE.md` для общей карты репозитория.
-- `scripts/AGENTS.md`, если задача затрагивает automation, swarm lifecycle, sandbox, approvals или release scripts.
-- `docs/swarm-runtime.md` для runtime-контрактов swarm-контура.
-- `docs/swarm-usage.md` для пользовательских точек входа swarm automation.
-- `docs/PRODUCT_SENSE.md` для пользовательских ожиданий application runtime.
-- `docs/RELIABILITY.md` для runtime и testing posture.
-- `docs/SECURITY.md` для секретов, deploy-boundaries и approval-политики.
-- `docs/PLANS.md` для активных и завершенных планов.
+One line per point: result, checks actually run with outcome, concrete risks. Omit empty
+categories; never list what was not done.

@@ -1,5 +1,0 @@
--r requirements.txt
-
-# Зависимости только для разработки.
-pytest>=9.0.0
-PyYAML
