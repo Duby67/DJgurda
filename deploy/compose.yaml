@@ -1,0 +1,20 @@
+services:
+  bot:
+    image: ${DJGURDA_IMAGE:?Set DJGURDA_IMAGE to the image tag or digest}
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN:?Set BOT_TOKEN for this environment}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    pids_limit: 64
+    stop_grace_period: 30s
+    logging:
+      driver: local
+      options:
+        max-size: "5m"
+        max-file: "2"

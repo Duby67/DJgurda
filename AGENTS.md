@@ -21,6 +21,9 @@ Hard rules; stop and report instead of working around them.
 - **Honest evidence:** never report an unrun or skipped check as passed; completion needs checks run
   after the last change.
 - **No delegation:** only the operator starts agents.
+- **Small VM first:** optimize for bounded memory, CPU, disk usage, and concurrency. Give
+  production priority; keep development lightweight and stop it when unused. Build images off
+  the server. Resource budgets and deployment instructions live in `docs/deployment.md`.
 - **Focused tests:** prefer a few tests of meaningful behavior and real regressions. Avoid
   repetitive micro-cases, implementation-mirroring, and raise coverage tests.
 
