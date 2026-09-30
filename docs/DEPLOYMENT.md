@@ -47,7 +47,8 @@ Runtime properties:
 | Merge to `main` | Build image | production |
 
 - `branch-policy`: PRs into `main` only from `development`; no PRs from `main` into `development`.
-- `version-check`: `pyproject.toml` version must exceed the base and match `uv.lock`.
+- `version-check`: `pyproject.toml` version, `GENERATION.MAJOR.MINOR.PATCH` (e.g. `2.0.4.0`),
+  must exceed the base and match `uv.lock`.
 - `lint`: `ruff check`, `ruff format --check`, `mypy` (strict); settings in `pyproject.toml`.
 - Rulesets on both branches: require PR and the checks above, block force pushes and deletions,
   empty bypass list; `development` requires up-to-date branches. Push workflows rely on them.
