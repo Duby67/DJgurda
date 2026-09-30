@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     bot_token: SecretStr
     admin_ids: list[PositiveInt] = Field(min_length=1, repr=False)
     database_path: Path
+    work_dir: Path
     app_env: Literal["development", "production"] = "development"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 

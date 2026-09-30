@@ -1,28 +1,6 @@
-"""Link extraction and source classification."""
-
-from dataclasses import dataclass
-from urllib.parse import urlsplit
+"""Link extraction from Telegram messages."""
 
 from aiogram.types import Message
-
-
-@dataclass(frozen=True)
-class Source:
-    name: str
-    domains: tuple[str, ...]
-
-    def matches(self, host: str) -> bool:
-        return any(host == domain or host.endswith("." + domain) for domain in self.domains)
-
-
-SOURCES = (
-    Source("YouTube", ("youtube.com", "youtu.be")),
-    Source("TikTok", ("tiktok.com",)),
-    Source("Instagram", ("instagram.com",)),
-    Source("VK", ("vk.com", "vk.ru", "vkvideo.ru")),
-    Source("Coub", ("coub.com",)),
-    Source("Yandex Music", ("music.yandex.ru", "music.yandex.com")),
-)
 
 
 def extract_links(message: Message) -> list[str]:
@@ -35,13 +13,3 @@ def extract_links(message: Message) -> list[str]:
         elif entity.type == "text_link" and entity.url:
             links.append(entity.url)
     return links
-
-
-def classify(url: str) -> Source | None:
-    if "://" not in url:
-        url = "https://" + url
-    try:
-        host = urlsplit(url).hostname or ""
-    except ValueError:
-        return None
-    return next((source for source in SOURCES if source.matches(host)), None)

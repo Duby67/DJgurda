@@ -1,6 +1,7 @@
 """Exercise routing and outgoing messages without contacting Telegram."""
 
 import asyncio
+import re
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from importlib.metadata import version
@@ -11,9 +12,11 @@ import pytest
 from aiogram import Bot
 from aiogram.types import Chat, Message, MessageEntity, Update, User
 
+from djgurda import chat
 from djgurda.bot import create_dispatcher
 from djgurda.chat import HELP
-from djgurda.links import classify
+from djgurda.media import Media, MediaError
+from djgurda.sources import classify
 from djgurda.storage import Storage
 
 RESTART = (0, "")
@@ -30,8 +33,8 @@ def message(update_id: int, chat_id: int, text: str) -> Update:
     entities = []
     if text.startswith("/"):
         entities.append(MessageEntity(type="bot_command", offset=0, length=len(text.split()[0])))
-    if "youtu.be" in text:
-        entities.append(MessageEntity(type="url", offset=text.index("youtu.be"), length=12))
+    for match in re.finditer(r"\S+\.\S+/\S*", text):
+        entities.append(MessageEntity(type="url", offset=match.start(), length=len(match[0])))
     return Update(
         update_id=update_id,
         message=Message(
@@ -45,9 +48,33 @@ def message(update_id: int, chat_id: int, text: str) -> Update:
     )
 
 
-def test_chat_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def run_script(bot_request: AsyncMock, work_dir: Path, script: list[tuple[int, str]]) -> None:
+    async def deliver() -> None:
+        async with Bot(token="123456789:offline-test-token") as bot:
+            bot.session.make_request = bot_request  # type: ignore[method-assign]
+            storage = Storage(work_dir / "db.sqlite3")
+            dispatcher = create_dispatcher([100], storage, work_dir)
+            for update_id, item in enumerate(script, 1):
+                if item == RESTART:
+                    storage.close()
+                    storage = Storage(work_dir / "db.sqlite3")
+                    dispatcher = create_dispatcher([100], storage, work_dir)
+                    continue
+                chat_id, text = item
+                await dispatcher.feed_update(bot, message(update_id, chat_id, text))
+            storage.close()
+
+    asyncio.run(deliver())
+
+
+def sent(request: AsyncMock) -> list[tuple[int, str]]:
+    methods = [c.args[1] for c in request.await_args_list]
+    return [(m.chat_id, getattr(m, "text", None) or m.caption) for m in methods]
+
+
+def test_chat_lifecycle(tmp_path: Path) -> None:
     request = AsyncMock(return_value=True)
-    link = "смотри youtu.be/abcd"
+    link = "смотри vm.tiktok.com/abcd"
     script = [
         (42, link),
         (42, "/stop"),  # Paused until /start.
@@ -65,31 +92,15 @@ def test_chat_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
         (-7, "/status"),
     ]
 
-    async def deliver() -> None:
-        async with Bot(token="123456789:offline-test-token") as bot:
-            monkeypatch.setattr(bot.session, "make_request", request)
-            storage = Storage(tmp_path / "db.sqlite3")
-            dispatcher = create_dispatcher([100], storage)
-            for update_id, item in enumerate(script, 1):
-                if item == RESTART:
-                    storage.close()
-                    storage = Storage(tmp_path / "db.sqlite3")
-                    dispatcher = create_dispatcher([100], storage)
-                    continue
-                chat_id, text = item
-                await dispatcher.feed_update(bot, message(update_id, chat_id, text))
-            storage.close()
+    run_script(request, tmp_path, script)
 
-    asyncio.run(deliver())
-
-    sent = [(c.args[1].chat_id, c.args[1].text) for c in request.await_args_list]
     status = "Бот {} в этом чате\nВерсия: " + version("djgurda")
-    assert sent == [
+    assert sent(request) == [
         (42, "Бот активен в этом чате"),
         (-7, status.format("приостановлен")),
         (-7, HELP),
         (42, status.format("активен")),
-        (42, "YouTube: обработка ещё не реализована"),
+        (42, "TikTok: обработка ещё не реализована"),
         (42, "Бот приостановлен в этом чате"),
         (42, status.format("приостановлен")),
         (42, "Бот активен в этом чате"),
@@ -98,25 +109,53 @@ def test_chat_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     ]
 
 
+def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def download(url: str, target: Path) -> Media:
+        assert target.parent == tmp_path
+        if "fail" in url:
+            raise MediaError("не удалось скачать")
+        path = target / "video.mp4"
+        path.write_bytes(b"video")
+        return Media(path=path, title="Title", duration=1, width=2, height=3)
+
+    monkeypatch.setattr(chat, "download", download)
+    request = AsyncMock(return_value=True)
+    links = "youtu.be/ok youtu.be/fail youtube.com/playlist?list=1"
+    run_script(request, tmp_path, [(42, "/start"), (42, links)])
+
+    assert sent(request) == [
+        (42, "Бот активен в этом чате"),
+        (42, "Title"),
+        (42, "YouTube/video: не удалось скачать"),
+        (42, "YouTube/playlist: обработка ещё не реализована"),
+    ]
+    assert not list(tmp_path.glob("download-*"))
+
+
 @pytest.mark.parametrize(
-    ("url", "source"),
+    ("url", "label", "downloadable"),
     [
-        ("https://www.youtube.com/watch?v=x", "YouTube"),
-        ("vm.tiktok.com/abc", "TikTok"),
-        ("HTTPS://M.VK.COM/wall-1_2", "VK"),
-        ("https://music.yandex.ru/album/1", "Yandex Music"),
-        ("https://notyoutube.com/watch", None),
-        ("https://example.com/?u=youtube.com", None),
+        ("https://www.youtube.com/watch?v=x&list=y", "YouTube/video", True),
+        ("youtu.be/x", "YouTube/video", True),
+        ("https://m.youtube.com/shorts/x", "YouTube/shorts", True),
+        ("https://youtube.com/playlist?list=y", "YouTube/playlist", False),
+        ("https://www.youtube.com/@name", "YouTube/channel", False),
+        ("https://www.youtube.com/", "YouTube", False),
+        ("vm.tiktok.com/abc", "TikTok", False),
+        ("HTTPS://M.VK.COM/wall-1_2", "VK", False),
+        ("https://notyoutube.com/watch?v=x", None, False),
+        ("https://example.com/?u=youtube.com", None, False),
     ],
 )
-def test_classify(url: str, source: str | None) -> None:
-    result = classify(url)
-    assert (result and result.name) == source
+def test_classify(url: str, label: str | None, downloadable: bool) -> None:
+    link = classify(url)
+    assert (link and link.label) == label
+    assert bool(link and link.downloadable) == downloadable
 
 
-def test_startup_and_shutdown_notify_only_admins(storage: Storage) -> None:
+def test_startup_and_shutdown_notify_only_admins(storage: Storage, tmp_path: Path) -> None:
     bot = AsyncMock()
-    dispatcher = create_dispatcher([100, 200, 100], storage)
+    dispatcher = create_dispatcher([100, 200, 100], storage, tmp_path)
     asyncio.run(dispatcher.emit_startup(bot=bot))
     asyncio.run(dispatcher.emit_shutdown(bot=bot))
     assert bot.send_message.await_args_list == [
@@ -126,8 +165,8 @@ def test_startup_and_shutdown_notify_only_admins(storage: Storage) -> None:
     ]
 
 
-def test_startup_notification_failure_is_not_ignored(storage: Storage) -> None:
+def test_startup_notification_failure_is_not_ignored(storage: Storage, tmp_path: Path) -> None:
     bot = AsyncMock()
     bot.send_message.side_effect = RuntimeError("Notification failed")
     with pytest.raises(RuntimeError, match="Notification failed"):
-        asyncio.run(create_dispatcher([100], storage).emit_startup(bot=bot))
+        asyncio.run(create_dispatcher([100], storage, tmp_path).emit_startup(bot=bot))

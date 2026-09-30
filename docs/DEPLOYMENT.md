@@ -10,12 +10,14 @@ Target VM: 1 vCPU, ~2 GiB RAM, no swap, 30 GiB disk.
 | development | 0.10 | 256 MiB | no |
 
 About 430 MiB stays for the OS and Docker. CPU shares favor production. Build images off the
-server, run one bot per environment, and stop development when unused. Media processing must
-bound concurrency and temporary disk use; measure before changing budgets.
+server, run one bot per environment, and stop development when unused. Downloads run one at a
+time, capped at 50 MB; a short YouTube video peaked at ~75 MiB under both budgets. Measure before
+changing budgets.
 
 ## Image and Compose
 
-`deploy/Dockerfile` builds a multi-stage image from `uv.lock`, running as UID/GID 10001.
+`deploy/Dockerfile` builds a multi-stage image from `uv.lock`, running as UID/GID 10001. It adds
+static ffmpeg (stream merging) and deno (yt-dlp's YouTube JavaScript runtime); ~590 MB.
 
 Compose always takes `deploy/compose.yaml` plus one override: `compose.production.yaml` or
 `compose.development.yaml`. The override sets limits, `APP_ENV` and the project name.
@@ -27,7 +29,8 @@ Runtime properties:
 - No published ports; outbound long polling only.
 - Read-only root filesystem; `/tmp` is a 16 MiB tmpfs counted against memory.
 - Logs rotate at 5 MiB, two files.
-- SQLite at `/data/djgurda.sqlite3` on the named volume `data`, one per Compose project.
+- SQLite at `/data/djgurda.sqlite3` and downloads in `/data/work` on the named volume `data`,
+  one per Compose project; leftover downloads are removed on startup.
   Deployments keep it; `down -v` deletes it.
 - Healthcheck confirms completed initialization (Telegram lookup and admin notifications), not
   ongoing connectivity.

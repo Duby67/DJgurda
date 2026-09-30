@@ -48,6 +48,7 @@ def test_readiness_lifecycle(
         bot_token="123:offline-token",
         admin_ids=[100],
         database_path=tmp_path / "db.sqlite3",
+        work_dir=tmp_path / "work",
         _env_file=None,
     )
     if failure:
