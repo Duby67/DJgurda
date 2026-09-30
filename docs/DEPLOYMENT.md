@@ -18,7 +18,8 @@ continues with fewer formats. Measure before changing budgets.
 ## Image and Compose
 
 `deploy/Dockerfile` builds a multi-stage image from `uv.lock`, running as UID/GID 10001. It adds
-static ffmpeg (stream merging) and deno (yt-dlp's YouTube JavaScript runtime); ~590 MB.
+static ffmpeg (stream merging), deno (yt-dlp's YouTube JavaScript runtime) and curl_cffi
+(browser impersonation that TikTok requires); ~645 MB.
 
 Compose always takes `deploy/compose.yaml` plus one override: `compose.production.yaml` or
 `compose.development.yaml`. The override sets limits, `APP_ENV` and the project name.
@@ -46,7 +47,8 @@ Runtime properties:
 | Merge to `main` | Build image | production |
 
 - `branch-policy`: PRs into `main` only from `development`; no PRs from `main` into `development`.
-- `version-check`: `pyproject.toml` version must exceed the base and match `uv.lock`.
+- `version-check`: `pyproject.toml` version, `GENERATION.MAJOR.MINOR.PATCH` (e.g. `2.0.4.0`),
+  must exceed the base and match `uv.lock`.
 - `lint`: `ruff check`, `ruff format --check`, `mypy` (strict); settings in `pyproject.toml`.
 - Rulesets on both branches: require PR and the checks above, block force pushes and deletions,
   empty bypass list; `development` requires up-to-date branches. Push workflows rely on them.
@@ -59,6 +61,7 @@ GitHub Environments `development` and `production`, limited to their branches.
 | Name | Kind | Meaning |
 | --- | --- | --- |
 | `BOT_TOKEN` | Environment secret | `<id>:<secret>` from @BotFather; a different bot per environment |
+| `YANDEX_MUSIC_TOKEN` | Secret | Optional; Yandex Music account token with a subscription |
 | `ADMIN_IDS` | Secret | Nonempty JSON array of positive integers, e.g. `[123456789]` |
 | `DEPLOY_SSH_PRIVATE_KEY` | Secret | SSH key for `DEPLOY_USER` |
 | `DEPLOY_HOST` | Variable | Hostname or IPv4 |
@@ -67,8 +70,8 @@ GitHub Environments `development` and `production`, limited to their branches.
 | `DEPLOY_KNOWN_HOSTS` | Variable | known_hosts entries; `[host]:port` for nonstandard ports |
 | `DEPLOY_APP_DIR` | Variable | Absolute root without spaces; the environment name is appended |
 
-All are required. GHCR uses `GITHUB_TOKEN`; an existing package must grant this repository
-Actions access.
+All except `YANDEX_MUSIC_TOKEN` are required. GHCR uses `GITHUB_TOKEN`; an existing package must
+grant this repository Actions access.
 
 ### Server
 
