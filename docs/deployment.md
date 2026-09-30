@@ -91,7 +91,9 @@ shows actual resource usage once containers are running.
 - Logs rotate at 5 MiB with two files per container (plus driver overhead).
 - No database or media storage volumes yet: the startup notification bot does not use them.
   Add separate persistent volumes per environment when implementing storage.
-- No fake healthcheck: process restart is not proof of Telegram connectivity.
+- Healthcheck checks an initialization marker written after Telegram identity lookup and
+  all administrator notifications succeed. It is cleared on startup and shutdown.
+  It confirms completed initialization, not ongoing Telegram connectivity.
 - Exceeding the memory ceiling can cause an OOM termination; development stays stopped
   after failure, production follows its restart policy.
 
@@ -128,19 +130,19 @@ Set `BOT_TOKEN` separately in each environment, using different bots.
 The repository secret `ADMIN_IDS` must contain a nonempty JSON array of positive
 integer IDs. Administrators must have started a chat with each bot.
 
-Supply these repository secrets (environment overrides can point to another server):
+Supply these repository **Variables** (environment overrides can point to another server):
 
-| Secret | Meaning |
+| Variable | Meaning |
 | --- | --- |
 | `DEPLOY_HOST` | SSH hostname or IPv4 address |
 | `DEPLOY_PORT` | SSH port, explicitly set even when it is 22 |
 | `DEPLOY_USER` | SSH user with Docker access |
-| `DEPLOY_SSH_PRIVATE_KEY` | Private SSH key for that user |
 | `DEPLOY_KNOWN_HOSTS` | Verified OpenSSH known_hosts entries; nonstandard ports use `[host]:port` |
-| `DEPLOY_APP_DIR` | Absolute application root without spaces, e.g. `/opt/djgurda` |
-| `ADMIN_IDS` | Administrator IDs shared by both environments |
+| `DEPLOY_APP_DIR` | Shared application root without spaces: `/home/DJgurda/apps`; the script appends the environment |
 
-All settings are required; missing settings fail the deployment. Key verification
+Keep `DEPLOY_SSH_PRIVATE_KEY`, `ADMIN_IDS` and each environment's `BOT_TOKEN` in
+**Secrets**. The workflow reads the five connection settings above from `vars`,
+not `secrets`. All settings are required; missing settings fail the deployment. Key verification
 uses `DEPLOY_KNOWN_HOSTS` with strict checking, without dynamically trusting keys
 from the deployment connection. The pipeline uses the automatic `GITHUB_TOKEN`
 for GHCR publishing and pulling; a personal registry token is not needed. If a
@@ -160,26 +162,38 @@ rollouts; GitHub also serializes runs per branch without interrupting an active
 deployment. Each run checks that its commit is still the branch tip before build
 and again before SSH, so rerunning an outdated commit fails explicitly.
 
-The server pulls the image before replacing configuration, starts it with the
-existing resource limits, and observes the process for 30 seconds. An early exit,
-restart or OOM fails deployment. This is a process check, not proof that Telegram
-polling or the administrator notification succeeded. Application logs stay on the
-server and are not copied to Actions logs automatically.
+The server pulls the image and creates a private candidate directory under
+`DEPLOY_APP_DIR/<environment>/releases`. Compose waits up to 180 seconds for the
+initialization healthcheck, then observes health, restart count, OOM state and
+image digest for 30 seconds. Telegram identity lookup and administrator
+notifications have a shared 60-second initialization timeout. Application logs
+stay on the server and are not copied to Actions logs automatically.
 
-Runtime configuration is stored with private permissions under
-`DEPLOY_APP_DIR/development` or `DEPLOY_APP_DIR/production`; registry credentials
-and transfer staging are temporary and cleaned up on exit. The previous runtime
-configuration is saved in the environment's `previous` directory. Failed startup
-is reported without automatic rollback; inspect logs privately and restore the
-previous configuration if needed. Registry credentials expire with the workflow,
+Only after these checks pass does the script atomically switch `current` to the
+candidate and retain the last successful release as `previous`. Failed attempts
+and retries do not replace the saved successful configuration. On a startup
+failure, the script attempts to restart `current` with its saved image and
+configuration and waits for readiness; the deployment job still fails. If there
+is no successful release, it stops the candidate. A recovery failure is reported
+explicitly and needs operator intervention. Recovery restarts send the normal
+startup notification again.
+
+Runtime env files have mode `600`, release directories `700`. Registry credentials
+and transfer staging are temporary. At most two successful configuration releases
+are retained; old application images still need disk maintenance. This is not a
+database rollback mechanism. Development remains running until manually stopped.
+Registry credentials expire with the workflow,
 so a later manual pull of a private image requires registry authentication.
 
 To stop development when unused, run from `DEPLOY_APP_DIR/development`:
 
 ```bash
-docker compose --env-file runtime.env -f compose.yaml -f compose.environment.yaml down
+docker compose --env-file current/runtime.env \
+  -f current/compose.yaml -f current/compose.environment.yaml down
 ```
 
-Use the same file arguments with `logs --tail 50 bot` for local diagnostics or
-`up -d --no-build` after restoring previous files. Keep disk usage under observation
+Use the same file arguments with `logs --tail 50 bot` for local diagnostics.
+For manual recovery, use the three files under `previous/` with
+`up -d --no-build --pull never --wait --wait-timeout 180`. This starts the saved
+release without changing the release pointers. Keep disk usage under observation
 and remove obsolete application images that are no longer needed for rollback.

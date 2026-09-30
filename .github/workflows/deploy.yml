@@ -72,11 +72,11 @@ jobs:
         env:
           DEPLOY_ENV: ${{ github.ref_name == 'main' && 'production' || 'development' }}
           DJGURDA_IMAGE: ${{ needs.build.outputs.image }}
-          DEPLOY_APP_DIR: ${{ secrets.DEPLOY_APP_DIR }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_APP_DIR: ${{ vars.DEPLOY_APP_DIR }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
           DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           ADMIN_IDS: ${{ secrets.ADMIN_IDS }}
