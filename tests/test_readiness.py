@@ -47,4 +47,5 @@ def test_readiness_lifecycle(tmp_path, monkeypatch, failure):
     else:
         asyncio.run(app.run(settings))
     assert not marker.exists()
+    bot.delete_webhook.assert_awaited_once_with(drop_pending_updates=True)
     bot.__aexit__.assert_awaited_once()

@@ -22,6 +22,7 @@ async def run(settings: Settings) -> None:
         async with Bot(token=settings.bot_token.get_secret_value()) as bot:
             dispatcher = create_dispatcher(settings.admin_ids)
             dispatcher.startup.register(mark_ready)
+            await bot.delete_webhook(drop_pending_updates=True)  # Skip messages sent while offline.
             await dispatcher.start_polling(bot, close_bot_session=False)
     finally:
         READY_FILE.unlink(missing_ok=True)
