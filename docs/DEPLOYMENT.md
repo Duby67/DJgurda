@@ -34,13 +34,14 @@ Runtime properties:
 
 | Event | Checks | Deployment |
 | --- | --- | --- |
-| PR to `development` | `branch-policy`, `version-check`, `tests` | — |
+| PR to `development` | `branch-policy`, `version-check`, `tests`, `lint` | — |
 | PR to `main` | `branch-policy` | — |
 | Merge to `development` | Build image | development |
 | Merge to `main` | Build image | production |
 
 - `branch-policy`: PRs into `main` only from `development`; no PRs from `main` into `development`.
 - `version-check`: `pyproject.toml` version must exceed the base and match `uv.lock`.
+- `lint`: `ruff check`, `ruff format --check`, `mypy` (strict); settings in `pyproject.toml`.
 - Rulesets on both branches: require PR and the checks above, block force pushes and deletions,
   empty bypass list; `development` requires up-to-date branches. Push workflows rely on them.
 - Promote `development` to `main` with merge commits.

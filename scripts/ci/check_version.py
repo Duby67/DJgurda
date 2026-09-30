@@ -10,14 +10,15 @@ from pathlib import Path
 def release_version(value: str) -> tuple[int, int, int]:
     if not re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", value):
         raise ValueError("Use a version in MAJOR.MINOR.PATCH format")
-    return tuple(map(int, value.split(".")))
+    major, minor, patch = map(int, value.split("."))
+    return major, minor, patch
 
 
 def check(base_ref: str) -> None:
     project = tomllib.loads(Path("pyproject.toml").read_text())["project"]
-    base = tomllib.loads(subprocess.check_output(
-        ["git", "show", f"{base_ref}:pyproject.toml"], text=True
-    ))["project"]
+    base = tomllib.loads(
+        subprocess.check_output(["git", "show", f"{base_ref}:pyproject.toml"], text=True)
+    )["project"]
     if release_version(project["version"]) <= release_version(base["version"]):
         raise ValueError("Increase project.version above development and run uv lock")
     lock = tomllib.loads(Path("uv.lock").read_text())

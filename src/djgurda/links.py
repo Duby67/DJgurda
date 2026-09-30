@@ -28,11 +28,13 @@ SOURCES = (
 def extract_links(message: Message) -> list[str]:
     text = message.text or message.caption or ""
     entities = message.entities or message.caption_entities or []
-    return [
-        entity.url if entity.type == "text_link" else entity.extract_from(text)
-        for entity in entities
-        if entity.type in ("url", "text_link")
-    ]
+    links = []
+    for entity in entities:
+        if entity.type == "url":
+            links.append(entity.extract_from(text))
+        elif entity.type == "text_link" and entity.url:
+            links.append(entity.url)
+    return links
 
 
 def classify(url: str) -> Source | None:

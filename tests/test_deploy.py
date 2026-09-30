@@ -1,21 +1,27 @@
 """Run the remote release lifecycle with an offline Docker substitute."""
 
 import os
-from pathlib import Path
 import subprocess
 import sys
+from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).parents[1]
 
 
+Run = Callable[..., subprocess.CompletedProcess[str]]
+
+
 @pytest.fixture
-def deployment(tmp_path):
+def deployment(tmp_path: Path) -> tuple[Path, Run]:
     tools = tmp_path / "bin"
     tools.mkdir()
     docker = tools / "docker"
-    docker.write_text(f"#!{sys.executable}\n" + '''
+    docker.write_text(
+        f"#!{sys.executable}\n"
+        + """
 import os, pathlib, sys
 args = sys.argv[1:]
 state = pathlib.Path(os.environ['FAKE_STATE'])
@@ -23,7 +29,9 @@ if args[0] == 'login':
     sys.stdin.read()
 elif args[0] == 'compose':
     config = pathlib.Path(args[args.index('--env-file') + 1]).read_text()
-    image = next(line.split('=', 1)[1] for line in config.splitlines() if line.startswith('DJGURDA_IMAGE='))
+    image = next(
+        line.split('=', 1)[1] for line in config.splitlines() if line.startswith('DJGURDA_IMAGE=')
+    )
     if 'up' in args:
         state.write_text(image)
         if image == os.environ.get('FAIL_IMAGE'):
@@ -33,27 +41,38 @@ elif args[0] == 'compose':
     elif 'ps' in args:
         print('offline-container')
 elif args[0] == 'inspect':
-    print(state.read_text() if args[args.index('--format') + 1] == '{{.Config.Image}}' else 'true 0 false healthy')
-''')
+    image_field = args[args.index('--format') + 1] == '{{.Config.Image}}'
+    print(state.read_text() if image_field else 'true 0 false healthy')
+"""
+    )
     docker.chmod(0o755)
     sleep = tools / "sleep"
     sleep.write_text("#!/bin/sh\nexit 0\n")
     sleep.chmod(0o755)
     stage = tmp_path / "stage"
     stage.mkdir()
-    for source, target in [("compose.yaml", "compose.yaml"), ("compose.development.yaml", "compose.environment.yaml")]:
+    for source, target in [
+        ("compose.yaml", "compose.yaml"),
+        ("compose.development.yaml", "compose.environment.yaml"),
+    ]:
         (stage / target).write_bytes((ROOT / "deploy" / source).read_bytes())
     (stage / "registry-user").write_text("offline")
     (stage / "registry-token").write_text("offline-registry-secret")
 
-    def run(digest, *, fail=False):
+    def run(digest: str, *, fail: bool = False) -> subprocess.CompletedProcess[str]:
         image = "ghcr.io/example/bot@sha256:" + digest * 64
         (stage / "runtime.env").write_text(f"DJGURDA_IMAGE={image}\nBOT_TOKEN=offline-bot-secret\n")
         result = subprocess.run(
             ["bash", str(ROOT / "scripts/deploy-remote.sh"), "stage", "development"],
-            cwd=tmp_path, text=True, capture_output=True,
-            env={**os.environ, "PATH": str(tools) + ":" + os.environ["PATH"],
-                 "FAKE_STATE": str(tmp_path / "running-image"), "FAIL_IMAGE": image if fail else ""},
+            cwd=tmp_path,
+            text=True,
+            capture_output=True,
+            env={
+                **os.environ,
+                "PATH": str(tools) + ":" + os.environ["PATH"],
+                "FAKE_STATE": str(tmp_path / "running-image"),
+                "FAIL_IMAGE": image if fail else "",
+            },
         )
         assert (result.returncode != 0) == fail, result.stdout + result.stderr
         assert "offline-registry-secret" not in result.stdout + result.stderr
@@ -63,7 +82,9 @@ elif args[0] == 'inspect':
     return tmp_path, run
 
 
-def test_failed_retries_preserve_successful_releases_and_recover(deployment):
+def test_failed_retries_preserve_successful_releases_and_recover(
+    deployment: tuple[Path, Run],
+) -> None:
     root, run = deployment
     env = root / "development"
     run("a")
@@ -86,7 +107,7 @@ def test_failed_retries_preserve_successful_releases_and_recover(deployment):
     assert (env / "current/runtime.env").stat().st_mode & 0o777 == 0o600
 
 
-def test_first_failed_release_is_stopped_without_promotion(deployment):
+def test_first_failed_release_is_stopped_without_promotion(deployment: tuple[Path, Run]) -> None:
     root, run = deployment
     result = run("a", fail=True)
     assert "no successful release exists" in result.stderr

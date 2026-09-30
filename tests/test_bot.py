@@ -1,7 +1,7 @@
 """Exercise routing and outgoing messages without contacting Telegram."""
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from importlib.metadata import version
 from unittest.mock import AsyncMock, call
 
@@ -23,7 +23,7 @@ def message(update_id: int, chat_id: int, text: str) -> Update:
         update_id=update_id,
         message=Message(
             message_id=update_id,
-            date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            date=datetime(2026, 1, 1, tzinfo=UTC),
             chat=Chat(id=chat_id, type="group" if chat_id < 0 else "private"),
             from_user=User(id=42, is_bot=False, first_name="Test"),
             text=text,
@@ -36,10 +36,15 @@ def test_chat_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
     request = AsyncMock(return_value=True)
     link = "смотри youtu.be/abcd"
     script = [
-        (42, link), (42, "/stop"),  # Paused until /start.
-        (42, "/start"), (-7, "/status"),  # Another chat stays paused.
-        (42, "/status"), (42, link), (42, "/stop"),
-        (42, "/status"), (42, link),
+        (42, link),
+        (42, "/stop"),  # Paused until /start.
+        (42, "/start"),
+        (-7, "/status"),  # Another chat stays paused.
+        (42, "/status"),
+        (42, link),
+        (42, "/stop"),
+        (42, "/status"),
+        (42, link),
     ]
 
     async def deliver() -> None:
