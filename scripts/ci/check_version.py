@@ -6,12 +6,14 @@ import sys
 import tomllib
 from pathlib import Path
 
+NUMBER = r"(0|[1-9][0-9]*)"
+FORMAT = "GENERATION.MAJOR.MINOR.PATCH"
 
-def release_version(value: str) -> tuple[int, int, int]:
-    if not re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", value):
-        raise ValueError("Use a version in MAJOR.MINOR.PATCH format")
-    major, minor, patch = map(int, value.split("."))
-    return major, minor, patch
+
+def release_version(value: str, parts: tuple[int, ...] = (4,)) -> tuple[int, ...]:
+    if not any(re.fullmatch(r"\.".join([NUMBER] * count), value) for count in parts):
+        raise ValueError(f"Use a version in {FORMAT} format, e.g. 2.0.4.0")
+    return tuple(map(int, value.split(".")))
 
 
 def check(base_ref: str) -> None:
@@ -19,7 +21,8 @@ def check(base_ref: str) -> None:
     base = tomllib.loads(
         subprocess.check_output(["git", "show", f"{base_ref}:pyproject.toml"], text=True)
     )["project"]
-    if release_version(project["version"]) <= release_version(base["version"]):
+    # The base may still carry a MAJOR.MINOR.PATCH version from before the generation prefix.
+    if release_version(project["version"]) <= release_version(base["version"], (3, 4)):
         raise ValueError("Increase project.version above development and run uv lock")
     lock = tomllib.loads(Path("uv.lock").read_text())
     packages = [p for p in lock["package"] if p["name"] == project["name"]]

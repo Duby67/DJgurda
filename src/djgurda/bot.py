@@ -22,7 +22,7 @@ def create_dispatcher(admin_ids: list[int], storage: Storage, work_dir: Path) ->
 
     async def notify_shutdown(bot: Bot) -> None:
         async with timeout(10):  # Fits the 30 s stop grace period.
-            await send_to_admins(bot, f"Бот выключен\nВерсия: {version('djgurda')}")
+            await send_to_admins(bot, "Бот выключен")
 
     dispatcher = Dispatcher()
     dispatcher.startup.register(notify_startup)

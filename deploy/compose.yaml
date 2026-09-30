@@ -5,6 +5,7 @@ services:
       BOT_TOKEN: ${BOT_TOKEN:?Set BOT_TOKEN for this environment}
       ADMIN_IDS: ${ADMIN_IDS:?Set ADMIN_IDS to a nonempty JSON array of administrator IDs}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      YANDEX_MUSIC_TOKEN: ${YANDEX_MUSIC_TOKEN:-}  # Optional: Yandex Music downloads.
       DATABASE_PATH: /data/djgurda.sqlite3
       WORK_DIR: /data/work
     volumes:
