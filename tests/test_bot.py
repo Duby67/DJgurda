@@ -10,6 +10,7 @@ from aiogram import Bot
 from aiogram.types import Chat, Message, MessageEntity, Update, User
 
 from djgurda.bot import create_dispatcher
+from djgurda.chat import HELP
 from djgurda.links import classify
 
 
@@ -40,6 +41,7 @@ def test_chat_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
         (42, "/stop"),  # Paused until /start.
         (42, "/start"),
         (-7, "/status"),  # Another chat stays paused.
+        (-7, "/help"),
         (42, "/status"),
         (42, link),
         (42, "/stop"),
@@ -61,6 +63,7 @@ def test_chat_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
     assert sent == [
         (42, "Бот активен в этом чате"),
         (-7, status.format("приостановлен")),
+        (-7, HELP),
         (42, status.format("активен")),
         (42, "YouTube: обработка ещё не реализована"),
         (42, "Бот приостановлен в этом чате"),

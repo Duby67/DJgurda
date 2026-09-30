@@ -6,7 +6,19 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from djgurda.links import classify, extract_links
+from djgurda.links import SOURCES, classify, extract_links
+
+HELP = "\n".join(
+    [
+        "Отправьте ссылку, и бот перенесёт медиа в чат.",
+        "Источники: " + ", ".join(source.name for source in SOURCES),
+        "",
+        "/start — включить бота в чате",
+        "/stop — приостановить бота в чате",
+        "/status — состояние бота и версия",
+        "/help — эта справка",
+    ]
+)
 
 
 def create_router() -> Router:
@@ -30,6 +42,10 @@ def create_router() -> Router:
     async def status(message: Message) -> None:
         state = "активен" if message.chat.id in active else "приостановлен"
         await message.answer(f"Бот {state} в этом чате\nВерсия: {version('djgurda')}")
+
+    @router.message(Command("help"))
+    async def help_(message: Message) -> None:
+        await message.answer(HELP)
 
     @router.message(is_active)
     async def links(message: Message) -> None:
