@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import SecretStr, field_validator
+from pydantic import Field, PositiveInt, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     )
 
     bot_token: SecretStr
+    admin_ids: list[PositiveInt] = Field(min_length=1, repr=False)
     app_env: Literal["development", "production"] = "development"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 

@@ -46,11 +46,14 @@ Create a private environment file outside Git for each bot, with permissions `60
 ```dotenv
 DJGURDA_IMAGE=ghcr.io/OWNER/IMAGE@sha256:DIGEST
 BOT_TOKEN=TOKEN_FOR_THIS_ENVIRONMENT
+ADMIN_IDS=[123456789]
 LOG_LEVEL=INFO
 ```
 
 Replace the image placeholder with a published image; use `djgurda:local` for a local
 build. Production and development require different Telegram bot tokens.
+Set ADMIN_IDS to the administrator IDs as a nonempty JSON array. A GitHub secret
+is not passed to the container automatically; deployment must supply it explicitly.
 The override supplies APP_ENV and the Compose project name; do not set
 COMPOSE_PROJECT_NAME or pass `-p` unless intentionally changing project identity.
 
@@ -81,7 +84,7 @@ shows actual resource usage once containers are running.
 - Read-only root filesystem; `/tmp` is a 16 MiB tmpfs counted against the memory limit.
   It is for small runtime files, not future downloaded media.
 - Logs rotate at 5 MiB with two files per container (plus driver overhead).
-- No database or media storage volumes yet: the Hello world bot does not use them.
+- No database or media storage volumes yet: the startup notification bot does not use them.
   Add separate persistent volumes per environment when implementing storage.
 - No fake healthcheck: process restart is not proof of Telegram connectivity.
 - Exceeding the memory ceiling can cause an OOM termination; development stays stopped

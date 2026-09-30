@@ -33,6 +33,7 @@ Thumbs.db
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+!.vscode/launch.json
 *.code-workspace
 
 # Python
