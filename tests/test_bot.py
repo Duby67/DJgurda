@@ -154,15 +154,33 @@ def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     assert not list(tmp_path.glob("download-*"))
 
 
+@pytest.mark.parametrize(
+    ("title", "channel", "limit", "expected"),
+    [
+        ("Смешной кот #shorts #cat", "Коты | ", 96, "Смешной кот — Коты"),
+        ("#shorts", "", 96, "Интересный контент"),
+        (
+            "Очень длинное название видео, которое никак не помещается в заголовок подписи целиком",
+            "Канал с очень длинным названием для проверки",
+            80,
+            "Очень длинное название видео, которое никак… — Канал с очень длинным названием…",
+        ),
+        ("Название", "Канал", 12, "Название"),  # No room for the channel.
+    ],
+)
+def test_caption_header(title: str, channel: str, limit: int, expected: str) -> None:
+    assert caption.header(title, channel, limit) == expected
+
+
 def test_caption_fits_telegram_limit() -> None:
     author = caption.Author("Ivan", None)
-    text = "т" * 1000
+    text = "т" * 990
     assert caption.fits(text, author, "YouTube")
     assert not caption.fits(text + "т" * 20, author, "YouTube")
-    built = caption.build("Очень длинное название 🎬" * 20, text, author, "YouTube", "https://x")
-    visible = built.replace('<a href="https://x">', "").replace("</a>", "")
-    assert caption.length(visible) == caption.CAPTION_LIMIT
-    assert visible.startswith("Очень") and "…\n\n" in visible
+    built = caption.build("Очень длинное название 🎬 " * 20, "", text, author, "YouTube", "x")
+    visible = built.replace('<a href="x">', "").replace("</a>", "")
+    assert caption.length(visible) <= caption.CAPTION_LIMIT
+    assert visible.startswith("Очень длинное") and "…\n\n" + text in visible
 
 
 @pytest.mark.parametrize(

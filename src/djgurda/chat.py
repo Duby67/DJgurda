@@ -88,10 +88,16 @@ def create_router(storage: Storage, work_dir: Path) -> Router:
         async with downloads:
             with TemporaryDirectory(dir=work_dir, prefix=DOWNLOAD_PREFIX) as target:
                 media = await asyncio.to_thread(download, link.url, Path(target))
-                title = " — ".join(part for part in (media.title, media.uploader) if part)
                 video = message.answer_video(
                     FSInputFile(media.path),
-                    caption=caption.build(title, text, author(message), link.source.name, link.url),
+                    caption=caption.build(
+                        media.title,
+                        media.uploader,
+                        text,
+                        author(message),
+                        link.source.name,
+                        link.url,
+                    ),
                     parse_mode="HTML",
                     duration=media.duration,
                     width=media.width,
