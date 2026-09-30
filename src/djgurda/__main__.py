@@ -11,7 +11,9 @@ from djgurda.config import Settings
 
 async def run(settings: Settings) -> None:
     async with Bot(token=settings.bot_token.get_secret_value()) as bot:
-        await create_dispatcher().start_polling(bot, close_bot_session=False)
+        await create_dispatcher(settings.admin_ids).start_polling(
+            bot, close_bot_session=False
+        )
 
 
 def main() -> None:

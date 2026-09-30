@@ -3,6 +3,7 @@ services:
     image: ${DJGURDA_IMAGE:?Set DJGURDA_IMAGE to the image tag or digest}
     environment:
       BOT_TOKEN: ${BOT_TOKEN:?Set BOT_TOKEN for this environment}
+      ADMIN_IDS: ${ADMIN_IDS:?Set ADMIN_IDS to a nonempty JSON array of administrator IDs}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     init: true
     read_only: true

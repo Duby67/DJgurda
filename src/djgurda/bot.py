@@ -1,17 +1,16 @@
-"""Telegram handlers and dispatcher composition."""
+"""Startup notification and dispatcher composition."""
 
-from aiogram import Dispatcher, Router
-from aiogram.filters import CommandStart
-from aiogram.types import Message
+from importlib.metadata import version
 
-
-async def say_hello(message: Message) -> None:
-    await message.answer("Hello world")
+from aiogram import Bot, Dispatcher
 
 
-def create_dispatcher() -> Dispatcher:
-    router = Router(name="commands")
-    router.message.register(say_hello, CommandStart())
+def create_dispatcher(admin_ids: list[int]) -> Dispatcher:
+    async def notify_admins(bot: Bot) -> None:
+        text = f"Бот запущен\nВерсия: {version('djgurda')}"
+        for admin_id in dict.fromkeys(admin_ids):
+            await bot.send_message(chat_id=admin_id, text=text)
+
     dispatcher = Dispatcher()
-    dispatcher.include_router(router)
+    dispatcher.startup.register(notify_admins)
     return dispatcher

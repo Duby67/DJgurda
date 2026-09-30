@@ -2,11 +2,11 @@
 
 import asyncio
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock
+from importlib.metadata import version
+from unittest.mock import AsyncMock, call
 
 import pytest
 from aiogram import Bot
-from aiogram.methods import SendMessage
 from aiogram.types import Chat, Message, MessageEntity, Update, User
 
 from djgurda.bot import create_dispatcher
@@ -31,15 +31,25 @@ def test_message_routing(text: str, monkeypatch: pytest.MonkeyPatch) -> None:
                     if text == "/start" else [],
                 ),
             )
-            await create_dispatcher().feed_update(bot, update)
+            await create_dispatcher([100]).feed_update(bot, update)
 
     asyncio.run(deliver())
 
-    if text == "/start":
-        request.assert_awaited_once()
-        method = request.await_args.args[1]
-        assert isinstance(method, SendMessage)
-        assert method.chat_id == 42
-        assert method.text == "Hello world"
-    else:
-        request.assert_not_awaited()
+    request.assert_not_awaited()
+
+
+def test_startup_notifies_only_admins() -> None:
+    bot = AsyncMock()
+    dispatcher = create_dispatcher([100, 200, 100])
+    asyncio.run(dispatcher.emit_startup(bot=bot))
+    assert bot.send_message.await_args_list == [
+        call(chat_id=admin_id, text=f"Бот запущен\nВерсия: {version('djgurda')}")
+        for admin_id in (100, 200)
+    ]
+
+
+def test_startup_notification_failure_is_not_ignored() -> None:
+    bot = AsyncMock()
+    bot.send_message.side_effect = RuntimeError("Notification failed")
+    with pytest.raises(RuntimeError, match="Notification failed"):
+        asyncio.run(create_dispatcher([100]).emit_startup(bot=bot))
