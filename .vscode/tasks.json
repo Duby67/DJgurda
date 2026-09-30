@@ -4,27 +4,15 @@
     {
       "label": "DJgurda: Docker start",
       "type": "process",
-      "command": "docker",
+      "command": "${workspaceFolder}/scripts/local.sh",
       "args": [
-        "compose",
-        "--env-file",
-        "${workspaceFolder}/.env",
-        "-f",
-        "${workspaceFolder}/deploy/compose.yaml",
-        "-f",
-        "${workspaceFolder}/deploy/compose.development.yaml",
-        "-f",
-        "${workspaceFolder}/deploy/compose.local.yaml",
         "up",
         "--build",
         "--force-recreate",
         "--remove-orphans"
       ],
       "options": {
-        "cwd": "${workspaceFolder}",
-        "env": {
-          "DJGURDA_IMAGE": "djgurda:local"
-        }
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": [],
       "group": {
@@ -39,24 +27,12 @@
     {
       "label": "DJgurda: Docker stop",
       "type": "process",
-      "command": "docker",
+      "command": "${workspaceFolder}/scripts/local.sh",
       "args": [
-        "compose",
-        "--env-file",
-        "${workspaceFolder}/.env",
-        "-f",
-        "${workspaceFolder}/deploy/compose.yaml",
-        "-f",
-        "${workspaceFolder}/deploy/compose.development.yaml",
-        "-f",
-        "${workspaceFolder}/deploy/compose.local.yaml",
         "down"
       ],
       "options": {
-        "cwd": "${workspaceFolder}",
-        "env": {
-          "DJGURDA_IMAGE": "djgurda:local"
-        }
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": []
     }

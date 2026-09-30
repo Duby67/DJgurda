@@ -1,6 +1,6 @@
 [project]
 name = "djgurda"
-version = "0.1.4"
+version = "0.2.0"
 description = "Telegram bot for transferring media from links into chats"
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
@@ -13,7 +13,11 @@ dependencies = [
 djgurda = "djgurda.__main__:main"
 
 [dependency-groups]
-dev = ["pytest>=9,<10"]
+dev = [
+    "mypy>=1.18,<2",
+    "pytest>=9,<10",
+    "ruff>=0.14,<1",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -24,3 +28,16 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/djgurda"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # Russian user-facing text.
+
+[tool.mypy]
+strict = true
+files = ["src", "tests", "scripts"]
+plugins = ["pydantic.mypy"]
+

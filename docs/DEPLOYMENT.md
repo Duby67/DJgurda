@@ -19,14 +19,16 @@ bound concurrency and temporary disk use; measure before changing budgets.
 
 Compose always takes `deploy/compose.yaml` plus one override: `compose.production.yaml` or
 `compose.development.yaml`. The override sets limits, `APP_ENV` and the project name.
-`compose.local.yaml` adds a local build and is not for the server.
+`compose.local.yaml` builds locally, runs as the host user and keeps the database in the
+git-ignored `.data/`; `scripts/local.sh` applies it (`up --build` / `down`). Not for the server.
 
 Runtime properties:
 
 - No published ports; outbound long polling only.
 - Read-only root filesystem; `/tmp` is a 16 MiB tmpfs counted against memory.
 - Logs rotate at 5 MiB, two files.
-- No persistent volumes yet.
+- SQLite at `/data/djgurda.sqlite3` on the named volume `data`, one per Compose project.
+  Deployments keep it; `down -v` deletes it.
 - Healthcheck confirms completed initialization (Telegram lookup and admin notifications), not
   ongoing connectivity.
 
@@ -34,13 +36,14 @@ Runtime properties:
 
 | Event | Checks | Deployment |
 | --- | --- | --- |
-| PR to `development` | `branch-policy`, `version-check`, `tests` | — |
+| PR to `development` | `branch-policy`, `version-check`, `tests`, `lint` | — |
 | PR to `main` | `branch-policy` | — |
 | Merge to `development` | Build image | development |
 | Merge to `main` | Build image | production |
 
 - `branch-policy`: PRs into `main` only from `development`; no PRs from `main` into `development`.
 - `version-check`: `pyproject.toml` version must exceed the base and match `uv.lock`.
+- `lint`: `ruff check`, `ruff format --check`, `mypy` (strict); settings in `pyproject.toml`.
 - Rulesets on both branches: require PR and the checks above, block force pushes and deletions,
   empty bypass list; `development` requires up-to-date branches. Push workflows rely on them.
 - Promote `development` to `main` with merge commits.
