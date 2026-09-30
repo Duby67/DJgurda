@@ -1,28 +1,6 @@
-"""Link extraction and source classification."""
-
-from dataclasses import dataclass
-from urllib.parse import urlsplit
+"""Link extraction from Telegram messages."""
 
 from aiogram.types import Message
-
-
-@dataclass(frozen=True)
-class Source:
-    name: str
-    domains: tuple[str, ...]
-
-    def matches(self, host: str) -> bool:
-        return any(host == domain or host.endswith("." + domain) for domain in self.domains)
-
-
-SOURCES = (
-    Source("YouTube", ("youtube.com", "youtu.be")),
-    Source("TikTok", ("tiktok.com",)),
-    Source("Instagram", ("instagram.com",)),
-    Source("VK", ("vk.com", "vk.ru", "vkvideo.ru")),
-    Source("Coub", ("coub.com",)),
-    Source("Yandex Music", ("music.yandex.ru", "music.yandex.com")),
-)
 
 
 def extract_links(message: Message) -> list[str]:
@@ -37,11 +15,16 @@ def extract_links(message: Message) -> list[str]:
     return links
 
 
-def classify(url: str) -> Source | None:
-    if "://" not in url:
-        url = "https://" + url
-    try:
-        host = urlsplit(url).hostname or ""
-    except ValueError:
-        return None
-    return next((source for source in SOURCES if source.matches(host)), None)
+def strip_links(message: Message) -> str:
+    """Return the message text without visible URLs, one normalized line per paragraph."""
+    text = message.text or message.caption or ""
+    entities = message.entities or message.caption_entities or []
+    data = text.encode("utf-16-le")  # Entity offsets count UTF-16 code units.
+    parts, cursor = [], 0
+    for entity in sorted(entities, key=lambda entity: entity.offset):
+        if entity.type == "url":
+            parts.append(data[cursor * 2 : entity.offset * 2])
+            cursor = entity.offset + entity.length
+    parts.append(data[cursor * 2 :])
+    lines = (" ".join(line.split()) for line in b"".join(parts).decode("utf-16-le").splitlines())
+    return "\n".join(line for line in lines if line)

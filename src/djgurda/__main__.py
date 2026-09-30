@@ -9,6 +9,7 @@ from aiogram import Bot
 
 from djgurda.bot import create_dispatcher
 from djgurda.config import Settings
+from djgurda.media import prepare_work_dir
 from djgurda.storage import Storage
 
 READY_FILE = Path("/tmp/djgurda-ready")
@@ -21,9 +22,10 @@ async def mark_ready() -> None:
 async def run(settings: Settings) -> None:
     READY_FILE.unlink(missing_ok=True)
     try:
+        prepare_work_dir(settings.work_dir)
         with closing(Storage(settings.database_path)) as storage:
             async with Bot(token=settings.bot_token.get_secret_value()) as bot:
-                dispatcher = create_dispatcher(settings.admin_ids, storage)
+                dispatcher = create_dispatcher(settings.admin_ids, storage, settings.work_dir)
                 dispatcher.startup.register(mark_ready)
                 # Skip messages sent while offline.
                 await bot.delete_webhook(drop_pending_updates=True)

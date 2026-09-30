@@ -6,6 +6,7 @@ services:
       ADMIN_IDS: ${ADMIN_IDS:?Set ADMIN_IDS to a nonempty JSON array of administrator IDs}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DATABASE_PATH: /data/djgurda.sqlite3
+      WORK_DIR: /data/work
     volumes:
       - data:/data
     init: true
