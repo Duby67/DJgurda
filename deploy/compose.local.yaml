@@ -4,3 +4,7 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     pull_policy: never
+    # Runs as the host user so the bind-mounted .data/ stays writable.
+    user: ${LOCAL_USER:?Start through scripts/local.sh}
+    volumes:
+      - ../.data:/data
