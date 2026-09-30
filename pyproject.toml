@@ -1,12 +1,13 @@
 [project]
 name = "djgurda"
-version = "0.2.0"
+version = "0.3.0"
 description = "Telegram bot for transferring media from links into chats"
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
 dependencies = [
     "aiogram>=3.25,<4",
     "pydantic-settings>=2.12,<3",
+    "yt-dlp[default]>=2025.11",
 ]
 
 [project.scripts]
@@ -41,3 +42,7 @@ strict = true
 files = ["src", "tests", "scripts"]
 plugins = ["pydantic.mypy"]
 
+
+[[tool.mypy.overrides]]
+module = ["yt_dlp", "yt_dlp.*"]
+ignore_missing_imports = true
