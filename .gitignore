@@ -20,6 +20,9 @@
 /.mcp.json
 /.claude/settings.local.json
 
+# Local bot database
+/.data/
+
 # Logs and temporary files
 *.log
 tmp/

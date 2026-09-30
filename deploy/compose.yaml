@@ -5,6 +5,9 @@ services:
       BOT_TOKEN: ${BOT_TOKEN:?Set BOT_TOKEN for this environment}
       ADMIN_IDS: ${ADMIN_IDS:?Set ADMIN_IDS to a nonempty JSON array of administrator IDs}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_PATH: /data/djgurda.sqlite3
+    volumes:
+      - data:/data
     init: true
     healthcheck:
       test: ["CMD-SHELL", "test -f /tmp/djgurda-ready"]
@@ -25,3 +28,6 @@ services:
       options:
         max-size: "5m"
         max-file: "2"
+
+volumes:
+  data:

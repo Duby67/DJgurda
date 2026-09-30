@@ -11,5 +11,7 @@ FROM python:3.14-slim-bookworm AS runtime
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH="/app/.venv/bin:$PATH"
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
+# A new named volume copies this owner, so the non-root user can write the database.
+RUN mkdir /data && chown 10001:10001 /data
 USER 10001:10001
 CMD ["djgurda"]

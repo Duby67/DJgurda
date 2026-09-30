@@ -6,9 +6,10 @@ from importlib.metadata import version
 from aiogram import Bot, Dispatcher
 
 from djgurda.chat import create_router
+from djgurda.storage import Storage
 
 
-def create_dispatcher(admin_ids: list[int]) -> Dispatcher:
+def create_dispatcher(admin_ids: list[int], storage: Storage) -> Dispatcher:
     async def notify_admins(bot: Bot) -> None:
         async with timeout(60):
             await bot.me()
@@ -18,5 +19,5 @@ def create_dispatcher(admin_ids: list[int]) -> Dispatcher:
 
     dispatcher = Dispatcher()
     dispatcher.startup.register(notify_admins)
-    dispatcher.include_router(create_router())
+    dispatcher.include_router(create_router(storage))
     return dispatcher

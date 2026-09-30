@@ -31,6 +31,7 @@ Telegram-бот для переноса медиа по ссылке в чат.
 | `BOT_TOKEN` | Токен Telegram-бота; отдельный для каждого окружения |
 | `ADMIN_IDS` | Непустой JSON-массив ID администраторов, например `[123456789]` |
 | `APP_ENV` | `development` (по умолчанию) или `production` |
+| `DATABASE_PATH` | Файл SQLite; в Compose задан как `/data/djgurda.sqlite3` |
 | `LOG_LEVEL` | `DEBUG`, `INFO` (по умолчанию), `WARNING`, `ERROR`, `CRITICAL` |
 
 Переменные процесса имеют приоритет над `.env`. Администратор должен заранее нажать Start в чате

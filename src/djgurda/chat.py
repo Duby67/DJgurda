@@ -7,6 +7,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 from djgurda.links import SOURCES, classify, extract_links
+from djgurda.storage import Storage
 
 HELP = "\n".join(
     [
@@ -21,8 +22,8 @@ HELP = "\n".join(
 )
 
 
-def create_router() -> Router:
-    active: set[int] = set()  # In memory: every chat is paused after a restart.
+def create_router(storage: Storage) -> Router:
+    active = storage.active_chats()  # Cached so paused chats cost no database reads.
     router = Router()
 
     async def is_active(message: Message) -> bool:
@@ -30,11 +31,13 @@ def create_router() -> Router:
 
     @router.message(Command("start"))
     async def start(message: Message) -> None:
+        storage.set_active(message.chat.id, True)
         active.add(message.chat.id)
         await message.answer("Бот активен в этом чате")
 
     @router.message(Command("stop"), is_active)
     async def stop(message: Message) -> None:
+        storage.set_active(message.chat.id, False)
         active.discard(message.chat.id)
         await message.answer("Бот приостановлен в этом чате")
 
