@@ -315,8 +315,8 @@ def test_startup_and_shutdown_notify_only_admins(storage: Storage, tmp_path: Pat
     asyncio.run(dispatcher.emit_startup(bot=bot))
     asyncio.run(dispatcher.emit_shutdown(bot=bot))
     assert bot.send_message.await_args_list == [
-        call(chat_id=admin_id, text=f"Бот {event}\nВерсия: {version('djgurda')}")
-        for event in ("запущен", "выключен")
+        call(chat_id=admin_id, text=text)
+        for text in (f"Бот запущен\nВерсия: {version('djgurda')}", "Бот выключен")
         for admin_id in (100, 200)
     ]
 
