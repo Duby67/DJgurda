@@ -12,7 +12,7 @@ import pytest
 from aiogram import Bot
 from aiogram.types import Chat, Message, MessageEntity, Update, User
 
-from djgurda import chat
+from djgurda import caption, chat
 from djgurda.bot import create_dispatcher
 from djgurda.chat import HELP
 from djgurda.media import Media, MediaError
@@ -69,7 +69,10 @@ def run_script(bot_request: AsyncMock, work_dir: Path, script: list[tuple[int, s
 
 def sent(request: AsyncMock) -> list[tuple[int, str]]:
     methods = [c.args[1] for c in request.await_args_list]
-    return [(m.chat_id, getattr(m, "text", None) or m.caption) for m in methods]
+    return [
+        (m.chat_id, getattr(m, "text", None) or getattr(m, "caption", None) or type(m).__name__)
+        for m in methods
+    ]
 
 
 def test_chat_lifecycle(tmp_path: Path) -> None:
@@ -116,20 +119,50 @@ def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
             raise MediaError("не удалось скачать")
         path = target / "video.mp4"
         path.write_bytes(b"video")
-        return Media(path=path, title="Title", duration=1, width=2, height=3)
+        return Media(path, "Title <1>", "Channel", duration=1, width=2, height=3)
 
     monkeypatch.setattr(chat, "download", download)
     request = AsyncMock(return_value=True)
-    links = "youtu.be/ok youtu.be/fail youtube.com/playlist?list=1"
-    run_script(request, tmp_path, [(42, "/start"), (42, links)])
+    author = '<a href="tg://user?id=42">{}</a>'
+    source = '<a href="https://youtu.be/ok">YouTube</a>'
+    script = [
+        (42, "/start"),
+        (-7, "/start"),
+        (42, "/saymyname  Ivan228 "),
+        (42, "как  смешно youtu.be/ok\n\nда"),  # Delivered, so the original is deleted.
+        (-7, "youtu.be/ok"),  # The nickname belongs to chat 42 only.
+        (42, "youtu.be/ok youtu.be/fail youtube.com/playlist?list=1"),  # Original stays.
+        (42, "статья " * 200 + "youtu.be/ok"),  # Too long for a caption: left untouched.
+    ]
+    run_script(request, tmp_path, script)
 
     assert sent(request) == [
         (42, "Бот активен в этом чате"),
-        (42, "Title"),
+        (-7, "Бот активен в этом чате"),
+        (42, "Имя в этом чате: Ivan228"),
+        (
+            42,
+            f"Title &lt;1&gt; — Channel\n\nкак смешно\nда\n\n{author.format('Ivan228')}\n{source}",
+        ),
+        (42, "DeleteMessage"),
+        (-7, f"Title &lt;1&gt; — Channel\n\n{author.format('Test')}\n{source}"),
+        (-7, "DeleteMessage"),
+        (42, f"Title &lt;1&gt; — Channel\n\n{author.format('Ivan228')}\n{source}"),
         (42, "YouTube/video: не удалось скачать"),
         (42, "YouTube/playlist: обработка ещё не реализована"),
     ]
     assert not list(tmp_path.glob("download-*"))
+
+
+def test_caption_fits_telegram_limit() -> None:
+    author = caption.Author("Ivan", None)
+    text = "т" * 1000
+    assert caption.fits(text, author, "YouTube")
+    assert not caption.fits(text + "т" * 20, author, "YouTube")
+    built = caption.build("Очень длинное название 🎬" * 20, text, author, "YouTube", "https://x")
+    visible = built.replace('<a href="https://x">', "").replace("</a>", "")
+    assert caption.length(visible) == caption.CAPTION_LIMIT
+    assert visible.startswith("Очень") and "…\n\n" in visible
 
 
 @pytest.mark.parametrize(
