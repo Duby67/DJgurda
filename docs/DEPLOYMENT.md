@@ -11,8 +11,9 @@ Target VM: 1 vCPU, ~2 GiB RAM, no swap, 30 GiB disk.
 
 About 430 MiB stays for the OS and Docker. CPU shares favor production. Build images off the
 server, run one bot per environment, and stop development when unused. Downloads run one at a
-time, capped at 50 MB; a short YouTube video peaked at ~75 MiB under both budgets. Measure before
-changing budgets.
+time, capped at 50 MB. A YouTube download peaks at ~330 MiB, of which deno (YouTube's JavaScript
+challenge) takes ~290 MiB. Under the 256 MiB development budget deno is OOM-killed and yt-dlp
+continues with fewer formats. Measure before changing budgets.
 
 ## Image and Compose
 

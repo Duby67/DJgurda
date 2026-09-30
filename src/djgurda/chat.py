@@ -10,10 +10,11 @@ from aiogram import Bot, Router
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command, CommandObject
 from aiogram.types import FSInputFile, Message
+from aiogram.utils.chat_action import ChatActionSender
 
 from djgurda import caption
 from djgurda.links import extract_links, strip_links
-from djgurda.media import DOWNLOAD_PREFIX, MediaError, download
+from djgurda.media import DOWNLOAD_PREFIX, Info, MediaError, download
 from djgurda.sources import SOURCES, classify
 from djgurda.sources.base import Link
 from djgurda.storage import Storage
@@ -31,6 +32,7 @@ HELP = "\n".join(
     ]
 )
 NICKNAME_LIMIT = 32
+QUEUE_LIMIT = 5  # Links waiting or downloading; more are refused instead of piling up.
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,7 @@ logger = logging.getLogger(__name__)
 def create_router(storage: Storage, work_dir: Path) -> Router:
     active = storage.active_chats()  # Cached so paused chats cost no database reads.
     downloads = asyncio.Semaphore(1)  # One download at a time bounds CPU, memory and disk.
+    pending = 0
     router = Router()
 
     async def is_active(message: Message) -> bool:
@@ -84,27 +87,70 @@ def create_router(storage: Storage, work_dir: Path) -> Router:
         url = f"https://t.me/{user.username}" if user.username else f"tg://user?id={user.id}"
         return caption.Author(name, url)
 
+    async def send(
+        message: Message,
+        bot: Bot,
+        link: Link,
+        text: str,
+        info: Info,
+        file: str | FSInputFile,
+        cover: str | FSInputFile | None = None,
+        thumbnail: FSInputFile | None = None,
+    ) -> Message:
+        video = message.answer_video(
+            file,
+            cover=cover,
+            thumbnail=thumbnail,
+            start_timestamp=link.start,
+            caption=caption.build(
+                info.title, info.uploader, text, author(message), link.source.name, link.url
+            ),
+            parse_mode="HTML",
+            duration=info.duration,
+            width=info.width,
+            height=info.height,
+            supports_streaming=True,
+        )
+        return await bot(video, request_timeout=300)  # Uploads up to 50 MB.
+
     async def deliver(message: Message, bot: Bot, link: Link, text: str) -> None:
-        async with downloads:
-            with TemporaryDirectory(dir=work_dir, prefix=DOWNLOAD_PREFIX) as target:
-                media = await asyncio.to_thread(download, link.url, Path(target))
-                video = message.answer_video(
-                    FSInputFile(media.path),
-                    caption=caption.build(
-                        media.title,
-                        media.uploader,
+        nonlocal pending
+        hit = storage.cached(link.key) if link.key else None
+        if link.key and hit:
+            file_id, cover_id, info = hit
+            try:
+                await send(message, bot, link, text, info, file_id, cover_id)
+                return
+            except TelegramBadRequest as error:
+                logger.warning("Cached file for %s is unusable, downloading: %s", link.key, error)
+                storage.forget(link.key)
+        if pending >= QUEUE_LIMIT:
+            raise MediaError("очередь загрузок заполнена, попробуйте позже")
+        pending += 1
+        try:
+            async with (
+                downloads,
+                ChatActionSender.upload_video(
+                    chat_id=message.chat.id, bot=bot, message_thread_id=message.message_thread_id
+                ),
+            ):
+                with TemporaryDirectory(dir=work_dir, prefix=DOWNLOAD_PREFIX) as target:
+                    media = await asyncio.to_thread(download, link.url, Path(target))
+                    sent = await send(
+                        message,
+                        bot,
+                        link,
                         text,
-                        author(message),
-                        link.source.name,
-                        link.url,
-                    ),
-                    parse_mode="HTML",
-                    duration=media.duration,
-                    width=media.width,
-                    height=media.height,
-                    supports_streaming=True,
-                )
-                await bot(video, request_timeout=300)  # Uploads up to 50 MB.
+                        media.info,
+                        FSInputFile(media.path),
+                        FSInputFile(media.cover) if media.cover else None,
+                        FSInputFile(media.thumbnail) if media.thumbnail else None,
+                    )
+        finally:
+            pending -= 1
+        if link.key and sent.video:  # Repeated links are resent by file_id without downloading.
+            cover_id = sent.video.cover[-1].file_id if sent.video.cover else None
+            storage.cache(link.key, sent.video.file_id, cover_id, media.info)
 
     @router.message(is_active)
     async def links(message: Message, bot: Bot) -> None:

@@ -24,4 +24,6 @@ def classify(url: str) -> Link | None:
     except ValueError:
         return None
     source = next((source for source in SOURCES if source.matches(host)), None)
-    return Link(url, source, source.kind(parts)) if source else None
+    if source is None:
+        return None
+    return Link(url, source, source.kind(parts), source.media_id(parts), source.start(parts))

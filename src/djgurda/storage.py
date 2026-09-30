@@ -1,7 +1,10 @@
 """SQLite storage for chat settings."""
 
 import sqlite3
+from dataclasses import astuple
 from pathlib import Path
+
+from djgurda.media import Info
 
 # Bump only for incompatible changes. Additive tables use IF NOT EXISTS, so a rollback to the
 # previous release still opens the database.
@@ -13,6 +16,16 @@ CREATE TABLE IF NOT EXISTS nicknames (
     user_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     PRIMARY KEY (chat_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS media_cache (
+    key TEXT PRIMARY KEY,
+    file_id TEXT NOT NULL,
+    cover_id TEXT,
+    title TEXT NOT NULL,
+    uploader TEXT NOT NULL,
+    duration INTEGER,
+    width INTEGER,
+    height INTEGER
 );
 """
 
@@ -55,6 +68,24 @@ class Storage:
             " ON CONFLICT (chat_id, user_id) DO UPDATE SET name = excluded.name",
             (chat_id, user_id, name),
         )
+
+    def cached(self, key: str) -> tuple[str, str | None, Info] | None:
+        """Return the video file_id, the cover file_id and the metadata."""
+        row = self._db.execute(
+            "SELECT file_id, cover_id, title, uploader, duration, width, height"
+            " FROM media_cache WHERE key = ?",
+            (key,),
+        ).fetchone()
+        return (row[0], row[1], Info(*row[2:])) if row else None
+
+    def cache(self, key: str, file_id: str, cover_id: str | None, info: Info) -> None:
+        self._db.execute(
+            "INSERT OR REPLACE INTO media_cache VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (key, file_id, cover_id, *astuple(info)),
+        )
+
+    def forget(self, key: str) -> None:
+        self._db.execute("DELETE FROM media_cache WHERE key = ?", (key,))
 
     def close(self) -> None:
         self._db.close()
