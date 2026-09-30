@@ -114,12 +114,14 @@ def test_classify(url: str, source: str | None) -> None:
     assert (result and result.name) == source
 
 
-def test_startup_notifies_only_admins(storage: Storage) -> None:
+def test_startup_and_shutdown_notify_only_admins(storage: Storage) -> None:
     bot = AsyncMock()
     dispatcher = create_dispatcher([100, 200, 100], storage)
     asyncio.run(dispatcher.emit_startup(bot=bot))
+    asyncio.run(dispatcher.emit_shutdown(bot=bot))
     assert bot.send_message.await_args_list == [
-        call(chat_id=admin_id, text=f"Бот запущен\nВерсия: {version('djgurda')}")
+        call(chat_id=admin_id, text=f"Бот {event}\nВерсия: {version('djgurda')}")
+        for event in ("запущен", "выключен")
         for admin_id in (100, 200)
     ]
 
