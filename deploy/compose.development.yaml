@@ -1,0 +1,10 @@
+name: djgurda-development
+services:
+  bot:
+    environment:
+      APP_ENV: development
+    restart: "no"
+    cpus: 0.10
+    cpu_shares: 128
+    mem_limit: 256m
+    memswap_limit: 256m

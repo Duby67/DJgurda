@@ -5,6 +5,7 @@
 *.local.env
 *.local.json
 *.local.yaml
+!deploy/compose.local.yaml
 *.local.yml
 *.pem
 *.key
@@ -33,4 +34,17 @@ Thumbs.db
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+!.vscode/tasks.json
 *.code-workspace
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
