@@ -10,7 +10,6 @@ from aiogram import Bot
 from djgurda.bot import create_dispatcher
 from djgurda.config import Settings
 from djgurda.media import prepare_work_dir
-from djgurda.sources import yandex_music
 from djgurda.storage import Storage
 
 READY_FILE = Path("/tmp/djgurda-ready")
@@ -24,8 +23,6 @@ async def run(settings: Settings) -> None:
     READY_FILE.unlink(missing_ok=True)
     try:
         prepare_work_dir(settings.work_dir)
-        token = settings.yandex_music_token
-        yandex_music.configure(token.get_secret_value() if token else None)
         with closing(Storage(settings.database_path)) as storage:
             async with Bot(token=settings.bot_token.get_secret_value()) as bot:
                 dispatcher = create_dispatcher(settings.admin_ids, storage, settings.work_dir)

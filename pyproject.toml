@@ -1,14 +1,13 @@
 [project]
 name = "djgurda"
-version = "2.0.4.2"
+version = "0.3.0"
 description = "Telegram bot for transferring media from links into chats"
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
 dependencies = [
     "aiogram>=3.25,<4",
     "pydantic-settings>=2.12,<3",
-    "yandex-music>=2.2,<3",
-    "yt-dlp[default,curl-cffi]>=2025.11",
+    "yt-dlp[default]>=2025.11",
 ]
 
 [project.scripts]
@@ -45,5 +44,5 @@ plugins = ["pydantic.mypy"]
 
 
 [[tool.mypy.overrides]]
-module = ["yt_dlp", "yt_dlp.*", "yandex_music", "yandex_music.*"]
+module = ["yt_dlp", "yt_dlp.*"]
 ignore_missing_imports = true
