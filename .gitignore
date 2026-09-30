@@ -5,6 +5,7 @@
 *.local.env
 *.local.json
 *.local.yaml
+!deploy/compose.local.yaml
 *.local.yml
 *.pem
 *.key
@@ -33,7 +34,7 @@ Thumbs.db
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
-!.vscode/launch.json
+!.vscode/tasks.json
 *.code-workspace
 
 # Python

@@ -40,6 +40,9 @@ Image publishing and automated deployment workflows are not implemented yet.
 
 Use the base Compose file together with exactly one environment override. The base
 file is not a standalone deployment: resource limits and environment are in the overrides.
+For local WSL runs, additionally use `compose.local.yaml` to build the same runtime
+image locally; see [local startup](../README.md#локальный-запуск). Do not use the
+local build override on the server.
 
 Create a private environment file outside Git for each bot, with permissions `600`:
 

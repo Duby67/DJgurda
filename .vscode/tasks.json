@@ -1,0 +1,64 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "DJgurda: Docker start",
+      "type": "process",
+      "command": "docker",
+      "args": [
+        "compose",
+        "--env-file",
+        "${workspaceFolder}/.env",
+        "-f",
+        "${workspaceFolder}/deploy/compose.yaml",
+        "-f",
+        "${workspaceFolder}/deploy/compose.development.yaml",
+        "-f",
+        "${workspaceFolder}/deploy/compose.local.yaml",
+        "up",
+        "--build",
+        "--force-recreate",
+        "--remove-orphans"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "DJGURDA_IMAGE": "djgurda:local"
+        }
+      },
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "DJgurda: Docker stop",
+      "type": "process",
+      "command": "docker",
+      "args": [
+        "compose",
+        "--env-file",
+        "${workspaceFolder}/.env",
+        "-f",
+        "${workspaceFolder}/deploy/compose.yaml",
+        "-f",
+        "${workspaceFolder}/deploy/compose.development.yaml",
+        "-f",
+        "${workspaceFolder}/deploy/compose.local.yaml",
+        "down"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "DJGURDA_IMAGE": "djgurda:local"
+        }
+      },
+      "problemMatcher": []
+    }
+  ]
+}

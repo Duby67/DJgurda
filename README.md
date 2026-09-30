@@ -11,23 +11,34 @@ Docker-образ, Compose для production/development и бюджеты не�
 
 ## Локальный запуск
 
-Требуются [uv](https://docs.astral.sh/uv/) и Python 3.14 (uv может установить его автоматически).
+Основной запуск в WSL — через Docker Engine / Docker Desktop с интеграцией WSL
+и Docker Compose v2. Открой проект в окне VSCode WSL.
+
+При первой настройке создай `.env` из `.env.example` (не перезаписывай существующий)
+и заполни `BOT_TOKEN` и `ADMIN_IDS`.
+
+В VSCode нажми **Ctrl+Shift+B** или выбери **Tasks: Run Task → DJgurda: Docker start**.
+Задача собирает образ и запускает контейнер с development-ограничениями, показывая
+логи в терминале. После изменений кода останови и запусти задачу заново: код входит
+в образ, автоперезагрузки нет. Для остановки используй **Ctrl+C** в терминале;
+задача **DJgurda: Docker stop** удаляет контейнер и сеть. Python-отладчик F5
+к этому запуску не подключён.
+
+Эквивалент из терминала WSL:
 
 ```bash
-uv sync --locked
-cp .env.example .env
-# Укажи BOT_TOKEN и ADMIN_IDS в .env.
-uv run --locked djgurda
+DJGURDA_IMAGE=djgurda:local docker compose --env-file .env \
+  -f deploy/compose.yaml -f deploy/compose.development.yaml \
+  -f deploy/compose.local.yaml up --build --force-recreate --remove-orphans
 ```
+
+Останови ранее запущенный через Python экземпляр перед запуском контейнера
+с тем же токеном.
 
 Перед первым запуском каждый администратор должен открыть личный чат с ботом и
 нажать Start, чтобы бот мог отправлять ему сообщения. Для каждого одновременно
 работающего окружения используй отдельный токен. Ошибка отправки уведомления
 прерывает запуск. Версия берётся из метаданных пакета, заданных в `pyproject.toml`.
-
-В VSCode установи рекомендуемые расширения и выполни `uv sync --locked`.
-Конфигурация `DJgurda: first start` запускает модуль через F5 с переменными из `.env`;
-тесты доступны в панели Testing. Интерпретатор — `.venv/bin/python`.
 
 | Переменная | Назначение |
 | --- | --- |
@@ -39,6 +50,10 @@ uv run --locked djgurda
 Переменные процесса имеют приоритет над `.env`. Токен нельзя добавлять в Git.
 
 ## Тесты
+
+Для локальных тестов требуются [uv](https://docs.astral.sh/uv/) и Python 3.14.
+После `uv sync --locked` тесты доступны также в панели Testing VSCode;
+интерпретатор — `.venv/bin/python`.
 
 ```bash
 uv sync --locked
