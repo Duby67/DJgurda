@@ -34,7 +34,8 @@ The multi-stage image contains Python and runtime dependencies installed from
 10001 without root privileges. The build context excludes local secrets.
 
 For server deployment, publish the image separately and use its immutable digest.
-Image publishing and automated deployment workflows are not implemented yet.
+The push workflow builds on GitHub-hosted runners, publishes to GHCR and deploys
+by digest. Configure the prerequisites below before the first merge.
 
 ## Configuration and start
 
@@ -56,7 +57,8 @@ LOG_LEVEL=INFO
 Replace the image placeholder with a published image; use `djgurda:local` for a local
 build. Production and development require different Telegram bot tokens.
 Set ADMIN_IDS to the administrator IDs as a nonempty JSON array. A GitHub secret
-is not passed to the container automatically; deployment must supply it explicitly.
+is passed explicitly by the deployment workflow; manual launches need it in the
+environment file.
 The override supplies APP_ENV and the Compose project name; do not set
 COMPOSE_PROJECT_NAME or pass `-p` unless intentionally changing project identity.
 
@@ -92,3 +94,92 @@ shows actual resource usage once containers are running.
 - No fake healthcheck: process restart is not proof of Telegram connectivity.
 - Exceeding the memory ceiling can cause an OOM termination; development stays stopped
   after failure, production follows its restart policy.
+
+
+## GitHub Actions
+
+| Event | Checks | Deployment |
+| --- | --- | --- |
+| PR to `development` | `branch-policy`, `version-check`, `tests` | None |
+| PR to `main` | `branch-policy` only | None |
+| Push after merge to `development` | Build image | development |
+| Push after merge to `main` | Build image | production |
+
+`branch-policy` rejects PRs from `main` or `production` into `development` and
+accepts PRs into `main` only from `development` in this repository. PR jobs have
+read-only repository access and no deployment secrets. The version gate requires
+`MAJOR.MINOR.PATCH` to increase above the PR base version and match `uv.lock`.
+Update `pyproject.toml` and run `uv lock` before opening each development PR.
+Tests run with `uv sync --locked` and `uv run --locked pytest -q`.
+
+Configure active GitHub branch rulesets for both branches: require a PR, block
+force pushes and deletions, and leave the bypass list empty. After the first CI
+run, require the exact checks in the table above. For `development`, enable
+**Require branches to be up to date before merging** so the version comparison
+and tests include the latest target changes. Use merge commits when promoting
+`development` to `main` to preserve their shared history. Push workflows rely on
+these rulesets: they do not rerun PR tests or enforce PR origin themselves.
+
+### GitHub settings and secrets
+
+Create GitHub Environments named `development` and `production`. Restrict their
+allowed deployment branches to `development` and `main`, respectively.
+Set `BOT_TOKEN` separately in each environment, using different bots.
+The repository secret `ADMIN_IDS` must contain a nonempty JSON array of positive
+integer IDs. Administrators must have started a chat with each bot.
+
+Supply these repository secrets (environment overrides can point to another server):
+
+| Secret | Meaning |
+| --- | --- |
+| `DEPLOY_HOST` | SSH hostname or IPv4 address |
+| `DEPLOY_PORT` | SSH port, explicitly set even when it is 22 |
+| `DEPLOY_USER` | SSH user with Docker access |
+| `DEPLOY_SSH_PRIVATE_KEY` | Private SSH key for that user |
+| `DEPLOY_KNOWN_HOSTS` | Verified OpenSSH known_hosts entries; nonstandard ports use `[host]:port` |
+| `DEPLOY_APP_DIR` | Absolute application root without spaces, e.g. `/opt/djgurda` |
+| `ADMIN_IDS` | Administrator IDs shared by both environments |
+
+All settings are required; missing settings fail the deployment. Key verification
+uses `DEPLOY_KNOWN_HOSTS` with strict checking, without dynamically trusting keys
+from the deployment connection. The pipeline uses the automatic `GITHUB_TOKEN`
+for GHCR publishing and pulling; a personal registry token is not needed. If a
+GHCR package already exists, grant this repository Actions access to that package.
+
+### Server prerequisites and rollout
+
+The server must be Linux amd64 with Docker Engine, Compose v2 supporting `up --wait`,
+Bash, tar and flock. The SSH user must be able to run Docker without interactive
+sudo and create/write `DEPLOY_APP_DIR`. No Python, uv, source checkout or image
+build is required on the server. Stop the legacy bot before the first deployment
+if it uses either new environment's token.
+
+Both environments can share one server and the same `DEPLOY_APP_DIR`. They use
+separate subdirectories and Compose projects. A shared server lock serializes
+rollouts; GitHub also serializes runs per branch without interrupting an active
+deployment. Each run checks that its commit is still the branch tip before build
+and again before SSH, so rerunning an outdated commit fails explicitly.
+
+The server pulls the image before replacing configuration, starts it with the
+existing resource limits, and observes the process for 30 seconds. An early exit,
+restart or OOM fails deployment. This is a process check, not proof that Telegram
+polling or the administrator notification succeeded. Application logs stay on the
+server and are not copied to Actions logs automatically.
+
+Runtime configuration is stored with private permissions under
+`DEPLOY_APP_DIR/development` or `DEPLOY_APP_DIR/production`; registry credentials
+and transfer staging are temporary and cleaned up on exit. The previous runtime
+configuration is saved in the environment's `previous` directory. Failed startup
+is reported without automatic rollback; inspect logs privately and restore the
+previous configuration if needed. Registry credentials expire with the workflow,
+so a later manual pull of a private image requires registry authentication.
+
+To stop development when unused, run from `DEPLOY_APP_DIR/development`:
+
+```bash
+docker compose --env-file runtime.env -f compose.yaml -f compose.environment.yaml down
+```
+
+Use the same file arguments with `logs --tail 50 bot` for local diagnostics or
+`up -d --no-build` after restoring previous files. Keep disk usage under observation
+and remove obsolete application images that are no longer needed for rollback.
