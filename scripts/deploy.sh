@@ -21,7 +21,7 @@ def require(condition, message):
 e = os.environ
 require(e['DEPLOY_ENV'] in ('development', 'production'), 'Invalid DEPLOY_ENV')
 require(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.-]*', e['DEPLOY_HOST']), 'DEPLOY_HOST must be a hostname or IPv4 address')
-require(re.fullmatch(r'[a-z_][a-z0-9_-]*', e['DEPLOY_USER']), 'Invalid DEPLOY_USER')
+require(re.fullmatch(r'[A-Za-z_][A-Za-z0-9_-]*', e['DEPLOY_USER']), 'Invalid DEPLOY_USER')
 require(e['DEPLOY_PORT'].isdigit() and 1 <= int(e['DEPLOY_PORT']) <= 65535, 'Invalid DEPLOY_PORT')
 p = PurePosixPath(e['DEPLOY_APP_DIR'])
 require(p.is_absolute() and len(p.parts) > 1 and '..' not in p.parts and re.fullmatch(r'/[A-Za-z0-9_./-]+', str(p)), 'DEPLOY_APP_DIR must be an absolute non-root path without spaces or ..')
