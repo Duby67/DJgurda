@@ -1,12 +1,22 @@
-"""Source contract: a module per site describes its links; the chat flow is shared."""
+"""Source contract: a module per site describes its links and how to fetch them.
+
+The chat flow (reading messages, captions, delivery) is shared by all sources.
+"""
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import SplitResult
+
+from djgurda.media import Media, download
 
 
 def unknown(url: SplitResult) -> None:
     return None
+
+
+def within(host: str, domain: str) -> bool:
+    return host == domain or host.endswith("." + domain)
 
 
 @dataclass(frozen=True)
@@ -17,14 +27,24 @@ class Source:
     downloadable: frozenset[str] = frozenset()
     media_id: Callable[[SplitResult], str | None] = unknown  # Stable id for the file_id cache.
     start: Callable[[SplitResult], int | None] = unknown  # Playback start in seconds.
+    # Mirror domain -> real domain, e.g. kkinstagram.com -> instagram.com; subdomains are kept.
+    aliases: tuple[tuple[str, str], ...] = ()
+    tracking: frozenset[str] = frozenset()  # Query parameters dropped from the canonical link.
+    audio: frozenset[str] = frozenset()  # Kinds delivered as audio instead of video.
+    fetch: Callable[[str, Path], Media] = download  # Canonical URL -> downloaded media.
 
-    def matches(self, host: str) -> bool:
-        return any(host == domain or host.endswith("." + domain) for domain in self.domains)
+    def canonical_host(self, host: str) -> str | None:
+        if any(within(host, domain) for domain in self.domains):
+            return host
+        for alias, domain in self.aliases:
+            if within(host, alias):
+                return host.removesuffix(alias) + domain
+        return None
 
 
 @dataclass(frozen=True)
 class Link:
-    url: str
+    url: str  # Canonical: real domain, no tracking parameters.
     source: Source
     kind: str | None
     media_id: str | None = None
@@ -41,3 +61,7 @@ class Link:
     @property
     def downloadable(self) -> bool:
         return self.kind in self.source.downloadable
+
+    @property
+    def audio(self) -> bool:
+        return self.kind in self.source.audio

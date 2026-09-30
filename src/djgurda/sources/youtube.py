@@ -59,4 +59,6 @@ YOUTUBE = Source(
     frozenset({"video", "shorts", "clip"}),
     media_id,
     start,
+    aliases=(("youtube-nocookie.com", "youtube.com"), ("koutube.com", "youtube.com")),
+    tracking=frozenset({"si", "feature", "pp"}),
 )
