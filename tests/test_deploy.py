@@ -1,0 +1,95 @@
+"""Run the remote release lifecycle with an offline Docker substitute."""
+
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+import pytest
+
+ROOT = Path(__file__).parents[1]
+
+
+@pytest.fixture
+def deployment(tmp_path):
+    tools = tmp_path / "bin"
+    tools.mkdir()
+    docker = tools / "docker"
+    docker.write_text(f"#!{sys.executable}\n" + '''
+import os, pathlib, sys
+args = sys.argv[1:]
+state = pathlib.Path(os.environ['FAKE_STATE'])
+if args[0] == 'login':
+    sys.stdin.read()
+elif args[0] == 'compose':
+    config = pathlib.Path(args[args.index('--env-file') + 1]).read_text()
+    image = next(line.split('=', 1)[1] for line in config.splitlines() if line.startswith('DJGURDA_IMAGE='))
+    if 'up' in args:
+        state.write_text(image)
+        if image == os.environ.get('FAIL_IMAGE'):
+            raise SystemExit(1)
+    elif 'stop' in args:
+        state.unlink(missing_ok=True)
+    elif 'ps' in args:
+        print('offline-container')
+elif args[0] == 'inspect':
+    print(state.read_text() if args[args.index('--format') + 1] == '{{.Config.Image}}' else 'true 0 false healthy')
+''')
+    docker.chmod(0o755)
+    sleep = tools / "sleep"
+    sleep.write_text("#!/bin/sh\nexit 0\n")
+    sleep.chmod(0o755)
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    for source, target in [("compose.yaml", "compose.yaml"), ("compose.development.yaml", "compose.environment.yaml")]:
+        (stage / target).write_bytes((ROOT / "deploy" / source).read_bytes())
+    (stage / "registry-user").write_text("offline")
+    (stage / "registry-token").write_text("offline-registry-secret")
+
+    def run(digest, *, fail=False):
+        image = "ghcr.io/example/bot@sha256:" + digest * 64
+        (stage / "runtime.env").write_text(f"DJGURDA_IMAGE={image}\nBOT_TOKEN=offline-bot-secret\n")
+        result = subprocess.run(
+            ["bash", str(ROOT / "scripts/deploy-remote.sh"), "stage", "development"],
+            cwd=tmp_path, text=True, capture_output=True,
+            env={**os.environ, "PATH": str(tools) + ":" + os.environ["PATH"],
+                 "FAKE_STATE": str(tmp_path / "running-image"), "FAIL_IMAGE": image if fail else ""},
+        )
+        assert (result.returncode != 0) == fail, result.stdout + result.stderr
+        assert "offline-registry-secret" not in result.stdout + result.stderr
+        assert "offline-bot-secret" not in result.stdout + result.stderr
+        return result
+
+    return tmp_path, run
+
+
+def test_failed_retries_preserve_successful_releases_and_recover(deployment):
+    root, run = deployment
+    env = root / "development"
+    run("a")
+    first = (env / "current").resolve()
+    assert not (env / "previous").exists()
+    run("b")
+    second = (env / "current").resolve()
+    assert (env / "previous").resolve() == first
+    for _ in range(2):
+        result = run("c", fail=True)
+        assert "restored the last successful release" in result.stderr
+        assert (env / "current").resolve() == second
+        assert (env / "previous").resolve() == first
+        assert (root / "running-image").read_text().endswith("b" * 64)
+        assert len(list((env / "releases").iterdir())) == 2
+    run("d")
+    assert (env / "previous").resolve() == second
+    assert not first.exists()
+    assert len(list((env / "releases").iterdir())) == 2
+    assert (env / "current/runtime.env").stat().st_mode & 0o777 == 0o600
+
+
+def test_first_failed_release_is_stopped_without_promotion(deployment):
+    root, run = deployment
+    result = run("a", fail=True)
+    assert "no successful release exists" in result.stderr
+    assert not (root / "development/current").exists()
+    assert not (root / "running-image").exists()
+    assert not list((root / "development/releases").iterdir())

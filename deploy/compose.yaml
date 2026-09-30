@@ -6,6 +6,12 @@ services:
       ADMIN_IDS: ${ADMIN_IDS:?Set ADMIN_IDS to a nonempty JSON array of administrator IDs}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     init: true
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/djgurda-ready"]
+      interval: 5s
+      timeout: 2s
+      start_period: 90s
+      retries: 3
     read_only: true
     cap_drop: [ALL]
     security_opt:
