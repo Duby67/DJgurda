@@ -1,21 +1,26 @@
 """Media download shared by all sources."""
 
 import logging
+import re
 import shutil
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 import yt_dlp
 
 MAX_BYTES = 50 * 1024 * 1024  # Bot API upload limit.
-MAX_RESOLUTION = 480  # Smaller side, so vertical Shorts get 480p as well.
+# Preferred ceiling for the smaller side (vertical Shorts get 480p too); when a source has
+# nothing that small, yt-dlp picks its smallest variant instead.
+MAX_RESOLUTION = 480
 MAX_DURATION = 20 * 60  # Seconds; HLS sizes are often unknown, so length is the cheap guard.
 DOWNLOAD_TIMEOUT = 5 * 60  # Seconds for download and merge of one link.
 DOWNLOAD_PREFIX = "download-"
 THUMBNAIL_SIZE = 320  # Bot API limit for video thumbnails.
+DURATION = re.compile(r"Duration: (\d+):(\d+):(\d+)")
+SIZE = re.compile(r"Video: .*?, (\d{2,5})x(\d{2,5})")
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +57,7 @@ def prepare_work_dir(work_dir: Path) -> None:
         shutil.rmtree(leftover)
 
 
-def download(url: str, target: Path) -> Media:
+def download(url: str, target: Path, headers: dict[str, str] | None = None) -> Media:
     deadline = time.monotonic() + DOWNLOAD_TIMEOUT
 
     def check_deadline(progress: dict[str, Any]) -> None:
@@ -61,7 +66,7 @@ def download(url: str, target: Path) -> Media:
 
     options: dict[str, Any] = {
         "paths": {"home": str(target), "temp": str(target)},
-        "outtmpl": "%(id)s.%(ext)s",
+        "outtmpl": "media.%(ext)s",  # One download per directory; ids can be URLs.
         "format": "bv*+ba/b",
         "format_sort": [f"res:{MAX_RESOLUTION}", "vcodec:h264", "ext:mp4:m4a"],
         "merge_output_format": "mp4",
@@ -76,6 +81,7 @@ def download(url: str, target: Path) -> Media:
         "postprocessors": [
             {"key": "FFmpegThumbnailsConvertor", "format": "jpg", "when": "before_dl"}
         ],
+        "http_headers": headers or {},
         "progress_hooks": [check_deadline],
         "postprocessor_hooks": [check_deadline],
     }
@@ -87,11 +93,6 @@ def download(url: str, target: Path) -> Media:
             if (info.get("duration") or 0) > MAX_DURATION:
                 raise MediaError(f"видео длиннее {MAX_DURATION // 60} минут")
             formats = info.get("requested_formats") or [info]
-            if any(
-                min(item.get("width") or 0, item.get("height") or 0) > MAX_RESOLUTION
-                for item in formats
-            ):
-                raise MediaError(f"нет качества {MAX_RESOLUTION}p или ниже")
             if info.get("section_start") is not None:
                 # Clips: format sizes describe the whole video, so estimate from bitrate (kbit/s).
                 bitrate = sum(item.get("tbr") or 0 for item in formats)
@@ -111,11 +112,36 @@ def download(url: str, target: Path) -> Media:
     path = Path(downloads[0]["filepath"]) if downloads else None
     if path is None or not path.is_file() or path.stat().st_size > MAX_BYTES:
         raise MediaError("файл больше 50 МБ")
+    details = info_of(info)
+    if not (details.duration and details.width and details.height):
+        details = probe(path, details)  # Direct files carry no metadata in yt-dlp.
     cover = next(target.glob("*.jpg"), None)
     if cover is None:
-        logger.warning("No preview image for %s; Telegram will use the first frame", url)
-        return Media(path, info_of(info))
-    return Media(path, info_of(info), cover, thumbnail(cover))
+        logger.info("No preview image for %s; Telegram will use the first frame", url)
+        return Media(path, details)
+    return Media(path, details, cover, thumbnail(cover))
+
+
+def probe(path: Path, info: Info) -> Info:
+    """Fill duration and size from the file header using ffmpeg."""
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-i", str(path)], capture_output=True, text=True, timeout=30
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        logger.warning("Cannot probe %s: %s", path, error)
+        return info
+    duration = DURATION.search(result.stderr)
+    size = SIZE.search(result.stderr)
+    return replace(
+        info,
+        duration=info.duration
+        or (
+            int(duration[1]) * 3600 + int(duration[2]) * 60 + int(duration[3]) if duration else None
+        ),
+        width=info.width or (int(size[1]) if size else None),
+        height=info.height or (int(size[2]) if size else None),
+    )
 
 
 def thumbnail(cover: Path) -> Path | None:
