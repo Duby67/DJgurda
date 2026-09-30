@@ -27,7 +27,6 @@ p = PurePosixPath(e['DEPLOY_APP_DIR'])
 require(p.is_absolute() and len(p.parts) > 1 and '..' not in p.parts and re.fullmatch(r'/[A-Za-z0-9_./-]+', str(p)), 'DEPLOY_APP_DIR must be an absolute non-root path without spaces or ..')
 require(re.fullmatch(r'ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}', e['DJGURDA_IMAGE']), 'DJGURDA_IMAGE must be a GHCR digest')
 require(re.fullmatch(r'[0-9]+:[A-Za-z0-9_-]+', e['BOT_TOKEN']), 'Invalid BOT_TOKEN format')
-require(re.fullmatch(r'[A-Za-z0-9_.-]*', e.get('YANDEX_MUSIC_TOKEN', '')), 'Invalid YANDEX_MUSIC_TOKEN format')
 try:
     admins = json.loads(e['ADMIN_IDS'])
 except ValueError:
@@ -53,7 +52,6 @@ values = {
     'DJGURDA_IMAGE': os.environ['DJGURDA_IMAGE'],
     'BOT_TOKEN': os.environ['BOT_TOKEN'],
     'ADMIN_IDS': json.dumps(json.loads(os.environ['ADMIN_IDS']), separators=(',', ':')),
-    'YANDEX_MUSIC_TOKEN': os.environ.get('YANDEX_MUSIC_TOKEN', ''),  # Optional.
     'LOG_LEVEL': 'INFO',
 }
 Path(sys.argv[1]).write_text(''.join(f'{key}={value}\n' for key, value in values.items()))

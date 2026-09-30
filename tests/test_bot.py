@@ -11,25 +11,14 @@ from unittest.mock import AsyncMock, call
 
 import pytest
 from aiogram import Bot
-from aiogram.methods import SendAudio, SendChatAction, SendVideo, TelegramMethod
-from aiogram.types import (
-    Audio,
-    Chat,
-    FSInputFile,
-    Message,
-    MessageEntity,
-    PhotoSize,
-    Update,
-    User,
-    Video,
-)
+from aiogram.methods import SendChatAction, SendVideo, TelegramMethod
+from aiogram.types import Chat, FSInputFile, Message, MessageEntity, PhotoSize, Update, User, Video
 
 from djgurda import caption, chat
 from djgurda.bot import create_dispatcher
 from djgurda.chat import HELP
 from djgurda.media import Info, Media, MediaError
 from djgurda.sources import classify
-from djgurda.sources.base import Link
 from djgurda.storage import Storage
 
 RESTART = (0, "")
@@ -90,11 +79,6 @@ def sent(request: AsyncMock) -> list[tuple[int, str]]:
 
 
 async def telegram(bot: Bot, method: TelegramMethod[Any], timeout: int | None = None) -> Any:
-    if isinstance(method, SendAudio):
-        audio = Audio(file_id="audio-1", file_unique_id="a", duration=1)
-        return Message(
-            message_id=98, date=datetime.now(UTC), chat=Chat(id=1, type="private"), audio=audio
-        )
     if isinstance(method, SendVideo):  # The bot caches the returned file_id.
         cover = [PhotoSize(file_id="cover-1", file_unique_id="c", width=4, height=3)]
         video = Video(
@@ -108,7 +92,7 @@ async def telegram(bot: Bot, method: TelegramMethod[Any], timeout: int | None = 
 
 def test_chat_lifecycle(tmp_path: Path) -> None:
     request = AsyncMock(return_value=True)
-    link = "смотри vk.com/wall-1_2"
+    link = "смотри vm.tiktok.com/abcd"
     script = [
         (42, link),
         (42, "/stop"),  # Paused until /start.
@@ -134,7 +118,7 @@ def test_chat_lifecycle(tmp_path: Path) -> None:
         (-7, status.format("приостановлен")),
         (-7, HELP),
         (42, status.format("активен")),
-        (42, "VK: обработка ещё не реализована"),
+        (42, "TikTok: обработка ещё не реализована"),
         (42, "Бот приостановлен в этом чате"),
         (42, status.format("приостановлен")),
         (42, "Бот активен в этом чате"),
@@ -146,9 +130,8 @@ def test_chat_lifecycle(tmp_path: Path) -> None:
 def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     downloads = []
 
-    def fetch(link: Link, target: Path) -> Media:
+    def download(url: str, target: Path) -> Media:
         assert target.parent == tmp_path
-        url = link.url
         downloads.append(url)
         if "fail" in url:
             raise MediaError("не удалось скачать")
@@ -156,7 +139,7 @@ def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
         info = Info("Title <1>", "Channel", duration=1, width=2, height=3)
         return Media(path, info, cover, thumbnail)
 
-    monkeypatch.setattr(chat, "fetch", fetch)
+    monkeypatch.setattr(chat, "download", download)
     request = AsyncMock(side_effect=telegram)
     author = '<a href="tg://user?id=42">{}</a>'
     source = '<a href="https://youtu.be/ok">YouTube</a>'
@@ -238,47 +221,6 @@ def test_youtube_start(url: str, start: int | None) -> None:
     assert link and link.start == start
 
 
-def test_audio_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    def fetch(link: Link, target: Path) -> Media:
-        path = target / "track.mp3"
-        return Media(path, Info("Song", "Artist", duration=1, width=None, height=None))
-
-    monkeypatch.setattr(chat, "fetch", fetch)
-    request = AsyncMock(side_effect=telegram)
-    track = "https://music.yandex.ru/album/1/track/2"
-    run_script(request, tmp_path, [(42, "/start"), (42, track), (42, track)])
-
-    audios = [c.args[1] for c in request.await_args_list if isinstance(c.args[1], SendAudio)]
-    assert [(a.title, a.performer, isinstance(a.audio, FSInputFile)) for a in audios] == [
-        ("Song", "Artist", True),
-        ("Song", "Artist", False),
-    ]
-    assert audios[1].audio == "audio-1"  # Cached file_id.
-
-
-@pytest.mark.parametrize(
-    ("url", "canonical"),
-    [
-        (
-            "https://www.kkinstagram.com/reel/DdZAYgNib18/?stkn=MTFv",
-            "https://www.instagram.com/reel/DdZAYgNib18/",
-        ),
-        (
-            "https://www.instagram.com/reel/DdZAYgNib18/?stkn=MTFv&utm_source=ig",
-            "https://www.instagram.com/reel/DdZAYgNib18/",
-        ),
-        ("m.youtube.com/watch?v=x&si=abc&t=5", "https://m.youtube.com/watch?v=x&t=5"),
-        ("https://music.youtube.com/watch?v=x", "https://music.youtube.com/watch?v=x"),
-        ("https://www.youtube-nocookie.com/embed/x", "https://www.youtube.com/embed/x"),
-        ("https://youtu.be/x?si=abc", "https://youtu.be/x"),
-        ("https://vm.vxtiktok.com/ZMabc/", "https://vm.tiktok.com/ZMabc/"),
-    ],
-)
-def test_canonical_links(url: str, canonical: str) -> None:
-    link = classify(url)
-    assert link and link.url == canonical
-
-
 @pytest.mark.parametrize(
     ("url", "label", "downloadable"),
     [
@@ -289,15 +231,7 @@ def test_canonical_links(url: str, canonical: str) -> None:
         ("https://youtube.com/playlist?list=y", "YouTube/playlist", False),
         ("https://www.youtube.com/@name", "YouTube/channel", False),
         ("https://www.youtube.com/", "YouTube", False),
-        ("vm.tiktok.com/ZMabc/", "TikTok/video", True),
-        ("https://www.tiktok.com/@user/video/123?is_from_webapp=1", "TikTok/video", True),
-        ("https://www.tiktok.com/@user/photo/123", "TikTok/photo", False),
-        ("https://www.instagram.com/reel/Dd1/?igsh=x", "Instagram/reel", True),
-        ("https://www.kkinstagram.com/reels/Dd1/", "Instagram/reel", True),
-        ("https://www.instagram.com/p/Dd1/", "Instagram/post", False),
-        ("https://music.yandex.ru/album/1/track/2", "Yandex Music/track", True),
-        ("https://music.yandex.com/track/2", "Yandex Music/track", True),
-        ("https://music.yandex.ru/album/1", "Yandex Music/album", False),
+        ("vm.tiktok.com/abc", "TikTok", False),
         ("HTTPS://M.VK.COM/wall-1_2", "VK", False),
         ("https://notyoutube.com/watch?v=x", None, False),
         ("https://example.com/?u=youtube.com", None, False),
@@ -315,8 +249,8 @@ def test_startup_and_shutdown_notify_only_admins(storage: Storage, tmp_path: Pat
     asyncio.run(dispatcher.emit_startup(bot=bot))
     asyncio.run(dispatcher.emit_shutdown(bot=bot))
     assert bot.send_message.await_args_list == [
-        call(chat_id=admin_id, text=text)
-        for text in (f"Бот запущен\nВерсия: {version('djgurda')}", "Бот выключен")
+        call(chat_id=admin_id, text=f"Бот {event}\nВерсия: {version('djgurda')}")
+        for event in ("запущен", "выключен")
         for admin_id in (100, 200)
     ]
 

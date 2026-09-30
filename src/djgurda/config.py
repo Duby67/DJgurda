@@ -19,14 +19,8 @@ class Settings(BaseSettings):
     admin_ids: list[PositiveInt] = Field(min_length=1, repr=False)
     database_path: Path
     work_dir: Path
-    yandex_music_token: SecretStr | None = None  # Optional: Yandex Music downloads.
     app_env: Literal["development", "production"] = "development"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
-
-    @field_validator("yandex_music_token")
-    @classmethod
-    def blank_token_is_unset(cls, value: SecretStr | None) -> SecretStr | None:
-        return value if value and value.get_secret_value().strip() else None
 
     @field_validator("bot_token")
     @classmethod

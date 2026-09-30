@@ -14,21 +14,18 @@ spec.loader.exec_module(version_gate)
 
 
 @pytest.mark.parametrize(
-    ("base", "current", "locked", "error"),
+    ("current", "locked", "error"),
     [
-        ("0.3.0", "2.0.4.0", "2.0.4.0", None),  # First release with the generation prefix.
-        ("2.0.4.0", "2.0.4.1", "2.0.4.1", None),
-        ("2.0.4.0", "2.0.4.0", "2.0.4.0", "Increase"),
-        ("2.0.4.0", "1.9.9.9", "1.9.9.9", "Increase"),
-        ("2.0.4.0", "2.0.5", "2.0.5", "GENERATION"),
-        ("2.0.4.0", "2.0.4.1-dev", "2.0.4.1-dev", "GENERATION"),
-        ("2.0.4.0", "2.0.4.1", "2.0.4.0", "uv.lock"),
+        ("0.1.1", "0.1.1", None),
+        ("0.1.0", "0.1.0", "Increase"),
+        ("0.0.9", "0.0.9", "Increase"),
+        ("0.1.1", "0.1.0", "uv.lock"),
+        ("0.1.1-dev", "0.1.1-dev", "MAJOR.MINOR.PATCH"),
     ],
 )
 def test_version_gate(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    base: str,
     current: str,
     locked: str,
     error: str | None,
@@ -39,7 +36,7 @@ def test_version_gate(
     monkeypatch.setattr(
         version_gate.subprocess,
         "check_output",
-        lambda *args, **kwargs: f'[project]\nname="djgurda"\nversion="{base}"\n',
+        lambda *args, **kwargs: '[project]\nname="djgurda"\nversion="0.1.0"\n',
     )
     if error:
         with pytest.raises(ValueError, match=error):

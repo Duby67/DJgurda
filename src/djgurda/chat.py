@@ -9,13 +9,12 @@ from tempfile import TemporaryDirectory
 from aiogram import Bot, Router
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command, CommandObject
-from aiogram.methods import SendAudio, SendVideo
 from aiogram.types import FSInputFile, Message
 from aiogram.utils.chat_action import ChatActionSender
 
 from djgurda import caption
 from djgurda.links import extract_links, strip_links
-from djgurda.media import DOWNLOAD_PREFIX, Info, Media, MediaError
+from djgurda.media import DOWNLOAD_PREFIX, Info, MediaError, download
 from djgurda.sources import SOURCES, classify
 from djgurda.sources.base import Link
 from djgurda.storage import Storage
@@ -36,10 +35,6 @@ NICKNAME_LIMIT = 32
 QUEUE_LIMIT = 5  # Links waiting or downloading; more are refused instead of piling up.
 
 logger = logging.getLogger(__name__)
-
-
-def fetch(link: Link, target: Path) -> Media:
-    return link.source.fetch(link.url, target)
 
 
 def create_router(storage: Storage, work_dir: Path) -> Router:
@@ -102,34 +97,21 @@ def create_router(storage: Storage, work_dir: Path) -> Router:
         cover: str | FSInputFile | None = None,
         thumbnail: FSInputFile | None = None,
     ) -> Message:
-        text = caption.build(
-            info.title, info.uploader, text, author(message), link.source.name, link.url
+        video = message.answer_video(
+            file,
+            cover=cover,
+            thumbnail=thumbnail,
+            start_timestamp=link.start,
+            caption=caption.build(
+                info.title, info.uploader, text, author(message), link.source.name, link.url
+            ),
+            parse_mode="HTML",
+            duration=info.duration,
+            width=info.width,
+            height=info.height,
+            supports_streaming=True,
         )
-        method: SendAudio | SendVideo
-        if link.audio:
-            method = message.answer_audio(
-                file,
-                caption=text,
-                parse_mode="HTML",
-                title=info.title,
-                performer=info.uploader,
-                duration=info.duration,
-                thumbnail=thumbnail,
-            )
-        else:
-            method = message.answer_video(
-                file,
-                cover=cover,
-                thumbnail=thumbnail,
-                start_timestamp=link.start,
-                caption=text,
-                parse_mode="HTML",
-                duration=info.duration,
-                width=info.width,
-                height=info.height,
-                supports_streaming=True,
-            )
-        return await bot(method, request_timeout=300)  # Uploads up to 50 MB.
+        return await bot(video, request_timeout=300)  # Uploads up to 50 MB.
 
     async def deliver(message: Message, bot: Bot, link: Link, text: str) -> None:
         nonlocal pending
@@ -148,15 +130,12 @@ def create_router(storage: Storage, work_dir: Path) -> Router:
         try:
             async with (
                 downloads,
-                ChatActionSender(
-                    bot=bot,
-                    chat_id=message.chat.id,
-                    message_thread_id=message.message_thread_id,
-                    action="upload_voice" if link.audio else "upload_video",
+                ChatActionSender.upload_video(
+                    chat_id=message.chat.id, bot=bot, message_thread_id=message.message_thread_id
                 ),
             ):
                 with TemporaryDirectory(dir=work_dir, prefix=DOWNLOAD_PREFIX) as target:
-                    media = await asyncio.to_thread(fetch, link, Path(target))
+                    media = await asyncio.to_thread(download, link.url, Path(target))
                     sent = await send(
                         message,
                         bot,
@@ -169,12 +148,9 @@ def create_router(storage: Storage, work_dir: Path) -> Router:
                     )
         finally:
             pending -= 1
-        file = sent.audio or sent.video
-        if link.key and file:  # Repeated links are resent by file_id without downloading.
-            covers = sent.video.cover if sent.video else None
-            storage.cache(
-                link.key, file.file_id, covers[-1].file_id if covers else None, media.info
-            )
+        if link.key and sent.video:  # Repeated links are resent by file_id without downloading.
+            cover_id = sent.video.cover[-1].file_id if sent.video.cover else None
+            storage.cache(link.key, sent.video.file_id, cover_id, media.info)
 
     @router.message(is_active)
     async def links(message: Message, bot: Bot) -> None:
