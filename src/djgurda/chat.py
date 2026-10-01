@@ -7,13 +7,21 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from aiogram import Bot, Router
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.exceptions import (
+    TelegramAPIError,
+    TelegramBadRequest,
+    TelegramForbiddenError,
+    TelegramNetworkError,
+    TelegramRetryAfter,
+    TelegramServerError,
+)
 from aiogram.filters import Command, CommandObject
 from aiogram.methods import SendAudio, SendVideo
 from aiogram.types import FSInputFile, Message
 from aiogram.utils.chat_action import ChatActionSender
 
 from djgurda import caption
+from djgurda.diagnostics import diagnostic, redact
 from djgurda.links import extract_links, strip_links
 from djgurda.media import DOWNLOAD_PREFIX, Info, Media, MediaError
 from djgurda.sources import SOURCES, classify
@@ -36,6 +44,20 @@ NICKNAME_LIMIT = 32
 QUEUE_LIMIT = 5  # Links waiting or downloading; more are refused instead of piling up.
 
 logger = logging.getLogger(__name__)
+
+
+def delivery_reason(error: Exception) -> str:
+    if isinstance(error, TelegramRetryAfter):
+        return f"Telegram ограничил отправку, повторите через {error.retry_after} с"
+    if isinstance(error, TelegramForbiddenError):
+        return "нет прав на отправку в этот чат; проверьте разрешения бота"
+    if isinstance(error, TimeoutError):
+        return "операция не завершилась вовремя, попробуйте позже"
+    if isinstance(error, (TelegramNetworkError, TelegramServerError)):
+        return "не удалось отправить медиа: Telegram не ответил или произошёл сбой сети"
+    if isinstance(error, TelegramAPIError):
+        return "не удалось отправить медиа: Telegram отклонил запрос"
+    return "не удалось обработать ссылку из-за внутренней ошибки бота"
 
 
 def fetch(link: Link, target: Path) -> Media:
@@ -140,7 +162,9 @@ def create_router(storage: Storage, work_dir: Path) -> Router:
                 await send(message, bot, link, text, info, file_id, cover_id)
                 return
             except TelegramBadRequest as error:
-                logger.warning("Cached file for %s is unusable, downloading: %s", link.key, error)
+                logger.warning(
+                    "Cached file for %s is unusable, downloading: %s", link.key, redact(str(error))
+                )
                 storage.forget(link.key)
         if pending >= QUEUE_LIMIT:
             raise MediaError("очередь загрузок заполнена, попробуйте позже")
@@ -191,11 +215,33 @@ def create_router(storage: Storage, work_dir: Path) -> Router:
                 await deliver(message, bot, link, text)
                 delivered += 1
             except MediaError as error:
-                await message.reply(f"{link.label}: {error}")
+                await report_failure(message, link, error, str(error))
+            except Exception as error:
+                await report_failure(message, link, error, delivery_reason(error))
         if delivered == len(found):
             try:
                 await message.delete()
-            except (TelegramBadRequest, TelegramForbiddenError) as error:
-                logger.warning("Cannot delete the original message; grant delete rights: %s", error)
+            except TelegramAPIError as error:
+                logger.warning("Cannot delete the original message: %s", redact(str(error)))
+
+    async def report_failure(message: Message, link: Link, error: Exception, reason: str) -> None:
+        logger.error(
+            "Media delivery failed source=%s chat=%s message=%s reason=%s\n%s",
+            link.label,
+            message.chat.id,
+            message.message_id,
+            reason,
+            diagnostic(error),
+        )
+        try:
+            await message.reply(f"{link.label}: {reason}")
+        except Exception as notification_error:
+            logger.error(
+                "Cannot notify user source=%s chat=%s message=%s\n%s",
+                link.label,
+                message.chat.id,
+                message.message_id,
+                diagnostic(notification_error),
+            )
 
     return router

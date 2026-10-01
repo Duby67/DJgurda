@@ -11,7 +11,15 @@ from unittest.mock import AsyncMock, call
 
 import pytest
 from aiogram import Bot
-from aiogram.methods import SendAudio, SendChatAction, SendVideo, TelegramMethod
+from aiogram.exceptions import TelegramNetworkError
+from aiogram.methods import (
+    DeleteMessage,
+    SendAudio,
+    SendChatAction,
+    SendMessage,
+    SendVideo,
+    TelegramMethod,
+)
 from aiogram.types import (
     Audio,
     Chat,
@@ -192,6 +200,59 @@ def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     assert isinstance(uploaded.video, FSInputFile) and isinstance(uploaded.thumbnail, FSInputFile)
     assert isinstance(uploaded.cover, FSInputFile)
     assert [(video.video, video.cover) for video in cached] == [("file-1", "cover-1")] * 2
+    assert not list(tmp_path.glob("download-*"))
+
+
+@pytest.mark.parametrize("notification_fails", [False, True])
+def test_upload_failure_keeps_original_and_continues(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    notification_fails: bool,
+) -> None:
+    monkeypatch.setattr(
+        chat, "fetch", lambda link, target: Media(target / "video.mp4", Info("", "", 1, 2, 3))
+    )
+    uploads = 0
+
+    async def request(bot: Bot, method: TelegramMethod[Any], timeout: int | None = None) -> Any:
+        nonlocal uploads
+        if isinstance(method, SendVideo):
+            uploads += 1
+            if uploads == 1:
+                raise TelegramNetworkError(method=method, message="Request timeout")
+        if notification_fails and isinstance(method, SendMessage) and "Telegram" in method.text:
+            raise TelegramNetworkError(method=method, message="Reply timeout")
+        return await telegram(bot, method, timeout)
+
+    mock = AsyncMock(side_effect=request)
+    run_script(mock, tmp_path, [(42, "/start"), (42, "youtu.be/fail youtu.be/ok")])
+    methods = [c.args[1] for c in mock.await_args_list]
+    assert uploads == 2
+    assert not any(isinstance(m, DeleteMessage) for m in methods)
+    assert any(
+        isinstance(m, SendMessage) and "не удалось отправить медиа" in m.text for m in methods
+    )
+    assert "TelegramNetworkError" in caplog.text
+    assert "source=YouTube/video chat=42 message=2" in caplog.text
+    assert ("Cannot notify user" in caplog.text) == notification_fails
+    assert not list(tmp_path.glob("download-*"))
+
+
+def test_unexpected_download_failure_is_visible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    def fetch(link: Link, target: Path) -> Media:
+        raise OSError("Disk full")
+
+    monkeypatch.setattr(chat, "fetch", fetch)
+    request = AsyncMock(side_effect=telegram)
+    run_script(request, tmp_path, [(42, "/start"), (42, "youtu.be/fail")])
+    assert sent(request)[-1] == (
+        42,
+        "YouTube/video: не удалось обработать ссылку из-за внутренней ошибки бота",
+    )
+    assert "OSError: Disk full" in caplog.text
     assert not list(tmp_path.glob("download-*"))
 
 
