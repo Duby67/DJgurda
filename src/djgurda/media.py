@@ -11,6 +11,8 @@ from typing import Any
 
 import yt_dlp
 
+from djgurda.diagnostics import DownloadLogger
+
 MAX_BYTES = 50 * 1024 * 1024  # Bot API upload limit.
 # Preferred ceiling for the smaller side (vertical Shorts get 480p too); when a source has
 # nothing that small, yt-dlp picks its smallest variant instead.
@@ -27,6 +29,25 @@ logger = logging.getLogger(__name__)
 
 class MediaError(Exception):
     """A user-facing reason why a link produced no media."""
+
+
+def download_reason(error: Exception) -> str:
+    reason = str(error).lower()
+    if any(word in reason for word in ("timed out", "timeout")):
+        return "источник не ответил вовремя, попробуйте позже"
+    if any(word in reason for word in ("sign in", "log in", "login", "cookies", "private video")):
+        return "источник требует авторизацию; бот не может скачать это видео"
+    if any(
+        word in reason
+        for word in (
+            "video unavailable",
+            "video is not available",
+            "has been removed",
+            "http error 404",
+        )
+    ):
+        return "видео недоступно: удалено или ограничено источником"
+    return "не удалось скачать медиа с источника, попробуйте позже"
 
 
 class Timeout(yt_dlp.utils.DownloadCancelled):  # type: ignore[misc]  # yt-dlp is untyped.
@@ -75,6 +96,7 @@ def download(url: str, target: Path, headers: dict[str, str] | None = None) -> M
         "cachedir": False,
         "socket_timeout": 30,
         "quiet": True,
+        "logger": DownloadLogger(logger),
         "no_warnings": True,
         "noprogress": True,
         "writethumbnail": True,
@@ -107,10 +129,12 @@ def download(url: str, target: Path, headers: dict[str, str] | None = None) -> M
     except Timeout as error:
         raise MediaError(f"загрузка дольше {DOWNLOAD_TIMEOUT // 60} минут") from error
     except yt_dlp.utils.DownloadError as error:
-        raise MediaError("не удалось скачать") from error
+        raise MediaError(download_reason(error)) from error
     downloads = info.get("requested_downloads") or []
     path = Path(downloads[0]["filepath"]) if downloads else None
-    if path is None or not path.is_file() or path.stat().st_size > MAX_BYTES:
+    if path is None or not path.is_file():
+        raise MediaError("источник не предоставил файл для скачивания")
+    if path.stat().st_size > MAX_BYTES:
         raise MediaError("файл больше 50 МБ")
     details = info_of(info)
     if not (details.duration and details.width and details.height):
