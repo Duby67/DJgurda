@@ -40,7 +40,13 @@ finish() {
   if ((status != 0)); then
     set +e
     if ((activated)); then
-      if [[ -n "$current" ]]; then
+      if [[ "$environment" == development ]]; then
+        select_compose "$candidate"
+        if ! "${compose[@]}" stop bot; then
+          echo 'Development cleanup failed; stop its container before retrying.' >&2
+        fi
+        echo 'Deployment check failed; development is not restored as a running service.' >&2
+      elif [[ -n "$current" ]]; then
         select_compose "$environment/$current"
         if "${compose[@]}" up -d --no-build --pull never --force-recreate --wait --wait-timeout 180 bot; then
           echo 'Deployment failed; restored the last successful release.' >&2
@@ -81,6 +87,11 @@ for ((attempt=0; attempt<6; attempt++)); do
   fi
 done
 
+# Development proves the rollout, then releases its runtime resources.
+if [[ "$environment" == development ]]; then
+  "${compose[@]}" stop bot
+fi
+
 # Promote only a proven candidate. A failed retry never overwrites these pointers.
 if [[ -n "$current" ]]; then
   ln -sfn "$current" "$environment/.previous.next"
@@ -98,3 +109,6 @@ for directory in "$environment"/releases/release.*; do
   fi
 done
 printf 'Deployment to %s completed; initialized bot stayed healthy for 30 seconds.\n' "$environment"
+if [[ "$environment" == development ]]; then
+  echo 'Development deployment check completed; bot stopped.'
+fi

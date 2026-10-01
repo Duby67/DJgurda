@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run Docker Compose for the local bot with development limits; the database lives in .data/.
+# Run functional checks locally; the database lives in .data/.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p .data

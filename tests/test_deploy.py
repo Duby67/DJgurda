@@ -59,11 +59,16 @@ elif args[0] == 'inspect':
     (stage / "registry-user").write_text("offline")
     (stage / "registry-token").write_text("offline-registry-secret")
 
-    def run(digest: str, *, fail: bool = False) -> subprocess.CompletedProcess[str]:
+    def run(
+        digest: str, *, fail: bool = False, environment: str = "production"
+    ) -> subprocess.CompletedProcess[str]:
+        (stage / "compose.environment.yaml").write_bytes(
+            (ROOT / "deploy" / f"compose.{environment}.yaml").read_bytes()
+        )
         image = "ghcr.io/example/bot@sha256:" + digest * 64
         (stage / "runtime.env").write_text(f"DJGURDA_IMAGE={image}\nBOT_TOKEN=offline-bot-secret\n")
         result = subprocess.run(
-            ["bash", str(ROOT / "scripts/deploy-remote.sh"), "stage", "development"],
+            ["bash", str(ROOT / "scripts/deploy-remote.sh"), "stage", environment],
             cwd=tmp_path,
             text=True,
             capture_output=True,
@@ -86,7 +91,7 @@ def test_failed_retries_preserve_successful_releases_and_recover(
     deployment: tuple[Path, Run],
 ) -> None:
     root, run = deployment
-    env = root / "development"
+    env = root / "production"
     run("a")
     first = (env / "current").resolve()
     assert not (env / "previous").exists()
@@ -111,6 +116,24 @@ def test_first_failed_release_is_stopped_without_promotion(deployment: tuple[Pat
     root, run = deployment
     result = run("a", fail=True)
     assert "no successful release exists" in result.stderr
-    assert not (root / "development/current").exists()
+    assert not (root / "production/current").exists()
     assert not (root / "running-image").exists()
-    assert not list((root / "development/releases").iterdir())
+    assert not list((root / "production/releases").iterdir())
+
+
+def test_development_stops_after_success_and_failure(deployment: tuple[Path, Run]) -> None:
+    root, run = deployment
+    env = root / "development"
+    run("a", fail=True, environment="development")
+    assert not (root / "running-image").exists()
+    assert not (env / "current").exists()
+    result = run("b", environment="development")
+    assert "bot stopped" in result.stdout
+    assert not (root / "running-image").exists()
+    current = (env / "current").resolve()
+    run("c", fail=True, environment="development")
+    assert not (root / "running-image").exists()
+    assert (env / "current").resolve() == current
+    run("d", environment="development")
+    assert not (root / "running-image").exists()
+    assert (env / "previous").resolve() == current
