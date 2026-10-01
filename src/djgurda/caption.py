@@ -66,13 +66,22 @@ def fits(text: str, author: Author, source: str) -> bool:
     return (length(text) + 2 if text else 0) + reserved <= CAPTION_LIMIT
 
 
-def build(title: str, channel: str, text: str, author: Author, source: str, url: str) -> str:
+def build(
+    title: str,
+    channel: str,
+    text: str,
+    author: Author,
+    source: str,
+    url: str,
+    *,
+    include_header: bool = True,
+) -> str:
     rest = [text] if text else []
     budget = CAPTION_LIMIT - sum(length(part) + 2 for part in rest)
     budget -= footer_length(author, source) + 2
     name = escape(author.name)
     sender = f'<a href="{escape(author.url)}">{name}</a>' if author.url else name
-    lines = [escape(header(title, channel, budget))]
+    lines = [escape(header(title, channel, budget))] if include_header else []
     lines += [escape(part) for part in rest]
     lines.append(f'{sender}\n<a href="{escape(url)}">{escape(source)}</a>')
     return "\n\n".join(lines)

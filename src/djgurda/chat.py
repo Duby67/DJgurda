@@ -125,7 +125,13 @@ def create_router(storage: Storage, work_dir: Path) -> Router:
         thumbnail: FSInputFile | None = None,
     ) -> Message:
         text = caption.build(
-            info.title, info.uploader, text, author(message), link.source.name, link.url
+            info.title,
+            info.uploader,
+            text,
+            author(message),
+            link.source.name,
+            link.url,
+            include_header=not link.audio,
         )
         method: SendAudio | SendVideo
         if link.audio:

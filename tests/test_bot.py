@@ -307,7 +307,7 @@ def test_audio_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(chat, "fetch", fetch)
     request = AsyncMock(side_effect=telegram)
     track = "https://music.yandex.ru/album/1/track/2"
-    run_script(request, tmp_path, [(42, "/start"), (42, track), (42, track)])
+    run_script(request, tmp_path, [(42, "/start"), (42, f"Слушай <это> {track}"), (42, track)])
 
     audios = [c.args[1] for c in request.await_args_list if isinstance(c.args[1], SendAudio)]
     assert [(a.title, a.performer, isinstance(a.audio, FSInputFile)) for a in audios] == [
@@ -315,6 +315,8 @@ def test_audio_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
         ("Song", "Artist", False),
     ]
     assert audios[1].audio == "audio-1"  # Cached file_id.
+    footer = f'<a href="tg://user?id=42">Test</a>\n<a href="{track}">Yandex Music</a>'
+    assert [audio.caption for audio in audios] == [f"Слушай &lt;это&gt;\n\n{footer}", footer]
 
 
 @pytest.mark.parametrize(
