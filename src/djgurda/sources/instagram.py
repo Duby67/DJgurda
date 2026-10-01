@@ -7,6 +7,7 @@ from urllib.parse import SplitResult, urlsplit
 
 import yt_dlp
 
+from djgurda.diagnostics import DownloadLogger, redact
 from djgurda.media import Media, download
 from djgurda.sources.base import Source
 
@@ -39,12 +40,18 @@ def media_id(url: SplitResult) -> str | None:
 
 def describe(url: str) -> tuple[str, str]:
     """Best-effort title and author; Instagram often requires a login for this."""
-    options = {"quiet": True, "no_warnings": True, "cachedir": False, "socket_timeout": 15}
+    options = {
+        "quiet": True,
+        "no_warnings": True,
+        "cachedir": False,
+        "socket_timeout": 15,
+        "logger": DownloadLogger(logger),
+    }
     try:
         with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=False)
     except yt_dlp.utils.DownloadError as error:
-        logger.info("No Instagram metadata for %s: %s", url, error)
+        logger.info("No Instagram metadata: %s", redact(str(error)))
         return "", ""
     text = (info.get("description") or "").split("\n", 1)[0]
     return text, info.get("channel") or info.get("uploader") or ""

@@ -11,7 +11,15 @@ from unittest.mock import AsyncMock, call
 
 import pytest
 from aiogram import Bot
-from aiogram.methods import SendAudio, SendChatAction, SendVideo, TelegramMethod
+from aiogram.exceptions import TelegramNetworkError
+from aiogram.methods import (
+    DeleteMessage,
+    SendAudio,
+    SendChatAction,
+    SendMessage,
+    SendVideo,
+    TelegramMethod,
+)
 from aiogram.types import (
     Audio,
     Chat,
@@ -24,7 +32,7 @@ from aiogram.types import (
     Video,
 )
 
-from djgurda import caption, chat
+from djgurda import caption, chat, emoji
 from djgurda.bot import create_dispatcher
 from djgurda.chat import HELP
 from djgurda.media import Info, Media, MediaError
@@ -128,19 +136,28 @@ def test_chat_lifecycle(tmp_path: Path) -> None:
 
     run_script(request, tmp_path, script)
 
-    status = "Бот {} в этом чате\nВерсия: " + version("djgurda")
+    status = (
+        f"{emoji.html('bot')} Бот {{}} в этом чате\n"
+        f"{emoji.html('version')} Версия: {version('djgurda')}"
+    )
     assert sent(request) == [
-        (42, "Бот активен в этом чате"),
+        (42, f"{emoji.html('success')} Бот активен в этом чате"),
         (-7, status.format("приостановлен")),
         (-7, HELP),
         (42, status.format("активен")),
-        (42, "VK: обработка ещё не реализована"),
-        (42, "Бот приостановлен в этом чате"),
+        (42, f"{emoji.html('warning')} VK: обработка ещё не реализована"),
+        (42, f"{emoji.html('warning')} Бот приостановлен в этом чате"),
         (42, status.format("приостановлен")),
-        (42, "Бот активен в этом чате"),
+        (42, f"{emoji.html('success')} Бот активен в этом чате"),
         (42, status.format("активен")),
         (-7, status.format("приостановлен")),
     ]
+    methods = [c.args[1] for c in request.await_args_list]
+    assert all(
+        m.parse_mode == "HTML"
+        for m in methods
+        if isinstance(m, SendMessage) and "<tg-emoji" in m.text
+    )
 
 
 def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -151,7 +168,7 @@ def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
         url = link.url
         downloads.append(url)
         if "fail" in url:
-            raise MediaError("не удалось скачать")
+            raise MediaError("не удалось скачать <private>")
         path, cover, thumbnail = target / "video.mp4", target / "cover.jpg", target / "thumb.jpg"
         info = Info("Title <1>", "Channel", duration=1, width=2, height=3)
         return Media(path, info, cover, thumbnail)
@@ -159,7 +176,7 @@ def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(chat, "fetch", fetch)
     request = AsyncMock(side_effect=telegram)
     author = '<a href="tg://user?id=42">{}</a>'
-    source = '<a href="https://youtu.be/ok">YouTube</a>'
+    source = emoji.html("YouTube") + ' <a href="https://youtu.be/ok">YouTube</a>'
     script = [
         (42, "/start"),
         (-7, "/start"),
@@ -172,8 +189,8 @@ def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     run_script(request, tmp_path, script)
 
     assert sent(request) == [
-        (42, "Бот активен в этом чате"),
-        (-7, "Бот активен в этом чате"),
+        (42, f"{emoji.html('success')} Бот активен в этом чате"),
+        (-7, f"{emoji.html('success')} Бот активен в этом чате"),
         (42, "Имя в этом чате: Ivan228"),
         (
             42,
@@ -183,8 +200,8 @@ def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
         (-7, f"Title &lt;1&gt; — Channel\n\n{author.format('Test')}\n{source}"),
         (-7, "DeleteMessage"),
         (42, f"Title &lt;1&gt; — Channel\n\n{author.format('Ivan228')}\n{source}"),
-        (42, "YouTube/video: не удалось скачать"),
-        (42, "YouTube/playlist: обработка ещё не реализована"),
+        (42, f"{emoji.html('error')} YouTube/video: не удалось скачать &lt;private&gt;"),
+        (42, f"{emoji.html('warning')} YouTube/playlist: обработка ещё не реализована"),
     ]
     assert downloads == ["https://youtu.be/ok", "https://youtu.be/fail"]
     videos = [c.args[1] for c in request.await_args_list if isinstance(c.args[1], SendVideo)]
@@ -192,6 +209,60 @@ def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     assert isinstance(uploaded.video, FSInputFile) and isinstance(uploaded.thumbnail, FSInputFile)
     assert isinstance(uploaded.cover, FSInputFile)
     assert [(video.video, video.cover) for video in cached] == [("file-1", "cover-1")] * 2
+    assert not list(tmp_path.glob("download-*"))
+
+
+@pytest.mark.parametrize("notification_fails", [False, True])
+def test_upload_failure_keeps_original_and_continues(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    notification_fails: bool,
+) -> None:
+    monkeypatch.setattr(
+        chat, "fetch", lambda link, target: Media(target / "video.mp4", Info("", "", 1, 2, 3))
+    )
+    uploads = 0
+
+    async def request(bot: Bot, method: TelegramMethod[Any], timeout: int | None = None) -> Any:
+        nonlocal uploads
+        if isinstance(method, SendVideo):
+            uploads += 1
+            if uploads == 1:
+                raise TelegramNetworkError(method=method, message="Request timeout")
+        if notification_fails and isinstance(method, SendMessage) and "Telegram" in method.text:
+            raise TelegramNetworkError(method=method, message="Reply timeout")
+        return await telegram(bot, method, timeout)
+
+    mock = AsyncMock(side_effect=request)
+    run_script(mock, tmp_path, [(42, "/start"), (42, "youtu.be/fail youtu.be/ok")])
+    methods = [c.args[1] for c in mock.await_args_list]
+    assert uploads == 2
+    assert not any(isinstance(m, DeleteMessage) for m in methods)
+    assert any(
+        isinstance(m, SendMessage) and "не удалось отправить медиа" in m.text for m in methods
+    )
+    assert "TelegramNetworkError" in caplog.text
+    assert "source=YouTube/video chat=42 message=2" in caplog.text
+    assert ("Cannot notify user" in caplog.text) == notification_fails
+    assert not list(tmp_path.glob("download-*"))
+
+
+def test_unexpected_download_failure_is_visible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    def fetch(link: Link, target: Path) -> Media:
+        raise OSError("Disk full")
+
+    monkeypatch.setattr(chat, "fetch", fetch)
+    request = AsyncMock(side_effect=telegram)
+    run_script(request, tmp_path, [(42, "/start"), (42, "youtu.be/fail")])
+    assert sent(request)[-1] == (
+        42,
+        f"{emoji.html('error')} YouTube/video: "
+        "не удалось обработать ссылку из-за внутренней ошибки бота",
+    )
+    assert "OSError: Disk full" in caplog.text
     assert not list(tmp_path.glob("download-*"))
 
 
@@ -219,7 +290,7 @@ def test_caption_fits_telegram_limit() -> None:
     assert caption.fits(text, author, "YouTube")
     assert not caption.fits(text + "т" * 20, author, "YouTube")
     built = caption.build("Очень длинное название 🎬 " * 20, "", text, author, "YouTube", "x")
-    visible = built.replace('<a href="x">', "").replace("</a>", "")
+    visible = re.sub(r"<[^>]+>", "", built)
     assert caption.length(visible) <= caption.CAPTION_LIMIT
     assert visible.startswith("Очень длинное") and "…\n\n" + text in visible
 
@@ -246,7 +317,7 @@ def test_audio_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(chat, "fetch", fetch)
     request = AsyncMock(side_effect=telegram)
     track = "https://music.yandex.ru/album/1/track/2"
-    run_script(request, tmp_path, [(42, "/start"), (42, track), (42, track)])
+    run_script(request, tmp_path, [(42, "/start"), (42, f"Слушай <это> {track}"), (42, track)])
 
     audios = [c.args[1] for c in request.await_args_list if isinstance(c.args[1], SendAudio)]
     assert [(a.title, a.performer, isinstance(a.audio, FSInputFile)) for a in audios] == [
@@ -254,6 +325,11 @@ def test_audio_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
         ("Song", "Artist", False),
     ]
     assert audios[1].audio == "audio-1"  # Cached file_id.
+    footer = (
+        f'<a href="tg://user?id=42">Test</a>\n{emoji.html("Yandex Music")} '
+        f'<a href="{track}">Yandex Music</a>'
+    )
+    assert [audio.caption for audio in audios] == [f"Слушай &lt;это&gt;\n\n{footer}", footer]
 
 
 @pytest.mark.parametrize(
@@ -315,8 +391,12 @@ def test_startup_and_shutdown_notify_only_admins(storage: Storage, tmp_path: Pat
     asyncio.run(dispatcher.emit_startup(bot=bot))
     asyncio.run(dispatcher.emit_shutdown(bot=bot))
     assert bot.send_message.await_args_list == [
-        call(chat_id=admin_id, text=text)
-        for text in (f"Бот запущен\nВерсия: {version('djgurda')}", "Бот выключен")
+        call(chat_id=admin_id, text=text, parse_mode="HTML")
+        for text in (
+            f"{emoji.html('success')} Бот запущен\n"
+            f"{emoji.html('version')} Версия: {version('djgurda')}",
+            f"{emoji.html('warning')} Бот выключен",
+        )
         for admin_id in (100, 200)
     ]
 
