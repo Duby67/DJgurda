@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from html import escape
 from importlib.metadata import version
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -20,7 +21,7 @@ from aiogram.methods import SendAudio, SendVideo
 from aiogram.types import FSInputFile, Message
 from aiogram.utils.chat_action import ChatActionSender
 
-from djgurda import caption
+from djgurda import caption, emoji
 from djgurda.diagnostics import diagnostic, redact
 from djgurda.links import extract_links, strip_links
 from djgurda.media import DOWNLOAD_PREFIX, Info, Media, MediaError
@@ -31,7 +32,7 @@ from djgurda.storage import Storage
 HELP = "\n".join(
     [
         "Отправьте ссылку, и бот перенесёт медиа в чат.",
-        "Источники: " + ", ".join(source.name for source in SOURCES),
+        "Источники: " + ", ".join(f"{emoji.html(source.name)} {source.name}" for source in SOURCES),
         "",
         "/start — включить бота в чате",
         "/stop — приостановить бота в чате",
@@ -77,22 +78,28 @@ def create_router(storage: Storage, work_dir: Path) -> Router:
     async def start(message: Message) -> None:
         storage.set_active(message.chat.id, True)
         active.add(message.chat.id)
-        await message.answer("Бот активен в этом чате")
+        await message.answer(f"{emoji.html('success')} Бот активен в этом чате", parse_mode="HTML")
 
     @router.message(Command("stop"), is_active)
     async def stop(message: Message) -> None:
         storage.set_active(message.chat.id, False)
         active.discard(message.chat.id)
-        await message.answer("Бот приостановлен в этом чате")
+        await message.answer(
+            f"{emoji.html('warning')} Бот приостановлен в этом чате", parse_mode="HTML"
+        )
 
     @router.message(Command("status"))
     async def status(message: Message) -> None:
         state = "активен" if message.chat.id in active else "приостановлен"
-        await message.answer(f"Бот {state} в этом чате\nВерсия: {version('djgurda')}")
+        await message.answer(
+            f"{emoji.html('bot')} Бот {state} в этом чате\n"
+            f"{emoji.html('version')} Версия: {version('djgurda')}",
+            parse_mode="HTML",
+        )
 
     @router.message(Command("help"))
     async def help_(message: Message) -> None:
-        await message.answer(HELP)
+        await message.answer(HELP, parse_mode="HTML")
 
     @router.message(Command("saymyname"), is_active)
     async def saymyname(message: Message, command: CommandObject) -> None:
@@ -215,7 +222,10 @@ def create_router(storage: Storage, work_dir: Path) -> Router:
         delivered = 0
         for link in found:
             if not link.downloadable:
-                await message.reply(f"{link.label}: обработка ещё не реализована")
+                await message.reply(
+                    f"{emoji.html('warning')} {escape(link.label)}: обработка ещё не реализована",
+                    parse_mode="HTML",
+                )
                 continue
             try:
                 await deliver(message, bot, link, text)
@@ -240,7 +250,9 @@ def create_router(storage: Storage, work_dir: Path) -> Router:
             diagnostic(error),
         )
         try:
-            await message.reply(f"{link.label}: {reason}")
+            await message.reply(
+                f"{emoji.html('error')} {escape(link.label)}: {escape(reason)}", parse_mode="HTML"
+            )
         except Exception as notification_error:
             logger.error(
                 "Cannot notify user source=%s chat=%s message=%s\n%s",

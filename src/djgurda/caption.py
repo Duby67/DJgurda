@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass
 from html import escape
 
+from djgurda import emoji
+
 CAPTION_LIMIT = 1024  # Telegram counts visible characters after HTML parsing.
 HEADER_LIMIT = 96  # Keeps "title — channel" short so the sender's text stays in front.
 CHANNEL_LIMIT = 32
@@ -57,7 +59,7 @@ def header(title: str, channel: str, limit: int) -> str:
 
 
 def footer_length(author: Author, source: str) -> int:
-    return length(author.name) + 1 + length(source)
+    return length(author.name) + 1 + length(emoji.character(source)) + 1 + length(source)
 
 
 def fits(text: str, author: Author, source: str) -> bool:
@@ -83,5 +85,5 @@ def build(
     sender = f'<a href="{escape(author.url)}">{name}</a>' if author.url else name
     lines = [escape(header(title, channel, budget))] if include_header else []
     lines += [escape(part) for part in rest]
-    lines.append(f'{sender}\n<a href="{escape(url)}">{escape(source)}</a>')
+    lines.append(f'{sender}\n{emoji.html(source)} <a href="{escape(url)}">{escape(source)}</a>')
     return "\n\n".join(lines)
