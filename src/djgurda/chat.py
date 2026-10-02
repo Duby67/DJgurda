@@ -53,7 +53,7 @@ HELP = "\n".join(
 NICKNAME_LIMIT = 32
 QUEUE_LIMIT = 5  # Short links waiting or downloading; more are refused instead of piling up.
 UPLOAD_TIMEOUT = 5 * 60  # Seconds; the local Bot API forwards the file to Telegram meanwhile.
-LONG_UPLOAD_TIMEOUT = 30 * 60  # 512 MB at about 2.5 Mbit/s.
+LONG_UPLOAD_TIMEOUT = 2 * 60 * 60  # 2000 MB at about 2.5 Mbit/s.
 PROGRESS_INTERVAL = 10  # Seconds between status edits; quick links finish without one.
 
 logger = logging.getLogger(__name__)

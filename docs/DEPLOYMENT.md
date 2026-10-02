@@ -15,11 +15,11 @@ uploads), for a deployment check. Target: 1 vCPU, ~2 GiB RAM, no swap, 30 GiB di
 
 About 300 MiB stays for the OS and Docker during a deployment check. CPU shares favor production.
 Development stops after its deployment check, on both success and failure. The Bot API limits
-are preliminary: measure its peak while sending a 512 MB file before relying on them. Build
+are preliminary: measure its peak while sending a 2000 MB file before relying on them. Build
 images off the server.
 
-One short download (up to 20 minutes) and one long download (up to 60 minutes) may run at the
-same time; files are capped at 512 MB (50 MB on the cloud Bot API) and need twice their size free on disk for merging. A
+One short download (up to 20 minutes) and one long download (up to 2 hours) may run at the
+same time; files are capped at 2000 MB (50 MB on the cloud Bot API) and need twice their size free on disk for merging. A
 YouTube download peaks at ~330 MiB, of which deno (YouTube's JavaScript challenge) takes
 ~290 MiB, so two parallel downloads fit the production budget. Under the 256 MiB development
 budget deno is OOM-killed and yt-dlp continues with fewer formats. Measure before changing
