@@ -1,0 +1,86 @@
+name: Update yt-dlp
+
+# YouTube changes often and an old yt-dlp stops working. The image installs the version pinned in
+# uv.lock, so a rebuild alone changes nothing: this opens a PR to development with a newer lock.
+on:
+  schedule:
+    - cron: '0 1 * * 0'  # Sunday 04:00 Moscow time (UTC+3).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-yt-dlp
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      BRANCH: update/yt-dlp
+    steps:
+      # PRs opened with GITHUB_TOKEN start no workflows, so the required checks would never run.
+      - name: Require the update token
+        env:
+          UPDATE_PR_TOKEN: ${{ secrets.UPDATE_PR_TOKEN }}
+        run: |
+          test -n "$UPDATE_PR_TOKEN" || {
+            echo '::error::Add the UPDATE_PR_TOKEN secret: a fine-grained token for this repository with Contents and Pull requests read/write.'
+            exit 1
+          }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: development
+          token: ${{ secrets.UPDATE_PR_TOKEN }}
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: '0.12.0'
+      - id: lock
+        name: Upgrade yt-dlp in uv.lock
+        run: |
+          uv lock --upgrade-package yt-dlp
+          if git diff --quiet uv.lock; then
+            echo 'yt-dlp is already the newest version.'
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          version=$(python3 -c "import tomllib; lock = tomllib.load(open('uv.lock', 'rb')); print(next(p['version'] for p in lock['package'] if p['name'] == 'yt-dlp'))")
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Increase the project version
+        if: steps.lock.outputs.changed == 'true'
+        run: |
+          # version-check requires a version above development and a matching uv.lock.
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          path = Path('pyproject.toml')
+          text = path.read_text()
+          match = re.search(r'^version = "(\d+)\.(\d+)\.(\d+)\.(\d+)"$', text, re.M)
+          if match is None:
+              raise SystemExit('pyproject.toml has no GENERATION.MAJOR.MINOR.PATCH version')
+          *head, patch = match.groups()
+          path.write_text(text.replace(match[0], f'version = "{".".join(head)}.{int(patch) + 1}"', 1))
+          PY
+          uv lock
+          python3 scripts/ci/check_version.py origin/development
+      - name: Open or update the PR
+        if: steps.lock.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.UPDATE_PR_TOKEN }}
+          VERSION: ${{ steps.lock.outputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898283+github-actions[bot]@users.noreply.github.com'
+          git switch -C "$BRANCH"
+          git commit -am "Update yt-dlp to $VERSION"
+          git push --force origin "$BRANCH"
+          open=$(gh pr list --head "$BRANCH" --base development --state open --json number --jq length)
+          if [ "$open" = 0 ]; then
+            gh pr create --base development --head "$BRANCH" --title "Update yt-dlp to $VERSION" \
+              --body 'Weekly yt-dlp update. Check a download locally, merge, then promote development to main.'
+          else
+            gh pr edit "$BRANCH" --title "Update yt-dlp to $VERSION"
+          fi
