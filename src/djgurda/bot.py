@@ -11,7 +11,9 @@ from djgurda.chat import create_router
 from djgurda.storage import Storage
 
 
-def create_dispatcher(admin_ids: list[int], storage: Storage, work_dir: Path) -> Dispatcher:
+def create_dispatcher(
+    admin_ids: list[int], storage: Storage, work_dir: Path, local_api: bool
+) -> Dispatcher:
     async def send_to_admins(bot: Bot, text: str) -> None:
         for admin_id in dict.fromkeys(admin_ids):
             await bot.send_message(chat_id=admin_id, text=text, parse_mode="HTML")
@@ -32,5 +34,5 @@ def create_dispatcher(admin_ids: list[int], storage: Storage, work_dir: Path) ->
     dispatcher = Dispatcher()
     dispatcher.startup.register(notify_startup)
     dispatcher.shutdown.register(notify_shutdown)
-    dispatcher.include_router(create_router(storage, work_dir))
+    dispatcher.include_router(create_router(storage, work_dir, local_api))
     return dispatcher

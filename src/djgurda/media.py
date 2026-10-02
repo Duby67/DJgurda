@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -13,12 +14,15 @@ import yt_dlp
 
 from djgurda.diagnostics import DownloadLogger
 
-MAX_BYTES = 50 * 1024 * 1024  # Bot API upload limit.
+LOCAL_MAX_BYTES = 512 * 1024 * 1024  # Below the local Bot API's 2000 MB; bounds disk and time.
+CLOUD_MAX_BYTES = 50 * 1024 * 1024  # Cloud Bot API upload limit.
 # Preferred ceiling for the smaller side (vertical Shorts get 480p too); when a source has
 # nothing that small, yt-dlp picks its smallest variant instead.
 MAX_RESOLUTION = 480
-MAX_DURATION = 20 * 60  # Seconds; HLS sizes are often unknown, so length is the cheap guard.
+MAX_DURATION = 60 * 60  # Seconds; HLS sizes are often unknown, so length is the cheap guard.
+LONG_DURATION = 20 * 60  # Longer media moves to its own lane so short links keep flowing.
 DOWNLOAD_TIMEOUT = 5 * 60  # Seconds for download and merge of one link.
+LONG_DOWNLOAD_TIMEOUT = 20 * 60
 DOWNLOAD_PREFIX = "download-"
 THUMBNAIL_SIZE = 320  # Bot API limit for video thumbnails.
 DURATION = re.compile(r"Duration: (\d+):(\d+):(\d+)")
@@ -50,6 +54,29 @@ def download_reason(error: Exception) -> str:
     return "не удалось скачать медиа с источника, попробуйте позже"
 
 
+def megabytes(size: int) -> str:
+    return f"{size // (1024 * 1024)} МБ"
+
+
+@dataclass
+class Job:
+    """One link's download, shared by the chat and the download thread."""
+
+    max_bytes: int
+    # Called from the download thread with the media duration before the transfer starts;
+    # raises MediaError when the media has no free lane.
+    admit: Callable[[int | None], None]
+    stage: str = "в очереди"  # Shown to the user; written by the download thread.
+
+
+def require_space(target: Path, size: int, job: Job) -> None:
+    """Merging keeps both streams and the result on disk at once."""
+    free = shutil.disk_usage(target).free
+    if free < 2 * (size or job.max_bytes):
+        logger.error("Not enough disk space: %s free for %s", free, size or "unknown size")
+        raise MediaError("на сервере недостаточно места для загрузки")
+
+
 class Timeout(yt_dlp.utils.DownloadCancelled):  # type: ignore[misc]  # yt-dlp is untyped.
     msg = "Download timed out"
 
@@ -78,12 +105,27 @@ def prepare_work_dir(work_dir: Path) -> None:
         shutil.rmtree(leftover)
 
 
-def download(url: str, target: Path, headers: dict[str, str] | None = None) -> Media:
-    deadline = time.monotonic() + DOWNLOAD_TIMEOUT
+def download(url: str, target: Path, job: Job, headers: dict[str, str] | None = None) -> Media:
+    limit = DOWNLOAD_TIMEOUT
+    deadline = time.monotonic() + limit
 
-    def check_deadline(progress: dict[str, Any]) -> None:
+    def on_download(progress: dict[str, Any]) -> None:
         if time.monotonic() > deadline:
             raise Timeout()
+        if progress["status"] == "downloading":  # Streams are reported one after another.
+            done = progress.get("downloaded_bytes") or 0
+            total = progress.get("total_bytes") or progress.get("total_bytes_estimate")
+            job.stage = (
+                f"скачивание {min(99, done * 100 // total)}%"
+                if total
+                else (f"скачивание, {megabytes(done)}")
+            )
+
+    def on_process(progress: dict[str, Any]) -> None:
+        if time.monotonic() > deadline:
+            raise Timeout()
+        if progress["status"] == "started":
+            job.stage = "обработка"
 
     options: dict[str, Any] = {
         "paths": {"home": str(target), "temp": str(target)},
@@ -91,7 +133,7 @@ def download(url: str, target: Path, headers: dict[str, str] | None = None) -> M
         "format": "bv*+ba/b",
         "format_sort": [f"res:{MAX_RESOLUTION}", "vcodec:h264", "ext:mp4:m4a"],
         "merge_output_format": "mp4",
-        "max_filesize": MAX_BYTES,
+        "max_filesize": job.max_bytes,
         "noplaylist": True,
         "cachedir": False,
         "socket_timeout": 30,
@@ -104,15 +146,16 @@ def download(url: str, target: Path, headers: dict[str, str] | None = None) -> M
             {"key": "FFmpegThumbnailsConvertor", "format": "jpg", "when": "before_dl"}
         ],
         "http_headers": headers or {},
-        "progress_hooks": [check_deadline],
-        "postprocessor_hooks": [check_deadline],
+        "progress_hooks": [on_download],
+        "postprocessor_hooks": [on_process],
     }
     try:
         with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=False)
             if info.get("is_live"):
                 raise MediaError("прямые трансляции не поддерживаются")
-            if (info.get("duration") or 0) > MAX_DURATION:
+            duration = info.get("duration") or 0
+            if duration > MAX_DURATION:
                 raise MediaError(f"видео длиннее {MAX_DURATION // 60} минут")
             formats = info.get("requested_formats") or [info]
             if info.get("section_start") is not None:
@@ -123,19 +166,24 @@ def download(url: str, target: Path, headers: dict[str, str] | None = None) -> M
                 size = sum(
                     item.get("filesize") or item.get("filesize_approx") or 0 for item in formats
                 )
-            if size > MAX_BYTES:
-                raise MediaError("файл больше 50 МБ")
+            if size > job.max_bytes:
+                raise MediaError(f"файл больше {megabytes(job.max_bytes)}")
+            require_space(target, int(size), job)
+            job.admit(duration or None)
+            if duration > LONG_DURATION:
+                limit = LONG_DOWNLOAD_TIMEOUT
+                deadline = time.monotonic() + limit
             info = ydl.process_ie_result(info, download=True)
     except Timeout as error:
-        raise MediaError(f"загрузка дольше {DOWNLOAD_TIMEOUT // 60} минут") from error
+        raise MediaError(f"загрузка дольше {limit // 60} минут") from error
     except yt_dlp.utils.DownloadError as error:
         raise MediaError(download_reason(error)) from error
     downloads = info.get("requested_downloads") or []
     path = Path(downloads[0]["filepath"]) if downloads else None
     if path is None or not path.is_file():
         raise MediaError("источник не предоставил файл для скачивания")
-    if path.stat().st_size > MAX_BYTES:
-        raise MediaError("файл больше 50 МБ")
+    if path.stat().st_size > job.max_bytes:
+        raise MediaError(f"файл больше {megabytes(job.max_bytes)}")
     details = info_of(info)
     if not (details.duration and details.width and details.height):
         details = probe(path, details)  # Direct files carry no metadata in yt-dlp.

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import SplitResult
 
-from djgurda.media import Media, download
+from djgurda.media import Job, Media, download
 
 
 def unknown(url: SplitResult) -> None:
@@ -31,7 +31,7 @@ class Source:
     aliases: tuple[tuple[str, str], ...] = ()
     tracking: frozenset[str] = frozenset()  # Query parameters dropped from the canonical link.
     audio: frozenset[str] = frozenset()  # Kinds delivered as audio instead of video.
-    fetch: Callable[[str, Path], Media] = download  # Canonical URL -> downloaded media.
+    fetch: Callable[[str, Path, Job], Media] = download  # Canonical URL -> downloaded media.
 
     def canonical_host(self, host: str) -> str | None:
         if any(within(host, domain) for domain in self.domains):

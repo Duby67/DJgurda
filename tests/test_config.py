@@ -14,6 +14,7 @@ def test_token_is_required(token: str | None, monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv("ADMIN_IDS", "[100]")
     monkeypatch.setenv("DATABASE_PATH", "db.sqlite3")
     monkeypatch.setenv("WORK_DIR", "work")
+    monkeypatch.setenv("BOT_API_URL", "http://bot-api:8081")
     if token is not None:
         monkeypatch.setenv("BOT_TOKEN", token)
 
@@ -28,6 +29,7 @@ def test_admin_ids_are_required(admin_ids: str | None, monkeypatch: pytest.Monke
     monkeypatch.setenv("BOT_TOKEN", "offline-test-token")
     monkeypatch.setenv("DATABASE_PATH", "db.sqlite3")
     monkeypatch.setenv("WORK_DIR", "work")
+    monkeypatch.setenv("BOT_API_URL", "http://bot-api:8081")
     for name in ("ADMIN_IDS", "admin_ids", "APP_ENV", "app_env", "LOG_LEVEL", "log_level"):
         monkeypatch.delenv(name, raising=False)
     if admin_ids is not None:
@@ -40,7 +42,19 @@ def test_admin_ids_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BOT_TOKEN", "offline-test-token")
     monkeypatch.setenv("DATABASE_PATH", "db.sqlite3")
     monkeypatch.setenv("WORK_DIR", "work")
+    monkeypatch.setenv("BOT_API_URL", "http://bot-api:8081")
     monkeypatch.setenv("ADMIN_IDS", "[100, 200]")
     settings = Settings(_env_file=None)
     assert settings.admin_ids == [100, 200]
     assert "admin_ids" not in repr(settings)
+
+
+def test_production_requires_local_bot_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BOT_TOKEN", "offline-test-token")
+    monkeypatch.setenv("ADMIN_IDS", "[100]")
+    monkeypatch.setenv("DATABASE_PATH", "db.sqlite3")
+    monkeypatch.setenv("WORK_DIR", "work")
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("BOT_API_URL", raising=False)
+    with pytest.raises(ValidationError, match="BOT_API_URL is required"):
+        Settings(_env_file=None)

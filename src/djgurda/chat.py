@@ -24,7 +24,16 @@ from aiogram.utils.chat_action import ChatActionSender
 from djgurda import caption, emoji
 from djgurda.diagnostics import diagnostic, redact
 from djgurda.links import extract_links, strip_links
-from djgurda.media import DOWNLOAD_PREFIX, Info, Media, MediaError
+from djgurda.media import (
+    CLOUD_MAX_BYTES,
+    DOWNLOAD_PREFIX,
+    LOCAL_MAX_BYTES,
+    LONG_DURATION,
+    Info,
+    Job,
+    Media,
+    MediaError,
+)
 from djgurda.sources import SOURCES, classify
 from djgurda.sources.base import Link
 from djgurda.storage import Storage
@@ -42,7 +51,10 @@ HELP = "\n".join(
     ]
 )
 NICKNAME_LIMIT = 32
-QUEUE_LIMIT = 5  # Links waiting or downloading; more are refused instead of piling up.
+QUEUE_LIMIT = 5  # Short links waiting or downloading; more are refused instead of piling up.
+UPLOAD_TIMEOUT = 5 * 60  # Seconds; the local Bot API forwards the file to Telegram meanwhile.
+LONG_UPLOAD_TIMEOUT = 30 * 60  # 512 MB at about 2.5 Mbit/s.
+PROGRESS_INTERVAL = 10  # Seconds between status edits; quick links finish without one.
 
 logger = logging.getLogger(__name__)
 
@@ -61,14 +73,46 @@ def delivery_reason(error: Exception) -> str:
     return "не удалось обработать ссылку из-за внутренней ошибки бота"
 
 
-def fetch(link: Link, target: Path) -> Media:
-    return link.source.fetch(link.url, target)
+def fetch(link: Link, target: Path, job: Job) -> Media:
+    return link.source.fetch(link.url, target, job)
 
 
-def create_router(storage: Storage, work_dir: Path) -> Router:
+async def show_progress(message: Message, bot: Bot, link: Link, job: Job) -> None:
+    """Reply with the job stage, edit it when it changes, delete it when cancelled.
+
+    Progress is cosmetic: its failures are logged and never affect delivery.
+    """
+    status: int | None = None
+    shown = ""
+    try:
+        while True:
+            await asyncio.sleep(PROGRESS_INTERVAL)
+            text = f"⏳ {link.label}: {job.stage}"
+            if text == shown:
+                continue
+            try:
+                if status is None:
+                    status = (await message.reply(text)).message_id
+                else:
+                    await bot.edit_message_text(text, chat_id=message.chat.id, message_id=status)
+                shown = text
+            except Exception as error:
+                logger.warning("Cannot show progress: %s", redact(str(error)))
+    finally:
+        if status is not None:
+            try:
+                await bot.delete_message(chat_id=message.chat.id, message_id=status)
+            except Exception as error:
+                logger.warning("Cannot delete progress: %s", redact(str(error)))
+
+
+def create_router(storage: Storage, work_dir: Path, local_api: bool) -> Router:
     active = storage.active_chats()  # Cached so paused chats cost no database reads.
-    downloads = asyncio.Semaphore(1)  # One download at a time bounds CPU, memory and disk.
+    # One short and one long download at a time bound CPU, memory and disk. A long one is
+    # refused while another is in progress, so it never takes a place in the short queue.
+    downloads = asyncio.Semaphore(1)
     pending = 0
+    long_busy = False
     router = Router()
 
     async def is_active(message: Message) -> bool:
@@ -130,6 +174,7 @@ def create_router(storage: Storage, work_dir: Path) -> Router:
         file: str | FSInputFile,
         cover: str | FSInputFile | None = None,
         thumbnail: FSInputFile | None = None,
+        timeout: int = UPLOAD_TIMEOUT,
     ) -> Message:
         text = caption.build(
             info.title,
@@ -164,10 +209,10 @@ def create_router(storage: Storage, work_dir: Path) -> Router:
                 height=info.height,
                 supports_streaming=True,
             )
-        return await bot(method, request_timeout=300)  # Uploads up to 50 MB.
+        return await bot(method, request_timeout=timeout)
 
     async def deliver(message: Message, bot: Bot, link: Link, text: str) -> None:
-        nonlocal pending
+        nonlocal pending, long_busy
         hit = storage.cached(link.key) if link.key else None
         if link.key and hit:
             file_id, cover_id, info = hit
@@ -182,30 +227,60 @@ def create_router(storage: Storage, work_dir: Path) -> Router:
         if pending >= QUEUE_LIMIT:
             raise MediaError("очередь загрузок заполнена, попробуйте позже")
         pending += 1
+        acquired = long = False
+        loop = asyncio.get_running_loop()
+        progress = None
+
+        async def enter_long_lane() -> None:
+            nonlocal pending, long_busy, long
+            if long_busy:
+                raise MediaError("уже скачивается длинное видео, попробуйте позже")
+            long_busy = long = True
+            pending -= 1
+            downloads.release()
+
+        def admit(duration: int | None) -> None:  # Runs in the download thread.
+            if (duration or 0) > LONG_DURATION:
+                asyncio.run_coroutine_threadsafe(enter_long_lane(), loop).result()
+
+        job = Job(LOCAL_MAX_BYTES if local_api else CLOUD_MAX_BYTES, admit)
+
         try:
-            async with (
-                downloads,
-                ChatActionSender(
-                    bot=bot,
-                    chat_id=message.chat.id,
-                    message_thread_id=message.message_thread_id,
-                    action="upload_voice" if link.audio else "upload_video",
-                ),
+            async with ChatActionSender(
+                bot=bot,
+                chat_id=message.chat.id,
+                message_thread_id=message.message_thread_id,
+                action="upload_voice" if link.audio else "upload_video",
             ):
+                progress = asyncio.create_task(show_progress(message, bot, link, job))
+                await downloads.acquire()
+                acquired = True
+                job.stage = "получение данных о видео"
                 with TemporaryDirectory(dir=work_dir, prefix=DOWNLOAD_PREFIX) as target:
-                    media = await asyncio.to_thread(fetch, link, Path(target))
+                    media = await asyncio.to_thread(fetch, link, Path(target), job)
+                    job.stage = "отправка в Telegram"
                     sent = await send(
                         message,
                         bot,
                         link,
                         text,
                         media.info,
-                        FSInputFile(media.path),
+                        # The local Bot API reads the shared volume instead of an HTTP upload.
+                        media.path.resolve().as_uri() if local_api else FSInputFile(media.path),
                         FSInputFile(media.cover) if media.cover else None,
                         FSInputFile(media.thumbnail) if media.thumbnail else None,
+                        LONG_UPLOAD_TIMEOUT if long else UPLOAD_TIMEOUT,
                     )
         finally:
-            pending -= 1
+            if progress:
+                progress.cancel()
+                await asyncio.gather(progress, return_exceptions=True)
+            if long:
+                long_busy = False
+            else:
+                pending -= 1
+                if acquired:
+                    downloads.release()
         file = sent.audio or sent.video
         if link.key and file:  # Repeated links are resent by file_id without downloading.
             covers = sent.video.cover if sent.video else None

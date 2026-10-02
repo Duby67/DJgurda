@@ -10,6 +10,8 @@ import yt_dlp
 from djgurda import media
 from djgurda.diagnostics import DownloadLogger, diagnostic
 
+JOB = media.Job(media.CLOUD_MAX_BYTES, lambda duration: None)
+
 
 @pytest.mark.parametrize(
     ("detail", "reason"),
@@ -28,7 +30,7 @@ def test_download_failure(
     downloader.__enter__.return_value.extract_info.side_effect = failure
     monkeypatch.setattr(yt_dlp, "YoutubeDL", lambda options: downloader)
     with pytest.raises(media.MediaError, match=reason) as raised:
-        media.download("https://example.com/video", tmp_path)
+        media.download("https://example.com/video", tmp_path, JOB)
     assert raised.value.__cause__ is failure
     assert detail in diagnostic(raised.value)
 
@@ -58,4 +60,4 @@ def test_missing_download_is_not_reported_as_oversized(
     downloader.__enter__.return_value.process_ie_result.return_value = {}
     monkeypatch.setattr(yt_dlp, "YoutubeDL", lambda options: downloader)
     with pytest.raises(media.MediaError, match="не предоставил файл"):
-        media.download("https://example.com/video", tmp_path)
+        media.download("https://example.com/video", tmp_path, JOB)
