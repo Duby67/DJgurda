@@ -46,6 +46,7 @@ def test_readiness_lifecycle(
     monkeypatch.setattr(Dispatcher, "start_polling", polling)
     settings = Settings(
         bot_token="123:offline-token",
+        bot_api_url="http://bot-api:8081",
         admin_ids=[100],
         database_path=tmp_path / "db.sqlite3",
         work_dir=tmp_path / "work",

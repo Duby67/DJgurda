@@ -22,6 +22,8 @@ Hard rules; stop and report instead of working around them.
 - **Small VM first:** optimize for bounded memory, CPU, disk usage, and concurrency. Give
   production priority; keep development lightweight and stop it when unused. Build images off
   the server. Resource budgets and deployment instructions live in `docs/DEPLOYMENT.md`.
+- **No heavy local builds:** ask before building a large image or one that downloads during the
+  build. Never build `deploy/bot-api.Dockerfile` locally: it crashes WSL; CI builds it.
 - **Focused tests:** prefer a few tests of meaningful behavior and real regressions. Avoid
   repetitive micro-cases, implementation-mirroring, and raise coverage tests.
 

@@ -7,8 +7,12 @@ from urllib.parse import SplitResult, urlsplit
 from yandex_music import Client
 from yandex_music.exceptions import YandexMusicError
 
-from djgurda.media import MAX_BYTES, MAX_DURATION, Info, Media, MediaError, thumbnail
+from djgurda.media import LONG_DURATION, Info, Job, Media, MediaError, megabytes, thumbnail
 from djgurda.sources.base import Source
+
+# The client reads the whole file into memory, so tracks keep the short lane and a small cap.
+MAX_BYTES = 50 * 1024 * 1024
+MAX_DURATION = LONG_DURATION
 
 logger = logging.getLogger(__name__)
 token: str | None = None  # Set at startup; downloads need an account with a subscription.
@@ -40,7 +44,7 @@ def media_id(url: SplitResult) -> str | None:
     return path[path.index("track") + 1] if kind(url) == "track" else None
 
 
-def fetch(url: str, target: Path) -> Media:
+def fetch(url: str, target: Path, job: Job) -> Media:
     global client
     if not token:
         logger.error("YANDEX_MUSIC_TOKEN is not set; Yandex Music links cannot be downloaded")
@@ -54,8 +58,10 @@ def fetch(url: str, target: Path) -> Media:
         track = tracks[0]
         if (track.duration_ms or 0) > MAX_DURATION * 1000:
             raise MediaError(f"трек длиннее {MAX_DURATION // 60} минут")
+        job.admit((track.duration_ms or 0) // 1000 or None)
         best = max(track.get_download_info(), key=lambda item: item.bitrate_in_kbps or 0)
         path = target / f"track.{'m4a' if best.codec == 'aac' else best.codec}"
+        job.stage = "скачивание"
         track.download(str(path), codec=best.codec, bitrate_in_kbps=best.bitrate_in_kbps)
         cover = None
         if track.cover_uri:
@@ -64,7 +70,7 @@ def fetch(url: str, target: Path) -> Media:
     except YandexMusicError as error:
         raise MediaError("не удалось скачать") from error
     if path.stat().st_size > MAX_BYTES:
-        raise MediaError("файл больше 50 МБ")
+        raise MediaError(f"файл больше {megabytes(MAX_BYTES)}")
     info = Info(
         title=track.title or "",
         uploader=", ".join(artist.name for artist in track.artists or [] if artist.name),
