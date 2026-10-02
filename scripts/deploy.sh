@@ -53,10 +53,10 @@ trap 'rm -rf "$work"' EXIT
 printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$work/key"
 printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$work/known_hosts"
 mkdir "$work/payload"
-base=deploy/compose.yaml
-[[ $DEPLOY_ENV == production-botapi ]] && base=deploy/compose.bot-api.yaml
-cp "$base" "$work/payload/compose.yaml"
-cp "deploy/compose.$DEPLOY_ENV.yaml" "$work/payload/compose.environment.yaml"
+service=bot overlay=$DEPLOY_ENV
+[[ $DEPLOY_ENV == production-botapi ]] && service=bot-api overlay=production
+cp "deploy/$service/compose.yaml" "$work/payload/compose.yaml"
+cp "deploy/$service/compose.$overlay.yaml" "$work/payload/compose.environment.yaml"
 cp scripts/deploy-remote.sh "$work/payload/deploy-remote.sh"
 printf '%s' "$GHCR_TOKEN" > "$work/payload/registry-token"
 printf '%s' "$GHCR_USER" > "$work/payload/registry-user"

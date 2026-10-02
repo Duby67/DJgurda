@@ -68,4 +68,4 @@ Premium у владельца бота либо дополнительный use
 | --- | --- |
 | [AGENTS.md](AGENTS.md) | Правила проекта |
 | [CLAUDE.md](CLAUDE.md) | Импорт правил для Claude Code |
-| [Skills/](Skills/) | Навыки; `.agents/skills` и `.claude/skills` — симлинки на них |
+| [.agents/skills/](.agents/skills/) | Навыки; `.claude/skills` — симлинк на них |

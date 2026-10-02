@@ -27,20 +27,22 @@ budgets.
 
 ## Image and Compose
 
-`deploy/Dockerfile` builds a multi-stage image from `uv.lock`, running as UID/GID 10001. It adds
+Each service has its own directory: `deploy/bot/` and `deploy/bot-api/`.
+
+`deploy/bot/Dockerfile` builds a multi-stage image from `uv.lock`, running as UID/GID 10001. It adds
 static ffmpeg (stream merging), deno (yt-dlp's YouTube JavaScript runtime) and curl_cffi
 (browser impersonation that TikTok requires); ~645 MB.
 
-`deploy/bot-api.Dockerfile` builds the official
+`deploy/bot-api/Dockerfile` builds the official
 [telegram-bot-api](https://github.com/tdlib/telegram-bot-api) at a pinned commit, also as
 UID/GID 10001. It runs in `--local` mode: uploads up to 2000 MB, and the bot passes files as
 `file://` paths from the production bot's `data` volume, mounted read-only into `bot-api`.
 
-A bot deployment takes `deploy/compose.yaml` plus one override: `compose.production.yaml` or
+A bot deployment takes `deploy/bot/compose.yaml` plus one override: `compose.production.yaml` or
 `compose.development.yaml`. The override sets limits, `APP_ENV` and the project name; the
 production override points the bot at `bot-api` with `BOT_API_URL`, which production requires,
-over the external network `djgurda-bot-api`. A Bot API deployment takes
-`deploy/compose.bot-api.yaml` plus `compose.production-botapi.yaml`; it owns that network and
+over the external network `djgurda-bot-api`. A Bot API deployment (environment
+`production-botapi`) takes `deploy/bot-api/compose.yaml` plus `compose.production.yaml`; it owns that network and
 needs the production volume `djgurda-production_data`, so production must exist first, and the
 bot needs the network, so the Bot API must be deployed before a production bot that uses it. `compose.local.yaml` is for functional checks on top of the
 development override, so it uses the cloud Bot API: it builds the bot image locally, runs as the

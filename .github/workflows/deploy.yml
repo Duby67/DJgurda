@@ -44,7 +44,7 @@ jobs:
         id: build
         with:
           context: .
-          file: deploy/Dockerfile
+          file: deploy/bot/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.image.outputs.name }}:sha-${{ github.sha }}
@@ -76,8 +76,8 @@ jobs:
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         id: build
         with:
-          context: deploy
-          file: deploy/bot-api.Dockerfile
+          context: deploy/bot-api
+          file: deploy/bot-api/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.image.outputs.name }}:sha-${{ github.sha }}

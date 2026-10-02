@@ -58,7 +58,7 @@ elif args[0] == 'inspect':
         ("compose.yaml", "compose.yaml"),
         ("compose.development.yaml", "compose.environment.yaml"),
     ]:
-        (stage / target).write_bytes((ROOT / "deploy" / source).read_bytes())
+        (stage / target).write_bytes((ROOT / "deploy/bot" / source).read_bytes())
     (stage / "registry-user").write_text("offline")
     (stage / "registry-token").write_text("offline-registry-secret")
 
@@ -66,10 +66,11 @@ elif args[0] == 'inspect':
         digest: str, *, fail: bool = False, environment: str = "production"
     ) -> subprocess.CompletedProcess[str]:
         bot_api = environment == "production-botapi"
-        base = "compose.bot-api.yaml" if bot_api else "compose.yaml"
-        (stage / "compose.yaml").write_bytes((ROOT / "deploy" / base).read_bytes())
+        service = ROOT / "deploy" / ("bot-api" if bot_api else "bot")
+        overlay = "production" if bot_api else environment
+        (stage / "compose.yaml").write_bytes((service / "compose.yaml").read_bytes())
         (stage / "compose.environment.yaml").write_bytes(
-            (ROOT / "deploy" / f"compose.{environment}.yaml").read_bytes()
+            (service / f"compose.{overlay}.yaml").read_bytes()
         )
         image = f"ghcr.io/example/{'bot-api' if bot_api else 'bot'}@sha256:" + digest * 64
         (stage / "runtime.env").write_text(
