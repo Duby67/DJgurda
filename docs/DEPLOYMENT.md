@@ -95,6 +95,7 @@ GitHub Environments `development` (branch `development`) and `production` (branc
 | `TELEGRAM_API_HASH` | Production environment secret | Application hash from my.telegram.org |
 | `YANDEX_MUSIC_TOKEN` | Secret | Optional; Yandex Music account token with a subscription |
 | `ADMIN_IDS` | Secret | Nonempty JSON array of positive integers, e.g. `[123456789]` |
+| `INLINE_CHAT_ID` | Environment variable | Optional; upload chat for inline mode, a different one per bot |
 | `DEPLOY_SSH_PRIVATE_KEY` | Secret | SSH key for `DEPLOY_USER` |
 | `DEPLOY_HOST` | Variable | Hostname or IPv4 |
 | `DEPLOY_PORT` | Variable | SSH port, even if 22 |
@@ -102,7 +103,7 @@ GitHub Environments `development` (branch `development`) and `production` (branc
 | `DEPLOY_KNOWN_HOSTS` | Variable | known_hosts entries; `[host]:port` for nonstandard ports |
 | `DEPLOY_APP_DIR` | Variable | Absolute root without spaces; the environment name is appended |
 
-All except `YANDEX_MUSIC_TOKEN` are required. GHCR uses `GITHUB_TOKEN`; an existing package must
+All except `YANDEX_MUSIC_TOKEN` and `INLINE_CHAT_ID` are required. GHCR uses `GITHUB_TOKEN`; an existing package must
 grant this repository Actions access.
 
 ### Server

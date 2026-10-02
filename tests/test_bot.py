@@ -15,7 +15,9 @@ import pytest
 from aiogram import Bot
 from aiogram.exceptions import TelegramNetworkError
 from aiogram.methods import (
+    AnswerInlineQuery,
     DeleteMessage,
+    EditMessageMedia,
     EditMessageText,
     SendAudio,
     SendChatAction,
@@ -26,7 +28,12 @@ from aiogram.methods import (
 from aiogram.types import (
     Audio,
     Chat,
+    ChosenInlineResult,
     FSInputFile,
+    InlineQuery,
+    InlineQueryResultArticle,
+    InlineQueryResultCachedVideo,
+    InputMediaVideo,
     Message,
     MessageEntity,
     MessageOriginUser,
@@ -55,7 +62,11 @@ def storage(tmp_path: Path) -> Iterator[Storage]:
 
 
 def message(
-    update_id: int, chat_id: int, text: str, forward_origin: MessageOriginUser | None = None
+    update_id: int,
+    chat_id: int,
+    text: str,
+    forward_origin: MessageOriginUser | None = None,
+    via_bot: User | None = None,
 ) -> Update:
     entities = []
     if text.startswith("/"):
@@ -72,6 +83,7 @@ def message(
             text=text,
             entities=entities,
             forward_origin=forward_origin,
+            via_bot=via_bot,
         ),
     )
 
@@ -239,10 +251,72 @@ def test_forwarded_delivery_is_ignored(tmp_path: Path, monkeypatch: pytest.Monke
                 sender_user=User(id=bot.id, is_bot=True, first_name="DJgurda"),
             )
             await dispatcher.feed_update(bot, message(2, 42, "Title\n\nyoutu.be/ok", origin))
+            # Sent through inline mode into an active chat.
+            via = User(id=bot.id, is_bot=True, first_name="DJgurda")
+            await dispatcher.feed_update(bot, message(3, 42, "Title\n\nyoutu.be/ok", via_bot=via))
             storage.close()
 
     asyncio.run(scenario())
     assert sent(request) == [(42, f"{emoji.html('success')} Бот активен в этом чате")]
+
+
+def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def fetch(link: Link, target: Path, job: Job) -> Media:
+        job.admit(LONG_DURATION + 1 if "long" in link.url else 60)
+        return Media(target / "video.mp4", Info("Title", "Channel", 60, 2, 3))
+
+    monkeypatch.setattr(chat, "fetch", fetch)
+    request = AsyncMock(side_effect=telegram)
+    user = User(id=42, is_bot=False, first_name="Test")
+
+    def query(update_id: int, text: str) -> Update:
+        return Update(
+            update_id=update_id,
+            inline_query=InlineQuery(id=str(update_id), from_user=user, query=text, offset=""),
+        )
+
+    def chosen(update_id: int, text: str) -> Update:
+        result = ChosenInlineResult(
+            result_id=chat.INLINE_DOWNLOAD,
+            from_user=user,
+            query=text,
+            inline_message_id=f"inline-{update_id}",
+        )
+        return Update(update_id=update_id, chosen_inline_result=result)
+
+    async def scenario() -> None:
+        async with Bot(token="123456789:offline-test-token") as bot:
+            bot.session.make_request = request  # type: ignore[method-assign]
+            storage = Storage(tmp_path / "db.sqlite3")
+            dispatcher = create_dispatcher(
+                [100], storage, tmp_path, local_api=True, inline_chat_id=-100
+            )
+            for update in [
+                query(1, "youtu.be/ok смотри"),  # New link: a placeholder.
+                chosen(2, "youtu.be/ok смотри"),  # Uploaded, then the placeholder is replaced.
+                query(3, "смотри youtu.be/ok"),  # Cached: sent at once.
+                chosen(4, "youtu.be/long"),  # Long videos are refused in inline mode.
+            ]:
+                await dispatcher.feed_update(bot, update)
+            storage.close()
+
+    asyncio.run(scenario())
+    methods = [c.args[1] for c in request.await_args_list]
+    answers = [m for m in methods if isinstance(m, AnswerInlineQuery)]
+    assert [type(result) for answer in answers for result in answer.results] == [
+        InlineQueryResultArticle,
+        InlineQueryResultCachedVideo,
+    ]
+    uploads = [m for m in methods if isinstance(m, SendVideo)]
+    assert [upload.chat_id for upload in uploads] == [-100]
+    (edit,) = [m for m in methods if isinstance(m, EditMessageMedia)]
+    assert edit.inline_message_id == "inline-2"
+    assert isinstance(edit.media, InputMediaVideo)
+    assert (edit.media.media, edit.media.cover) == ("file-1", "cover-1")
+    assert edit.media.caption and "смотри" in edit.media.caption
+    (failure,) = [m for m in methods if isinstance(m, EditMessageText)]
+    assert failure.inline_message_id == "inline-4"
+    assert f"только видео до {LONG_DURATION // 60} минут" in (failure.text or "")
 
 
 def test_long_media_has_its_own_lane(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

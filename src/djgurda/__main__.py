@@ -37,7 +37,11 @@ async def run(settings: Settings) -> None:
             )
             async with Bot(token=settings.bot_token.get_secret_value(), session=session) as bot:
                 dispatcher = create_dispatcher(
-                    settings.admin_ids, storage, settings.work_dir, local_api=url is not None
+                    settings.admin_ids,
+                    storage,
+                    settings.work_dir,
+                    local_api=url is not None,
+                    inline_chat_id=settings.inline_chat_id,
                 )
                 dispatcher.startup.register(mark_ready)
                 # Skip messages sent while offline.

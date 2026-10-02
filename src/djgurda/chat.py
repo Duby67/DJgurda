@@ -7,7 +7,7 @@ from importlib.metadata import version
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from aiogram import Bot, Router
+from aiogram import Bot, F, Router
 from aiogram.exceptions import (
     TelegramAPIError,
     TelegramBadRequest,
@@ -18,7 +18,21 @@ from aiogram.exceptions import (
 )
 from aiogram.filters import Command, CommandObject
 from aiogram.methods import SendAudio, SendVideo
-from aiogram.types import FSInputFile, Message, MessageOriginUser
+from aiogram.types import (
+    ChosenInlineResult,
+    FSInputFile,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InlineQuery,
+    InlineQueryResultArticle,
+    InlineQueryResultCachedVideo,
+    InlineQueryResultsButton,
+    InputMediaVideo,
+    InputTextMessageContent,
+    Message,
+    MessageOriginUser,
+    User,
+)
 from aiogram.utils.chat_action import ChatActionSender
 
 from djgurda import caption, emoji
@@ -48,6 +62,9 @@ HELP = "\n".join(
         "/status — состояние бота и версия",
         "/saymyname имя — имя в подписях в этом чате; без имени — сбросить",
         "/help — эта справка",
+        "",
+        "В любом чате, даже без бота: @имя_бота ссылка комментарий",
+        f"(только видео до {LONG_DURATION // 60} минут).",
     ]
 )
 NICKNAME_LIMIT = 32
@@ -55,6 +72,7 @@ QUEUE_LIMIT = 5  # Short links waiting or downloading; more are refused instead 
 UPLOAD_TIMEOUT = 5 * 60  # Seconds; the local Bot API forwards the file to Telegram meanwhile.
 LONG_UPLOAD_TIMEOUT = 2 * 60 * 60  # 2000 MB at about 2.5 Mbit/s.
 PROGRESS_INTERVAL = 10  # Seconds between status edits; quick links finish without one.
+INLINE_DOWNLOAD = "download"  # Result id of the placeholder replaced after the download.
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +89,21 @@ def delivery_reason(error: Exception) -> str:
     if isinstance(error, TelegramAPIError):
         return "не удалось отправить медиа: Telegram отклонил запрос"
     return "не удалось обработать ссылку из-за внутренней ошибки бота"
+
+
+def parse_query(query: str) -> tuple[Link, str] | None:
+    """Return the first downloadable video link of an inline query and the remaining text."""
+    words = query.split()
+    for index, word in enumerate(words):
+        link = classify(word)
+        if link and link.downloadable and not link.audio:
+            return link, " ".join(words[:index] + words[index + 1 :])
+    return None
+
+
+def inline_author(user: User) -> caption.Author:
+    url = f"https://t.me/{user.username}" if user.username else f"tg://user?id={user.id}"
+    return caption.Author(user.full_name, url)
 
 
 def fetch(link: Link, target: Path, job: Job) -> Media:
@@ -106,7 +139,9 @@ async def show_progress(message: Message, bot: Bot, link: Link, job: Job) -> Non
                 logger.warning("Cannot delete progress: %s", redact(str(error)))
 
 
-def create_router(storage: Storage, work_dir: Path, local_api: bool) -> Router:
+def create_router(
+    storage: Storage, work_dir: Path, local_api: bool, inline_chat_id: int | None = None
+) -> Router:
     active = storage.active_chats()  # Cached so paused chats cost no database reads.
     # One short and one long download at a time bound CPU, memory and disk. A long one is
     # refused while another is in progress, so it never takes a place in the short queue.
@@ -293,6 +328,8 @@ def create_router(storage: Storage, work_dir: Path, local_api: bool) -> Router:
         origin = message.forward_origin
         if isinstance(origin, MessageOriginUser) and origin.sender_user.id == bot.id:
             return  # Our own delivery forwarded from another chat: already processed.
+        if message.via_bot and message.via_bot.id == bot.id:
+            return  # Sent through our inline mode: already processed.
         found = [link for link in map(classify, extract_links(message)) if link]
         text = strip_links(message)
         if not found or not caption.fits(text, author(message), found[0].source.name):
@@ -339,5 +376,144 @@ def create_router(storage: Storage, work_dir: Path, local_api: bool) -> Router:
                 message.message_id,
                 diagnostic(notification_error),
             )
+
+    @router.inline_query()
+    async def inline_query(query: InlineQuery) -> None:
+        parsed = parse_query(query.query)
+        if parsed is None:
+            await query.answer([], cache_time=0, is_personal=True)
+            return
+        link, text = parsed
+        hit = storage.cached(link.key) if link.key else None
+        if hit:
+            file_id, _, info = hit
+            body = caption.build(
+                info.title,
+                info.uploader,
+                text,
+                inline_author(query.from_user),
+                link.source.name,
+                link.url,
+            )
+            result = InlineQueryResultCachedVideo(
+                id="cached",
+                video_file_id=file_id,
+                title=info.title or link.label,
+                description=text or None,
+                caption=body,
+                parse_mode="HTML",
+            )
+            await query.answer([result], cache_time=0, is_personal=True)
+            return
+        if inline_chat_id is None:  # New files need a chat to upload to before the edit.
+            button = InlineQueryResultsButton(
+                text="Загрузка новых ссылок не настроена", start_parameter="inline"
+            )
+            await query.answer([], cache_time=0, is_personal=True, button=button)
+            return
+        placeholder = InlineQueryResultArticle(
+            id=INLINE_DOWNLOAD,
+            title=f"Скачать и отправить: {link.label}",
+            description=text or f"Видео до {LONG_DURATION // 60} минут",
+            input_message_content=InputTextMessageContent(
+                message_text=f"⏳ {link.label}: скачивание…"
+            ),
+            # Telegram reports inline_message_id only for messages with a keyboard.
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text="Источник", url=link.url)]]
+            ),
+        )
+        await query.answer([placeholder], cache_time=0, is_personal=True)
+
+    @router.chosen_inline_result(F.result_id == INLINE_DOWNLOAD)
+    async def inline_download(chosen: ChosenInlineResult, bot: Bot) -> None:
+        parsed = parse_query(chosen.query)
+        message_id = chosen.inline_message_id
+        if parsed is None or message_id is None or inline_chat_id is None:
+            logger.error("Inline result cannot be processed: no link, message or upload chat")
+            return
+        link, text = parsed
+        try:
+            file_id, cover_id, info = await upload_inline(bot, link, inline_chat_id)
+            body = caption.build(
+                info.title,
+                info.uploader,
+                text,
+                inline_author(chosen.from_user),
+                link.source.name,
+                link.url,
+            )
+            media = InputMediaVideo(
+                media=file_id,
+                cover=cover_id,
+                start_timestamp=link.start,
+                caption=body,
+                parse_mode="HTML",
+                duration=info.duration,
+                width=info.width,
+                height=info.height,
+                supports_streaming=True,
+            )
+            await bot.edit_message_media(media=media, inline_message_id=message_id)
+        except Exception as error:
+            reason = str(error) if isinstance(error, MediaError) else delivery_reason(error)
+            logger.error(
+                "Inline delivery failed source=%s reason=%s\n%s",
+                link.label,
+                reason,
+                diagnostic(error),
+            )
+            try:
+                await bot.edit_message_text(
+                    f"{emoji.html('error')} {escape(link.label)}: {escape(reason)}",
+                    inline_message_id=message_id,
+                    parse_mode="HTML",
+                )
+            except Exception as notification_error:
+                logger.error("Cannot show inline failure\n%s", diagnostic(notification_error))
+
+    async def upload_inline(bot: Bot, link: Link, chat_id: int) -> tuple[str, str | None, Info]:
+        """Download a short video and upload it to the upload chat for its file_id."""
+        nonlocal pending
+        hit = storage.cached(link.key) if link.key else None
+        if hit:  # Another inline or chat delivery finished first.
+            return hit
+        if pending >= QUEUE_LIMIT:
+            raise MediaError("очередь загрузок заполнена, попробуйте позже")
+
+        def admit(duration: int | None) -> None:  # Runs in the download thread.
+            if (duration or 0) > LONG_DURATION:
+                raise MediaError(
+                    f"через @-упоминание — только видео до {LONG_DURATION // 60} минут"
+                )
+
+        job = Job(LOCAL_MAX_BYTES if local_api else CLOUD_MAX_BYTES, admit)
+        pending += 1
+        try:
+            async with downloads:
+                with TemporaryDirectory(dir=work_dir, prefix=DOWNLOAD_PREFIX) as target:
+                    media = await asyncio.to_thread(fetch, link, Path(target), job)
+                    sent = await bot.send_video(
+                        chat_id,
+                        media.path.resolve().as_uri() if local_api else FSInputFile(media.path),
+                        cover=FSInputFile(media.cover) if media.cover else None,
+                        thumbnail=FSInputFile(media.thumbnail) if media.thumbnail else None,
+                        caption=link.url,
+                        duration=media.info.duration,
+                        width=media.info.width,
+                        height=media.info.height,
+                        supports_streaming=True,
+                        disable_notification=True,
+                        request_timeout=UPLOAD_TIMEOUT,
+                    )
+        finally:
+            pending -= 1
+        if sent.video is None:
+            raise MediaError("Telegram не вернул загруженное видео")
+        covers = sent.video.cover
+        cover_id = covers[-1].file_id if covers else None
+        if link.key:
+            storage.cache(link.key, sent.video.file_id, cover_id, media.info)
+        return sent.video.file_id, cover_id, media.info
 
     return router
