@@ -2,7 +2,7 @@ name: Build and deploy
 
 on:
   push:
-    branches: [development, main]
+    branches: [development, main, production-botapi]
 
 permissions:
   contents: read
@@ -13,6 +13,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.ref_name != 'production-botapi'  # That branch deploys only the Bot API.
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -43,7 +44,7 @@ jobs:
         id: build
         with:
           context: .
-          file: deploy/Dockerfile
+          file: deploy/bot/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.image.outputs.name }}:sha-${{ github.sha }}
@@ -51,7 +52,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ github.ref_name }}
 
   build-bot-api:
-    if: github.ref_name == 'main'  # Development uses the cloud Bot API.
+    if: github.ref_name == 'production-botapi'  # Only that branch deploys the Bot API.
     runs-on: ubuntu-24.04
     timeout-minutes: 60  # A cold C++ build; the GHA cache skips it until the Dockerfile changes.
     permissions:
@@ -75,8 +76,8 @@ jobs:
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         id: build
         with:
-          context: deploy
-          file: deploy/bot-api.Dockerfile
+          context: deploy/bot-api
+          file: deploy/bot-api/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.image.outputs.name }}:sha-${{ github.sha }}
@@ -85,10 +86,10 @@ jobs:
 
   deploy:
     needs: [build, build-bot-api]
-    if: ${{ !failure() && !cancelled() }}  # build-bot-api is skipped for development.
+    if: ${{ !failure() && !cancelled() }}  # One of the two builds is always skipped.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+    environment: ${{ github.ref_name == 'development' && 'development' || 'production' }}
     permissions:
       contents: read
       packages: read
@@ -104,7 +105,7 @@ jobs:
           test "$current" = "$GITHUB_SHA" || { echo 'Branch advanced; use the latest workflow run.'; exit 1; }
       - name: Deploy immutable image over SSH
         env:
-          DEPLOY_ENV: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+          DEPLOY_ENV: ${{ github.ref_name == 'main' && 'production' || github.ref_name }}
           DJGURDA_IMAGE: ${{ needs.build.outputs.image }}
           BOT_API_IMAGE: ${{ needs.build-bot-api.outputs.image }}
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
@@ -118,6 +119,7 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           ADMIN_IDS: ${{ secrets.ADMIN_IDS }}
           YANDEX_MUSIC_TOKEN: ${{ secrets.YANDEX_MUSIC_TOKEN }}
+          INLINE_CHAT_ID: ${{ vars.INLINE_CHAT_ID }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ github.token }}
         run: bash scripts/deploy.sh

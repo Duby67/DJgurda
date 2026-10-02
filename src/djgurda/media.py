@@ -14,15 +14,15 @@ import yt_dlp
 
 from djgurda.diagnostics import DownloadLogger
 
-LOCAL_MAX_BYTES = 512 * 1024 * 1024  # Below the local Bot API's 2000 MB; bounds disk and time.
+LOCAL_MAX_BYTES = 2000 * 1024 * 1024  # The local Bot API upload limit.
 CLOUD_MAX_BYTES = 50 * 1024 * 1024  # Cloud Bot API upload limit.
 # Preferred ceiling for the smaller side (vertical Shorts get 480p too); when a source has
 # nothing that small, yt-dlp picks its smallest variant instead.
 MAX_RESOLUTION = 480
-MAX_DURATION = 60 * 60  # Seconds; HLS sizes are often unknown, so length is the cheap guard.
+MAX_DURATION = 2 * 60 * 60  # Seconds; HLS sizes are often unknown, so length is the cheap guard.
 LONG_DURATION = 20 * 60  # Longer media moves to its own lane so short links keep flowing.
 DOWNLOAD_TIMEOUT = 5 * 60  # Seconds for download and merge of one link.
-LONG_DOWNLOAD_TIMEOUT = 20 * 60
+LONG_DOWNLOAD_TIMEOUT = 60 * 60
 DOWNLOAD_PREFIX = "download-"
 THUMBNAIL_SIZE = 320  # Bot API limit for video thumbnails.
 DURATION = re.compile(r"Duration: (\d+):(\d+):(\d+)")

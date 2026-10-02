@@ -1,0 +1,20 @@
+name: djgurda-production
+# Production sends files up to 512 MB through the Bot API server of project djgurda-bot-api
+# (branch production-botapi), reached over its network; development uses the cloud Bot API
+# (50 MB) and only checks the deployment.
+services:
+  bot:
+    environment:
+      APP_ENV: production
+      BOT_API_URL: http://bot-api:8081
+    networks: [default, bot-api]
+    restart: unless-stopped
+    cpus: 0.85
+    cpu_shares: 1024
+    mem_limit: 1152m
+    memswap_limit: 1152m
+
+networks:
+  bot-api:
+    external: true  # Created by the production-botapi deployment; deploy it first.
+    name: djgurda-bot-api

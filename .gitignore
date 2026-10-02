@@ -5,7 +5,7 @@
 *.local.env
 *.local.json
 *.local.yaml
-!deploy/compose.local.yaml
+!deploy/bot/compose.local.yaml
 *.local.yml
 *.pem
 *.key
@@ -14,7 +14,7 @@
 /.agents/tasks.md
 /.agents/handoff.md
 
-# Local agent tool settings; project rules live in AGENTS.md and Skills/
+# Local agent tool settings; project rules live in AGENTS.md and .agents/skills/
 /.codex/
 /.serena/
 /.mcp.json
