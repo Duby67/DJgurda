@@ -253,10 +253,15 @@ def test_forwarded_delivery_is_ignored(tmp_path: Path, monkeypatch: pytest.Monke
 
 
 def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(chat, "PROGRESS_INTERVAL", 0.05)
+
     def fetch(link: Link, target: Path, job: Job) -> Media:
         if "broken" in link.url:
             raise MediaError("видео недоступно")
         job.admit(LONG_DURATION + 1 if "long" in link.url else 60)
+        if "long" in link.url:
+            job.stage = "скачивание 50%"
+            time.sleep(0.3)
         return Media(target / "video.mp4", Info("Title", "Channel", 60, 2, 3))
 
     monkeypatch.setattr(chat, "fetch", fetch)
@@ -289,7 +294,7 @@ def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
                 query(1, "youtu.be/ok смотри"),  # New link: a placeholder.
                 chosen(2, "youtu.be/ok смотри"),  # Uploaded, then the placeholder is replaced.
                 query(3, "смотри youtu.be/ok"),  # Cached: sent at once.
-                chosen(4, "youtu.be/long"),  # Long videos take the long lane.
+                chosen(4, "youtu.be/long"),  # Long videos take the long lane and show progress.
                 chosen(5, "youtu.be/broken"),  # The placeholder shows the failure.
             ]:
                 await dispatcher.feed_update(bot, update)
@@ -309,11 +314,17 @@ def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     edit = edits[0]
     assert isinstance(edit.media, InputMediaVideo)
     assert (edit.media.media, edit.media.cover) == ("file-1", "cover-1")
-    (failure,) = [m for m in methods if isinstance(m, EditMessageText)]
-    assert failure.inline_message_id == "inline-5"
+    texts = [(m.inline_message_id, m.text) for m in methods if isinstance(m, EditMessageText)]
     # Telegram rejects custom emoji in inline messages unless the bot has a Fragment username.
-    assert failure.text == "❌ YouTube/video: видео недоступно"
+    assert texts == [
+        ("inline-4", "⏳ YouTube/video: скачивание 50%"),
+        ("inline-5", "❌ YouTube/video: видео недоступно"),
+    ]
     assert edit.media.caption is None
+    (report,) = [m for m in methods if isinstance(m, SendMessage)]
+    assert report.chat_id == -100  # Failures are visible without server logs.
+    assert report.text.startswith("❌ YouTube/video (inline): видео недоступно\n")
+    assert "MediaError: видео недоступно" in report.text
 
 
 def test_long_media_has_its_own_lane(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

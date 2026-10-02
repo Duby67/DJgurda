@@ -95,7 +95,7 @@ GitHub Environments `development` (branch `development`) and `production` (branc
 | `TELEGRAM_API_HASH` | Production environment secret | Application hash from my.telegram.org |
 | `YANDEX_MUSIC_TOKEN` | Secret | Optional; Yandex Music account token with a subscription |
 | `ADMIN_IDS` | Secret | Nonempty JSON array of positive integers, e.g. `[123456789]` |
-| `INLINE_CHAT_ID` | Environment variable | Optional; upload chat for inline mode, a different one per bot |
+| `INLINE_CHAT_ID` | Environment variable | Optional; upload chat for inline mode and delivery error reports, a different one per bot |
 | `DEPLOY_SSH_PRIVATE_KEY` | Secret | SSH key for `DEPLOY_USER` |
 | `DEPLOY_HOST` | Variable | Hostname or IPv4 |
 | `DEPLOY_PORT` | Variable | SSH port, even if 22 |

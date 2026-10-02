@@ -22,7 +22,8 @@ class Settings(BaseSettings):
     database_path: Path
     work_dir: Path
     yandex_music_token: SecretStr | None = None  # Optional: Yandex Music downloads.
-    # Optional: chat where inline mode uploads new videos for their file_id; the bot posts there.
+    # Optional: chat where inline mode uploads new videos for their file_id and the bot reports
+    # delivery failures.
     inline_chat_id: int | None = None
     app_env: Literal["development", "production"] = "development"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"

@@ -73,6 +73,7 @@ UPLOAD_TIMEOUT = 5 * 60  # Seconds; the local Bot API forwards the file to Teleg
 LONG_UPLOAD_TIMEOUT = 2 * 60 * 60  # 2000 MB at about 2.5 Mbit/s.
 PROGRESS_INTERVAL = 10  # Seconds between status edits; quick links finish without one.
 INLINE_DOWNLOAD = "download"  # Result id of the placeholder replaced after the download.
+MESSAGE_LIMIT = 4096
 
 logger = logging.getLogger(__name__)
 
@@ -104,27 +105,39 @@ def fetch(link: Link, target: Path, job: Job) -> Media:
     return link.source.fetch(link.url, target, job)
 
 
-async def show_progress(message: Message, bot: Bot, link: Link, job: Job) -> None:
-    """Reply with the job stage, edit it when it changes, delete it when cancelled.
+async def report_progress(
+    link: Link, job: Job, show: Callable[[str], Coroutine[Any, Any, object]]
+) -> None:
+    """Pass the job stage to `show` when it changes, until cancelled.
 
     Progress is cosmetic: its failures are logged and never affect delivery.
     """
-    status: int | None = None
     shown = ""
+    while True:
+        await asyncio.sleep(PROGRESS_INTERVAL)
+        text = f"⏳ {link.label}: {job.stage}"
+        if text == shown:
+            continue
+        try:
+            await show(text)
+            shown = text
+        except Exception as error:
+            logger.warning("Cannot show progress: %s", redact(str(error)))
+
+
+async def show_progress(message: Message, bot: Bot, link: Link, job: Job) -> None:
+    """Reply with the job stage, edit it when it changes, delete it when cancelled."""
+    status: int | None = None
+
+    async def show(text: str) -> None:
+        nonlocal status
+        if status is None:
+            status = (await message.reply(text)).message_id
+        else:
+            await bot.edit_message_text(text, chat_id=message.chat.id, message_id=status)
+
     try:
-        while True:
-            await asyncio.sleep(PROGRESS_INTERVAL)
-            text = f"⏳ {link.label}: {job.stage}"
-            if text == shown:
-                continue
-            try:
-                if status is None:
-                    status = (await message.reply(text)).message_id
-                else:
-                    await bot.edit_message_text(text, chat_id=message.chat.id, message_id=status)
-                shown = text
-            except Exception as error:
-                logger.warning("Cannot show progress: %s", redact(str(error)))
+        await report_progress(link, job, show)
     finally:
         if status is not None:
             try:
@@ -317,16 +330,30 @@ def create_router(
                 await deliver(message, bot, link)
                 delivered += 1
             except MediaError as error:
-                await report_failure(message, link, error, str(error))
+                await report_failure(message, bot, link, error, str(error))
             except Exception as error:
-                await report_failure(message, link, error, delivery_reason(error))
+                await report_failure(message, bot, link, error, delivery_reason(error))
         if delivered == len(found):
             try:
                 await message.delete()
             except TelegramAPIError as error:
                 logger.warning("Cannot delete the original message: %s", redact(str(error)))
 
-    async def report_failure(message: Message, link: Link, error: Exception, reason: str) -> None:
+    async def report_error(bot: Bot, link: Link, reason: str, error: Exception, where: str) -> None:
+        """Post a failure to the inline upload chat, where it is seen without server logs."""
+        if inline_chat_id is None:
+            return
+        header = f"❌ {link.label} ({where}): {reason}\n{link.url}\n\n"
+        trace = diagnostic(error)[-(MESSAGE_LIMIT - len(header)) :]  # The cause is at the end.
+        try:
+            await bot.send_message(inline_chat_id, header + trace, disable_notification=True)
+        except Exception as failure:
+            logger.error("Cannot report the failure\n%s", diagnostic(failure))
+
+    async def report_failure(
+        message: Message, bot: Bot, link: Link, error: Exception, reason: str
+    ) -> None:
+        await report_error(bot, link, reason, error, f"чат {message.chat.id}")
         logger.error(
             "Media delivery failed source=%s chat=%s message=%s reason=%s\n%s",
             link.label,
@@ -389,8 +416,10 @@ def create_router(
         if link is None or message_id is None or inline_chat_id is None:
             logger.error("Inline result cannot be processed: no link, message or upload chat")
             return
+        show = partial(bot.edit_message_text, inline_message_id=message_id)
+        watch = partial(report_progress, link, show=show)
         try:
-            file_id, cover_id, info = await upload_inline(bot, link, inline_chat_id)
+            file_id, cover_id, info = await upload_inline(bot, link, inline_chat_id, watch)
             media = InputMediaVideo(
                 media=file_id,
                 cover=cover_id,
@@ -409,6 +438,7 @@ def create_router(
                 reason,
                 diagnostic(error),
             )
+            await report_error(bot, link, reason, error, "inline")
             try:
                 await bot.edit_message_text(
                     f"{emoji.character('error')} {escape(link.label)}: {escape(reason)}",
@@ -418,12 +448,15 @@ def create_router(
             except Exception as notification_error:
                 logger.error("Cannot show inline failure\n%s", diagnostic(notification_error))
 
-    async def upload_inline(bot: Bot, link: Link, chat_id: int) -> tuple[str, str | None, Info]:
+    async def upload_inline(
+        bot: Bot, link: Link, chat_id: int, watch: Callable[[Job], Coroutine[Any, Any, None]]
+    ) -> tuple[str, str | None, Info]:
         """Download a video and upload it to the upload chat for its file_id."""
         hit = storage.cached(link.key) if link.key else None
         if hit:  # Another inline or chat delivery finished first.
             return hit
-        async with download_slot(link) as (media, job):
+        async with download_slot(link, watch) as (media, job):
+            job.stage = "отправка в Telegram"
             sent = await bot.send_video(
                 chat_id,
                 upload_file(media),
