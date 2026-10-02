@@ -2,8 +2,8 @@ name: djgurda-local
 services:
   bot:
     build:
-      context: ..
-      dockerfile: deploy/Dockerfile
+      context: ../..
+      dockerfile: deploy/bot/Dockerfile
     pull_policy: never
     cpus: 1.0
     mem_limit: 1280m
@@ -11,4 +11,4 @@ services:
     # Runs as the host user so the bind-mounted .data/ stays writable.
     user: ${LOCAL_USER:?Start through scripts/local.sh}
     volumes:
-      - ../.data:/data
+      - ../../.data:/data

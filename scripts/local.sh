@@ -4,5 +4,5 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p .data
 export DJGURDA_IMAGE=djgurda:local LOCAL_USER="$(id -u):$(id -g)"
-exec docker compose --env-file .env -f deploy/compose.yaml \
-  -f deploy/compose.development.yaml -f deploy/compose.local.yaml "$@"
+exec docker compose --env-file .env -f deploy/bot/compose.yaml \
+  -f deploy/bot/compose.development.yaml -f deploy/bot/compose.local.yaml "$@"
