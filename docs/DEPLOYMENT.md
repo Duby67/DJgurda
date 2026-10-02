@@ -73,12 +73,17 @@ Runtime properties:
 | Merge to `development` | Build bot image | temporary deployment check, then stop |
 | Merge to `main` | Build bot image | production bot only |
 | Merge to `production-botapi` | Build Bot API image | production Bot API only |
+| Sunday 04:00 MSK or manual run | `Update yt-dlp` | — |
 
 - `branch-policy`: PRs into `main` and `production-botapi` only from `development`; no PRs from
   them into `development`.
 - `version-check`: `pyproject.toml` version, `GENERATION.MAJOR.MINOR.PATCH` (e.g. `2.0.4.0`),
   must exceed the base and match `uv.lock`.
 - `lint`: `ruff check`, `ruff format --check`, `mypy` (strict); settings in `pyproject.toml`.
+- `Update yt-dlp`: the image installs the yt-dlp pinned in `uv.lock`, so a rebuild alone does not
+  update it. The workflow upgrades yt-dlp in `uv.lock` on `development`, increases PATCH and
+  opens or updates the PR from `update/yt-dlp`; nothing happens when yt-dlp is already newest.
+  Check a download locally, merge it, then promote `development` to `main` as usual.
 - Rulesets on `development`, `main` and `production-botapi`: require PR and the checks above, block force pushes and deletions,
   empty bypass list; `development` requires up-to-date branches. Push workflows rely on them.
 - Promote `development` to `main` and `production-botapi` with merge commits.
@@ -97,13 +102,14 @@ GitHub Environments `development` (branch `development`) and `production` (branc
 | `ADMIN_IDS` | Secret | Nonempty JSON array of positive integers, e.g. `[123456789]` |
 | `INLINE_CHAT_ID` | Environment variable | Optional; upload chat for inline mode and delivery error reports, a different one per bot |
 | `DEPLOY_SSH_PRIVATE_KEY` | Secret | SSH key for `DEPLOY_USER` |
+| `UPDATE_PR_TOKEN` | Repository secret | Fine-grained token for this repository, Contents and Pull requests read/write; PRs opened with `GITHUB_TOKEN` start no checks |
 | `DEPLOY_HOST` | Variable | Hostname or IPv4 |
 | `DEPLOY_PORT` | Variable | SSH port, even if 22 |
 | `DEPLOY_USER` | Variable | SSH user with Docker access |
 | `DEPLOY_KNOWN_HOSTS` | Variable | known_hosts entries; `[host]:port` for nonstandard ports |
 | `DEPLOY_APP_DIR` | Variable | Absolute root without spaces; the environment name is appended |
 
-All except `YANDEX_MUSIC_TOKEN` and `INLINE_CHAT_ID` are required. GHCR uses `GITHUB_TOKEN`; an existing package must
+All except `YANDEX_MUSIC_TOKEN`, `INLINE_CHAT_ID` and `UPDATE_PR_TOKEN` are required for deployment; `Update yt-dlp` fails without `UPDATE_PR_TOKEN`. GHCR uses `GITHUB_TOKEN`; an existing package must
 grant this repository Actions access.
 
 ### Server
