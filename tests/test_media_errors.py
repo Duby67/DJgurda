@@ -2,6 +2,7 @@
 
 import io
 import logging
+import re
 import time
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -81,3 +82,61 @@ def test_yandex_music_download_is_bounded(
         yandex_music.save(
             "https://example.com/track", tmp_path / "track.mp3", deadline + time.monotonic()
         )
+
+
+class Selected(Exception):
+    """Stops a test download once yt-dlp has chosen its formats."""
+
+
+@pytest.mark.parametrize(
+    ("max_mb", "expected"),
+    [
+        (50, "480+audio"),  # 720p is 62 MB with audio: the best quality that fits instead.
+        (5, None),  # Even 360p does not fit.
+    ],
+)
+def test_too_big_quality_falls_back_to_one_that_fits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, max_mb: int, expected: str | None
+) -> None:
+    def video(height: int, mb: int) -> dict[str, object]:
+        return {
+            "format_id": str(height),
+            "url": f"https://example.com/{height}",
+            "ext": "mp4",
+            "protocol": "https",
+            "vcodec": "avc1",
+            "acodec": "none",
+            "height": height,
+            "width": height * 16 // 9,
+            "filesize": mb * 1024 * 1024,
+        }
+
+    audio = {**video(0, 2), "format_id": "audio", "ext": "m4a", "vcodec": "none", "acodec": "mp4a"}
+    info = {
+        "id": "x",
+        "title": "Title",
+        "extractor": "generic",
+        "extractor_key": "Generic",
+        "webpage_url": "https://example.com/x",
+        "duration": 60,
+        "formats": [audio, video(360, 5), video(480, 20), video(720, 60), video(1080, 200)],
+    }
+    process = yt_dlp.YoutubeDL.process_ie_result
+
+    def select(ydl: yt_dlp.YoutubeDL, item: dict[str, object], download: bool = True) -> object:
+        chosen = process(ydl, item, download=False)  # Real yt-dlp format selection, no network.
+        if download:
+            raise Selected(chosen["format_id"])
+        return chosen
+
+    monkeypatch.setattr(
+        yt_dlp.YoutubeDL, "extract_info", lambda ydl, url, download: select(ydl, dict(info), False)
+    )
+    monkeypatch.setattr(yt_dlp.YoutubeDL, "process_ie_result", select)
+    job = media.Job(max_mb * 1024 * 1024, lambda duration: None)
+    if expected is None:
+        with pytest.raises(media.MediaError, match=f"файл больше {max_mb} МБ"):
+            media.download("https://example.com/x", tmp_path, job)
+    else:
+        with pytest.raises(Selected, match=re.escape(expected)):
+            media.download("https://example.com/x", tmp_path, job)
