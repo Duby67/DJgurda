@@ -39,9 +39,9 @@ Compose always takes `deploy/compose.yaml` plus one override: `compose.productio
 `compose.development.yaml`. The override sets limits, `APP_ENV` and the project name;
 the production override also defines `bot-api` and points the bot at it with `BOT_API_URL`,
 which production requires. `compose.local.yaml` is for functional checks on top of the
-production override: it builds both images locally, runs them as the host user with
-1 CPU / 1280 MiB for the bot, and keeps the database and Bot API state in the git-ignored
-`.data/` under project `djgurda-local`. `.env` also needs `TELEGRAM_API_ID` and `TELEGRAM_API_HASH`.
+development override, so it uses the cloud Bot API: it builds the bot image locally, runs as the
+host user with 1 CPU / 1280 MiB, and keeps the database in the git-ignored `.data/` under project
+`djgurda-local`. The Bot API image is built only in CI; its local build crashes WSL.
 `scripts/local.sh` applies it (`up --build` / `down`). Use a separate local bot token so a server
 deployment check cannot compete for its updates. Not for the server.
 
