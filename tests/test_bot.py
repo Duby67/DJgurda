@@ -1,6 +1,7 @@
 """Exercise routing and outgoing messages without contacting Telegram."""
 
 import asyncio
+import json
 import re
 import threading
 import time
@@ -13,7 +14,7 @@ from unittest.mock import AsyncMock, call
 
 import pytest
 from aiogram import Bot
-from aiogram.exceptions import TelegramNetworkError
+from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.methods import (
     AnswerInlineQuery,
     DeleteMessage,
@@ -31,8 +32,6 @@ from aiogram.types import (
     ChosenInlineResult,
     FSInputFile,
     InlineQuery,
-    InlineQueryResultArticle,
-    InlineQueryResultCachedVideo,
     InputMediaVideo,
     Message,
     MessageEntity,
@@ -43,7 +42,7 @@ from aiogram.types import (
     Video,
 )
 
-from djgurda import caption, chat, emoji
+from djgurda import chat, emoji
 from djgurda.bot import create_dispatcher
 from djgurda.chat import HELP
 from djgurda.media import LONG_DURATION, Info, Job, Media, MediaError
@@ -102,6 +101,7 @@ def run_script(bot_request: AsyncMock, work_dir: Path, script: list[tuple[int, s
                     continue
                 chat_id, text = item
                 await dispatcher.feed_update(bot, message(update_id, chat_id, text))
+            assert storage.unfinished() == []  # Finished deliveries leave the journal.
             storage.close()
 
     asyncio.run(deliver())
@@ -198,31 +198,23 @@ def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
 
     monkeypatch.setattr(chat, "fetch", fetch)
     request = AsyncMock(side_effect=telegram)
-    author = '<a href="tg://user?id=42">{}</a>'
-    source = emoji.html("YouTube") + ' <a href="https://youtu.be/ok">YouTube</a>'
     script = [
         (42, "/start"),
         (-7, "/start"),
-        (42, "/saymyname  Ivan228 "),
-        (42, "как  смешно youtu.be/ok\n\nда"),  # Delivered, so the original is deleted.
-        (-7, "youtu.be/ok"),  # Cached file_id; the nickname belongs to chat 42 only.
+        (42, "как  смешно youtu.be/ok\n\nда"),  # Delivered without a caption; original deleted.
+        (-7, "youtu.be/ok"),  # Cached file_id.
         (42, "youtu.be/ok youtu.be/fail youtube.com/playlist?list=1"),  # Original stays.
-        (42, "статья " * 200 + "youtu.be/ok"),  # Too long for a caption: left untouched.
     ]
     run_script(request, tmp_path, script)
 
     assert sent(request) == [
         (42, f"{emoji.html('success')} Бот активен в этом чате"),
         (-7, f"{emoji.html('success')} Бот активен в этом чате"),
-        (42, "Имя в этом чате: Ivan228"),
-        (
-            42,
-            f"Title &lt;1&gt; — Channel\n\nкак смешно\nда\n\n{author.format('Ivan228')}\n{source}",
-        ),
+        (42, "SendVideo"),
         (42, "DeleteMessage"),
-        (-7, f"Title &lt;1&gt; — Channel\n\n{author.format('Test')}\n{source}"),
+        (-7, "SendVideo"),
         (-7, "DeleteMessage"),
-        (42, f"Title &lt;1&gt; — Channel\n\n{author.format('Ivan228')}\n{source}"),
+        (42, "SendVideo"),
         (42, f"{emoji.html('error')} YouTube/video: не удалось скачать &lt;private&gt;"),
         (42, f"{emoji.html('warning')} YouTube/playlist: обработка ещё не реализована"),
     ]
@@ -261,8 +253,15 @@ def test_forwarded_delivery_is_ignored(tmp_path: Path, monkeypatch: pytest.Monke
 
 
 def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(chat, "PROGRESS_INTERVAL", 0.05)
+
     def fetch(link: Link, target: Path, job: Job) -> Media:
+        if "broken" in link.url:
+            raise MediaError("видео недоступно")
         job.admit(LONG_DURATION + 1 if "long" in link.url else 60)
+        if "long" in link.url:
+            job.stage = "скачивание 50%"
+            time.sleep(0.3)
         return Media(target / "video.mp4", Info("Title", "Channel", 60, 2, 3))
 
     monkeypatch.setattr(chat, "fetch", fetch)
@@ -295,7 +294,8 @@ def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
                 query(1, "youtu.be/ok смотри"),  # New link: a placeholder.
                 chosen(2, "youtu.be/ok смотри"),  # Uploaded, then the placeholder is replaced.
                 query(3, "смотри youtu.be/ok"),  # Cached: sent at once.
-                chosen(4, "youtu.be/long"),  # Long videos are refused in inline mode.
+                chosen(4, "youtu.be/long"),  # Long videos take the long lane and show progress.
+                chosen(5, "youtu.be/broken"),  # The placeholder shows the failure.
             ]:
                 await dispatcher.feed_update(bot, update)
             storage.close()
@@ -303,20 +303,184 @@ def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     asyncio.run(scenario())
     methods = [c.args[1] for c in request.await_args_list]
     answers = [m for m in methods if isinstance(m, AnswerInlineQuery)]
-    assert [type(result) for answer in answers for result in answer.results] == [
-        InlineQueryResultArticle,
-        InlineQueryResultCachedVideo,
+    assert [result.id for answer in answers for result in answer.results] == [
+        chat.INLINE_DOWNLOAD,
+        "cached",
+        chat.INLINE_REDOWNLOAD,  # In case Telegram cannot send the cached file.
     ]
     uploads = [m for m in methods if isinstance(m, SendVideo)]
-    assert [upload.chat_id for upload in uploads] == [-100]
-    (edit,) = [m for m in methods if isinstance(m, EditMessageMedia)]
-    assert edit.inline_message_id == "inline-2"
+    assert [upload.chat_id for upload in uploads] == [-100, -100]
+    edits = [m for m in methods if isinstance(m, EditMessageMedia)]
+    assert [edit.inline_message_id for edit in edits] == ["inline-2", "inline-4"]
+    edit = edits[0]
     assert isinstance(edit.media, InputMediaVideo)
     assert (edit.media.media, edit.media.cover) == ("file-1", "cover-1")
-    assert edit.media.caption and "смотри" in edit.media.caption
+    texts = [(m.inline_message_id, m.text) for m in methods if isinstance(m, EditMessageText)]
+    # Telegram rejects custom emoji in inline messages unless the bot has a Fragment username.
+    assert texts == [
+        ("inline-4", "⏳ YouTube/video: скачивание 50%"),
+        ("inline-5", "❌ YouTube/video: видео недоступно"),
+    ]
+    assert edit.media.caption is None
+    (report,) = [m for m in methods if isinstance(m, SendMessage)]
+    assert report.chat_id == -100  # Failures are visible without server logs.
+    assert report.text.startswith("❌ YouTube/video (inline): видео недоступно\n")
+    assert "MediaError: видео недоступно" in report.text
+
+
+def test_inline_recovers_from_broken_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    downloads = []
+
+    def fetch(link: Link, target: Path, job: Job) -> Media:
+        downloads.append(link.url)
+        return Media(target / "video.mp4", Info("Title", "Channel", 60, 2, 3))
+
+    async def bot_api(bot: Bot, method: TelegramMethod[Any], timeout: int | None = None) -> Any:
+        if isinstance(method, AnswerInlineQuery) and any(
+            getattr(result, "video_file_id", None) == "broken" for result in method.results
+        ):
+            raise TelegramBadRequest(method=method, message="Bad Request: wrong file identifier")
+        return await telegram(bot, method, timeout)
+
+    monkeypatch.setattr(chat, "fetch", fetch)
+    request = AsyncMock(side_effect=bot_api)
+    user = User(id=42, is_bot=False, first_name="Test")
+    link = classify("youtu.be/ok")
+    assert link and link.key
+    key = link.key
+
+    async def scenario() -> None:
+        async with Bot(token="123456789:offline-test-token") as bot:
+            bot.session.make_request = request  # type: ignore[method-assign]
+            storage = Storage(tmp_path / "db.sqlite3")
+            storage.cache(key, "broken", None, Info("Title", "", 60, 2, 3))
+            dispatcher = create_dispatcher(
+                [100], storage, tmp_path, local_api=True, inline_chat_id=-100
+            )
+            inline = InlineQuery(id="1", from_user=user, query="youtu.be/ok", offset="")
+            await dispatcher.feed_update(bot, Update(update_id=1, inline_query=inline))
+            assert storage.cached(key) is None  # Telegram rejected it: forgotten.
+            storage.cache(key, "stale", None, Info("Title", "", 60, 2, 3))
+            # Accepted by Telegram but not sendable: two users pick "download again" at once.
+            redownloads = [
+                Update(
+                    update_id=update_id,
+                    chosen_inline_result=ChosenInlineResult(
+                        result_id=chat.INLINE_REDOWNLOAD,
+                        from_user=user,
+                        query="youtu.be/ok",
+                        inline_message_id=f"inline-{update_id}",
+                    ),
+                )
+                for update_id in (2, 3)
+            ]
+            await asyncio.gather(*(dispatcher.feed_update(bot, u) for u in redownloads))
+            hit = storage.cached(key)
+            assert hit and hit[0] == "file-1"  # Replaced by the new upload.
+            storage.close()
+
+    asyncio.run(scenario())
+    methods = [c.args[1] for c in request.await_args_list]
+    answers = [m for m in methods if isinstance(m, AnswerInlineQuery)]
+    assert [[result.id for result in answer.results] for answer in answers] == [
+        ["cached", chat.INLINE_REDOWNLOAD],
+        [chat.INLINE_DOWNLOAD],
+    ]
+    assert downloads == ["https://youtu.be/ok"]  # The second reuses the new file.
+    edits = [m for m in methods if isinstance(m, EditMessageMedia)]
+    assert [edit.media.media for edit in edits] == ["file-1", "file-1"]
+
+
+@pytest.mark.parametrize(
+    ("error", "downloaded"),
+    [
+        ("Bad Request: wrong file identifier/HTTP URL specified", True),
+        ("Bad Request: not enough rights to send videos to the chat", False),
+    ],
+)
+def test_cache_is_forgotten_only_for_file_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error: str, downloaded: bool
+) -> None:
+    downloads = []
+
+    def fetch(link: Link, target: Path, job: Job) -> Media:
+        downloads.append(link.url)
+        return Media(target / "video.mp4", Info("", "", 1, 2, 3))
+
+    async def bot_api(bot: Bot, method: TelegramMethod[Any], timeout: int | None = None) -> Any:
+        if isinstance(method, SendVideo) and method.video == "cached":
+            raise TelegramBadRequest(method=method, message=error)
+        return await telegram(bot, method, timeout)
+
+    monkeypatch.setattr(chat, "fetch", fetch)
+    link = classify("youtu.be/ok")
+    assert link and link.key
+    storage = Storage(tmp_path / "db.sqlite3")
+    storage.cache(link.key, "cached", None, Info("", "", 1, 2, 3))
+    storage.close()
+    run_script(AsyncMock(side_effect=bot_api), tmp_path, [(42, "/start"), (42, "youtu.be/ok")])
+    storage = Storage(tmp_path / "db.sqlite3")
+    hit = storage.cached(link.key)
+    storage.close()
+    assert bool(downloads) == downloaded
+    assert hit and hit[0] == ("file-1" if downloaded else "cached")
+
+
+def test_deliveries_resume_after_restart(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    downloads = []
+
+    def fetch(link: Link, target: Path, job: Job) -> Media:
+        downloads.append(link.url)
+        return Media(target / "v.mp4", Info("", "", 1, 2, 3))
+
+    monkeypatch.setattr(chat, "fetch", fetch)
+    request = AsyncMock(side_effect=telegram)
+    original = Message(message_id=5, date=datetime.now(UTC), chat=Chat(id=42, type="private"))
+    # The first link was delivered before the restart; the second was downloading.
+    state = {
+        "message": original.model_dump(mode="json", include=chat.MESSAGE_FIELDS),
+        "urls": ["youtu.be/second"],
+        "failed": False,
+        "status": 77,
+    }
+
+    async def scenario() -> None:
+        async with Bot(token="123456789:offline-test-token") as bot:
+            bot.session.make_request = request  # type: ignore[method-assign]
+            storage = Storage(tmp_path / "db.sqlite3")
+            storage.begin("chat:42:5", json.dumps(state))
+            storage.begin(
+                "inline:inline-1", json.dumps({"url": "https://youtu.be/ok", "redownload": False})
+            )
+            # Interrupted again and again: given up, so a crashing video cannot loop.
+            for _ in range(chat.ATTEMPTS):
+                storage.begin(
+                    "inline:inline-2",
+                    json.dumps({"url": "https://youtu.be/crash", "redownload": False}),
+                )
+            dispatcher = create_dispatcher(
+                [100], storage, tmp_path, local_api=True, inline_chat_id=-100
+            )
+            await dispatcher.emit_startup(bot=bot)
+            for _ in range(100):
+                if not storage.unfinished():
+                    break
+                await asyncio.sleep(0.05)
+            assert storage.unfinished() == []
+            storage.close()
+
+    asyncio.run(scenario())
+    assert downloads == ["https://youtu.be/second", "https://youtu.be/ok"]
+    methods = [c.args[1] for c in request.await_args_list]
+    deleted = [(m.chat_id, m.message_id) for m in methods if isinstance(m, DeleteMessage)]
+    assert deleted == [(42, 77), (42, 5)]  # The stale status, then the delivered original.
+    videos = [m.chat_id for m in methods if isinstance(m, SendVideo)]
+    assert videos == [42, -100]
+    (edit,) = [m for m in methods if isinstance(m, EditMessageMedia)]
+    assert edit.inline_message_id == "inline-1"
     (failure,) = [m for m in methods if isinstance(m, EditMessageText)]
-    assert failure.inline_message_id == "inline-4"
-    assert f"только видео до {LONG_DURATION // 60} минут" in (failure.text or "")
+    assert failure.inline_message_id == "inline-2"
+    assert failure.text == f"❌ YouTube/video: {chat.INTERRUPTED}"
 
 
 def test_long_media_has_its_own_lane(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -360,6 +524,40 @@ def test_long_media_has_its_own_lane(tmp_path: Path, monkeypatch: pytest.MonkeyP
         c.kwargs["timeout"] for c in request.await_args_list if isinstance(c.args[1], SendVideo)
     ]
     assert timeouts == [chat.UPLOAD_TIMEOUT, chat.LONG_UPLOAD_TIMEOUT]
+
+
+def test_same_link_is_downloaded_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    started, release = threading.Event(), threading.Event()
+    downloads = []
+
+    def fetch(link: Link, target: Path, job: Job) -> Media:
+        downloads.append(link.url)
+        started.set()
+        release.wait(5)
+        return Media(target / "video.mp4", Info("", "", 1, 2, 3))
+
+    monkeypatch.setattr(chat, "fetch", fetch)
+    request = AsyncMock(side_effect=telegram)
+
+    async def scenario() -> None:
+        async with Bot(token="123456789:offline-test-token") as bot:
+            bot.session.make_request = request  # type: ignore[method-assign]
+            storage = Storage(tmp_path / "db.sqlite3")
+            dispatcher = create_dispatcher([100], storage, tmp_path, local_api=True)
+            await dispatcher.feed_update(bot, message(1, 42, "/start"))
+            await dispatcher.feed_update(bot, message(2, -7, "/start"))
+            first = asyncio.create_task(dispatcher.feed_update(bot, message(3, 42, "youtu.be/ok")))
+            assert await asyncio.to_thread(started.wait, 5)
+            second = asyncio.create_task(dispatcher.feed_update(bot, message(4, -7, "youtu.be/ok")))
+            await asyncio.sleep(0.1)  # The second request waits instead of downloading.
+            release.set()
+            await asyncio.gather(first, second)
+            storage.close()
+
+    asyncio.run(scenario())
+    assert downloads == ["https://youtu.be/ok"]
+    videos = [c.args[1] for c in request.await_args_list if isinstance(c.args[1], SendVideo)]
+    assert [(video.chat_id, video.video) for video in videos][1:] == [(-7, "file-1")]
 
 
 def test_slow_download_shows_progress(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -452,35 +650,6 @@ def test_unexpected_download_failure_is_visible(
 
 
 @pytest.mark.parametrize(
-    ("title", "channel", "limit", "expected"),
-    [
-        ("Смешной кот #shorts #cat", "Коты | ", 96, "Смешной кот — Коты"),
-        ("#shorts", "", 96, "Интересный контент"),
-        (
-            "Очень длинное название видео, которое никак не помещается в заголовок подписи целиком",
-            "Канал с очень длинным названием для проверки",
-            80,
-            "Очень длинное название видео, которое никак… — Канал с очень длинным названием…",
-        ),
-        ("Название", "Канал", 12, "Название"),  # No room for the channel.
-    ],
-)
-def test_caption_header(title: str, channel: str, limit: int, expected: str) -> None:
-    assert caption.header(title, channel, limit) == expected
-
-
-def test_caption_fits_telegram_limit() -> None:
-    author = caption.Author("Ivan", None)
-    text = "т" * 990
-    assert caption.fits(text, author, "YouTube")
-    assert not caption.fits(text + "т" * 20, author, "YouTube")
-    built = caption.build("Очень длинное название 🎬 " * 20, "", text, author, "YouTube", "x")
-    visible = re.sub(r"<[^>]+>", "", built)
-    assert caption.length(visible) <= caption.CAPTION_LIMIT
-    assert visible.startswith("Очень длинное") and "…\n\n" + text in visible
-
-
-@pytest.mark.parametrize(
     ("url", "start"),
     [
         ("youtu.be/x?t=90", 90),
@@ -510,11 +679,7 @@ def test_audio_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
         ("Song", "Artist", False),
     ]
     assert audios[1].audio == "audio-1"  # Cached file_id.
-    footer = (
-        f'<a href="tg://user?id=42">Test</a>\n{emoji.html("Yandex Music")} '
-        f'<a href="{track}">Yandex Music</a>'
-    )
-    assert [audio.caption for audio in audios] == [f"Слушай &lt;это&gt;\n\n{footer}", footer]
+    assert [audio.caption for audio in audios] == [None, None]
 
 
 @pytest.mark.parametrize(

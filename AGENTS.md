@@ -14,6 +14,7 @@ Hard rules; stop and report instead of working around them.
   text implied by the file itself (its audience, purpose, or language), or copies of other files.
 - **Branch isolation:** new branch from `development`. Never work or
   commit directly on `development` or `main`; changes enter these branches through pull requests.
+- **Commits** only with the user's explicit permission for that change.
 - **No silent fallback:** fail with an actionable error instead of substituting a default.
 - **Secrets** come from the environment; never commit them or put them in logs, reports, or session
   files.
