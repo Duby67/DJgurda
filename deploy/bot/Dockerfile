@@ -3,7 +3,9 @@ FROM denoland/deno:bin-2.9.7 AS deno
 FROM mwader/static-ffmpeg:9.0.2 AS ffmpeg
 FROM python:3.14-slim-bookworm AS builder
 COPY --from=uv /uv /usr/local/bin/uv
-ENV UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
+# Precompiled bytecode: the read-only runtime would otherwise compile every module on each start,
+# which at the development CPU limit outlasts the healthcheck start period.
+ENV UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never UV_COMPILE_BYTECODE=1
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
