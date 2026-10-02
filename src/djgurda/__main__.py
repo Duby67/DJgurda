@@ -29,11 +29,16 @@ async def run(settings: Settings) -> None:
         token = settings.yandex_music_token
         yandex_music.configure(token.get_secret_value() if token else None)
         with closing(Storage(settings.database_path)) as storage:
-            api = TelegramAPIServer.from_base(str(settings.bot_api_url), is_local=True)
-            async with Bot(
-                token=settings.bot_token.get_secret_value(), session=AiohttpSession(api=api)
-            ) as bot:
-                dispatcher = create_dispatcher(settings.admin_ids, storage, settings.work_dir)
+            url = settings.bot_api_url
+            session = (
+                AiohttpSession(api=TelegramAPIServer.from_base(str(url), is_local=True))
+                if url
+                else None
+            )
+            async with Bot(token=settings.bot_token.get_secret_value(), session=session) as bot:
+                dispatcher = create_dispatcher(
+                    settings.admin_ids, storage, settings.work_dir, local_api=url is not None
+                )
                 dispatcher.startup.register(mark_ready)
                 # Skip messages sent while offline.
                 await bot.delete_webhook(drop_pending_updates=True)

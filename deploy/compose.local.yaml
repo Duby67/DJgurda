@@ -1,6 +1,9 @@
 name: djgurda-local
 services:
   bot:
+    environment:
+      APP_ENV: development
+    restart: "no"
     build:
       context: ..
       dockerfile: deploy/Dockerfile
@@ -17,6 +20,7 @@ services:
       context: ..
       dockerfile: deploy/bot-api.Dockerfile
     pull_policy: never
+    restart: "no"
     cpus: 0.50
     mem_limit: 256m
     memswap_limit: 256m

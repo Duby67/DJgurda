@@ -51,6 +51,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ github.ref_name }}
 
   build-bot-api:
+    if: github.ref_name == 'main'  # Development uses the cloud Bot API.
     runs-on: ubuntu-24.04
     timeout-minutes: 60  # A cold C++ build; the GHA cache skips it until the Dockerfile changes.
     permissions:
@@ -84,6 +85,7 @@ jobs:
 
   deploy:
     needs: [build, build-bot-api]
+    if: ${{ !failure() && !cancelled() }}  # build-bot-api is skipped for development.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}

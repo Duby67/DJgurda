@@ -47,3 +47,14 @@ def test_admin_ids_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = Settings(_env_file=None)
     assert settings.admin_ids == [100, 200]
     assert "admin_ids" not in repr(settings)
+
+
+def test_production_requires_local_bot_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BOT_TOKEN", "offline-test-token")
+    monkeypatch.setenv("ADMIN_IDS", "[100]")
+    monkeypatch.setenv("DATABASE_PATH", "db.sqlite3")
+    monkeypatch.setenv("WORK_DIR", "work")
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("BOT_API_URL", raising=False)
+    with pytest.raises(ValidationError, match="BOT_API_URL is required"):
+        Settings(_env_file=None)

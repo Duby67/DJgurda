@@ -8,7 +8,7 @@ from urllib.parse import SplitResult, urlsplit
 import yt_dlp
 
 from djgurda.diagnostics import DownloadLogger, redact
-from djgurda.media import Admit, Media, download
+from djgurda.media import Job, Media, download
 from djgurda.sources.base import Source
 
 # Serves the reel file to link-preview bots without an Instagram login.
@@ -57,9 +57,9 @@ def describe(url: str) -> tuple[str, str]:
     return text, info.get("channel") or info.get("uploader") or ""
 
 
-def fetch(url: str, target: Path, admit: Admit) -> Media:
+def fetch(url: str, target: Path, job: Job) -> Media:
     shortcode = parts(urlsplit(url))[1]
-    media = download(f"https://{MIRROR}/reel/{shortcode}/", target, admit, MIRROR_HEADERS)
+    media = download(f"https://{MIRROR}/reel/{shortcode}/", target, job, MIRROR_HEADERS)
     title, author = describe(url)
     return replace(media, info=replace(media.info, title=title, uploader=author))
 

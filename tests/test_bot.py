@@ -3,6 +3,7 @@
 import asyncio
 import re
 import threading
+import time
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from importlib.metadata import version
@@ -15,6 +16,7 @@ from aiogram import Bot
 from aiogram.exceptions import TelegramNetworkError
 from aiogram.methods import (
     DeleteMessage,
+    EditMessageText,
     SendAudio,
     SendChatAction,
     SendMessage,
@@ -36,7 +38,7 @@ from aiogram.types import (
 from djgurda import caption, chat, emoji
 from djgurda.bot import create_dispatcher
 from djgurda.chat import HELP
-from djgurda.media import LONG_DURATION, Admit, Info, Media, MediaError
+from djgurda.media import LONG_DURATION, Info, Job, Media, MediaError
 from djgurda.sources import classify
 from djgurda.sources.base import Link
 from djgurda.storage import Storage
@@ -75,12 +77,12 @@ def run_script(bot_request: AsyncMock, work_dir: Path, script: list[tuple[int, s
         async with Bot(token="123456789:offline-test-token") as bot:
             bot.session.make_request = bot_request  # type: ignore[method-assign]
             storage = Storage(work_dir / "db.sqlite3")
-            dispatcher = create_dispatcher([100], storage, work_dir)
+            dispatcher = create_dispatcher([100], storage, work_dir, local_api=True)
             for update_id, item in enumerate(script, 1):
                 if item == RESTART:
                     storage.close()
                     storage = Storage(work_dir / "db.sqlite3")
-                    dispatcher = create_dispatcher([100], storage, work_dir)
+                    dispatcher = create_dispatcher([100], storage, work_dir, local_api=True)
                     continue
                 chat_id, text = item
                 await dispatcher.feed_update(bot, message(update_id, chat_id, text))
@@ -111,6 +113,10 @@ async def telegram(bot: Bot, method: TelegramMethod[Any], timeout: int | None = 
         )
         return Message(
             message_id=99, date=datetime.now(UTC), chat=Chat(id=1, type="private"), video=video
+        )
+    if isinstance(method, SendMessage):  # Progress status is edited later.
+        return Message(
+            message_id=97, date=datetime.now(UTC), chat=Chat(id=1, type="private"), text="status"
         )
     return True
 
@@ -164,7 +170,7 @@ def test_chat_lifecycle(tmp_path: Path) -> None:
 def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     downloads = []
 
-    def fetch(link: Link, target: Path, admit: Admit) -> Media:
+    def fetch(link: Link, target: Path, job: Job) -> Media:
         assert target.parent == tmp_path
         url = link.url
         downloads.append(url)
@@ -217,9 +223,9 @@ def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
 def test_long_media_has_its_own_lane(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     long_admitted, release = threading.Event(), threading.Event()
 
-    def fetch(link: Link, target: Path, admit: Admit) -> Media:
+    def fetch(link: Link, target: Path, job: Job) -> Media:
         long = "long" in link.url
-        admit(LONG_DURATION + 1 if long else 60)
+        job.admit(LONG_DURATION + 1 if long else 60)
         if long:
             long_admitted.set()
             release.wait(5)
@@ -232,7 +238,7 @@ def test_long_media_has_its_own_lane(tmp_path: Path, monkeypatch: pytest.MonkeyP
         async with Bot(token="123456789:offline-test-token") as bot:
             bot.session.make_request = request  # type: ignore[method-assign]
             storage = Storage(tmp_path / "db.sqlite3")
-            dispatcher = create_dispatcher([100], storage, tmp_path)
+            dispatcher = create_dispatcher([100], storage, tmp_path, local_api=True)
             await dispatcher.feed_update(bot, message(1, 42, "/start"))
             first = asyncio.create_task(
                 dispatcher.feed_update(bot, message(2, 42, "youtu.be/long1"))
@@ -257,6 +263,39 @@ def test_long_media_has_its_own_lane(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert timeouts == [chat.UPLOAD_TIMEOUT, chat.LONG_UPLOAD_TIMEOUT]
 
 
+def test_slow_download_shows_progress(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(chat, "PROGRESS_INTERVAL", 0.05)
+
+    def fetch(link: Link, target: Path, job: Job) -> Media:
+        for stage in ("скачивание 50%", "обработка"):
+            job.stage = stage
+            time.sleep(0.3)
+        return Media(target / "video.mp4", Info("", "", 1, 2, 3))
+
+    monkeypatch.setattr(chat, "fetch", fetch)
+    request = AsyncMock(side_effect=telegram)
+
+    async def scenario() -> None:
+        async with Bot(token="123456789:offline-test-token") as bot:
+            bot.session.make_request = request  # type: ignore[method-assign]
+            storage = Storage(tmp_path / "db.sqlite3")
+            dispatcher = create_dispatcher([100], storage, tmp_path, local_api=False)
+            await dispatcher.feed_update(bot, message(1, 42, "/start"))
+            await dispatcher.feed_update(bot, message(2, 42, "youtu.be/slow"))
+            storage.close()
+
+    asyncio.run(scenario())
+    methods = [c.args[1] for c in request.await_args_list]
+    status = [m.text for m in methods if isinstance(m, SendMessage) and m.text.startswith("⏳")]
+    edits = [m.text for m in methods if isinstance(m, EditMessageText)]
+    assert status == ["⏳ YouTube/video: скачивание 50%"]
+    assert edits == ["⏳ YouTube/video: обработка"]  # Unchanged stages are not re-sent.
+    deleted = [m.message_id for m in methods if isinstance(m, DeleteMessage)]
+    assert deleted == [97, 2]  # The status, then the delivered original.
+    video = next(m for m in methods if isinstance(m, SendVideo))
+    assert isinstance(video.video, FSInputFile)  # The cloud Bot API needs an HTTP upload.
+
+
 @pytest.mark.parametrize("notification_fails", [False, True])
 def test_upload_failure_keeps_original_and_continues(
     tmp_path: Path,
@@ -267,7 +306,7 @@ def test_upload_failure_keeps_original_and_continues(
     monkeypatch.setattr(
         chat,
         "fetch",
-        lambda link, target, admit: Media(target / "video.mp4", Info("", "", 1, 2, 3)),
+        lambda link, target, job: Media(target / "video.mp4", Info("", "", 1, 2, 3)),
     )
     uploads = 0
 
@@ -298,7 +337,7 @@ def test_upload_failure_keeps_original_and_continues(
 def test_unexpected_download_failure_is_visible(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    def fetch(link: Link, target: Path, admit: Admit) -> Media:
+    def fetch(link: Link, target: Path, job: Job) -> Media:
         raise OSError("Disk full")
 
     monkeypatch.setattr(chat, "fetch", fetch)
@@ -357,7 +396,7 @@ def test_youtube_start(url: str, start: int | None) -> None:
 
 
 def test_audio_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    def fetch(link: Link, target: Path, admit: Admit) -> Media:
+    def fetch(link: Link, target: Path, job: Job) -> Media:
         path = target / "track.mp3"
         return Media(path, Info("Song", "Artist", duration=1, width=None, height=None))
 
@@ -434,7 +473,7 @@ def test_classify(url: str, label: str | None, downloadable: bool) -> None:
 
 def test_startup_and_shutdown_notify_only_admins(storage: Storage, tmp_path: Path) -> None:
     bot = AsyncMock()
-    dispatcher = create_dispatcher([100, 200, 100], storage, tmp_path)
+    dispatcher = create_dispatcher([100, 200, 100], storage, tmp_path, local_api=True)
     asyncio.run(dispatcher.emit_startup(bot=bot))
     asyncio.run(dispatcher.emit_shutdown(bot=bot))
     assert bot.send_message.await_args_list == [
@@ -452,4 +491,6 @@ def test_startup_notification_failure_is_not_ignored(storage: Storage, tmp_path:
     bot = AsyncMock()
     bot.send_message.side_effect = RuntimeError("Notification failed")
     with pytest.raises(RuntimeError, match="Notification failed"):
-        asyncio.run(create_dispatcher([100], storage, tmp_path).emit_startup(bot=bot))
+        asyncio.run(
+            create_dispatcher([100], storage, tmp_path, local_api=True).emit_startup(bot=bot)
+        )

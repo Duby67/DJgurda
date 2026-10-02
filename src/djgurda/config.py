@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import AnyHttpUrl, Field, PositiveInt, SecretStr, field_validator
+from pydantic import AnyHttpUrl, Field, PositiveInt, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     )
 
     bot_token: SecretStr
-    bot_api_url: AnyHttpUrl  # Local Bot API server; it must see work_dir at the same path.
+    # Local Bot API server; it must see work_dir at the same path. Unset: cloud API, 50 MB.
+    bot_api_url: AnyHttpUrl | None = None
     admin_ids: list[PositiveInt] = Field(min_length=1, repr=False)
     database_path: Path
     work_dir: Path
@@ -28,6 +29,12 @@ class Settings(BaseSettings):
     @classmethod
     def blank_token_is_unset(cls, value: SecretStr | None) -> SecretStr | None:
         return value if value and value.get_secret_value().strip() else None
+
+    @model_validator(mode="after")
+    def production_uses_local_api(self) -> Settings:
+        if self.app_env == "production" and self.bot_api_url is None:
+            raise ValueError("BOT_API_URL is required in production")
+        return self
 
     @field_validator("bot_token")
     @classmethod

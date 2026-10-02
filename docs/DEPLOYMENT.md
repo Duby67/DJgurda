@@ -2,15 +2,15 @@
 
 ## Budget
 
-The VM is dedicated exclusively to DJgurda: the bot and its local Bot API server.
-Target: 1 vCPU, ~2 GiB RAM, no swap, 30 GiB disk.
+The VM is dedicated exclusively to DJgurda. Production runs the bot and its local Bot API server
+and takes nearly all resources; development runs only the bot, on the cloud Bot API (50 MB
+uploads), for a deployment check. Target: 1 vCPU, ~2 GiB RAM, no swap, 30 GiB disk.
 
 | Environment | Service | CPU | Memory | Restart |
 | --- | --- | --- | --- | --- |
-| production | bot | 0.85 | 1024 MiB | unless-stopped |
+| production | bot | 0.85 | 1152 MiB | unless-stopped |
 | production | bot-api | 0.50 | 256 MiB | unless-stopped |
 | development (deployment check only) | bot | 0.10 | 256 MiB | no |
-| development (deployment check only) | bot-api | 0.10 | 128 MiB | no |
 
 About 300 MiB stays for the OS and Docker during a deployment check. CPU shares favor production.
 Development stops after its deployment check, on both success and failure. The Bot API limits
@@ -18,7 +18,7 @@ are preliminary: measure its peak while sending a 512 MB file before relying on 
 images off the server.
 
 One short download (up to 20 minutes) and one long download (up to 60 minutes) may run at the
-same time; files are capped at 512 MB and need twice their size free on disk for merging. A
+same time; files are capped at 512 MB (50 MB on the cloud Bot API) and need twice their size free on disk for merging. A
 YouTube download peaks at ~330 MiB, of which deno (YouTube's JavaScript challenge) takes
 ~290 MiB, so two parallel downloads fit the production budget. Under the 256 MiB development
 budget deno is OOM-killed and yt-dlp continues with fewer formats. Measure before changing
@@ -36,8 +36,10 @@ UID/GID 10001. It runs in `--local` mode: uploads up to 2000 MB, and the bot pas
 `file://` paths from the shared `data` volume, mounted read-only into `bot-api`.
 
 Compose always takes `deploy/compose.yaml` plus one override: `compose.production.yaml` or
-`compose.development.yaml`. The override sets limits, `APP_ENV` and the project name.
-`compose.local.yaml` is for functional checks: it builds locally, runs as the host user with
+`compose.development.yaml`. The override sets limits, `APP_ENV` and the project name;
+the production override also defines `bot-api` and points the bot at it with `BOT_API_URL`,
+which production requires. `compose.local.yaml` is for functional checks on top of the
+production override: it builds both images locally, runs them as the host user with
 1 CPU / 1280 MiB for the bot, and keeps the database and Bot API state in the git-ignored
 `.data/` under project `djgurda-local`. `.env` also needs `TELEGRAM_API_ID` and `TELEGRAM_API_HASH`.
 `scripts/local.sh` applies it (`up --build` / `down`). Use a separate local bot token so a server
@@ -45,15 +47,15 @@ deployment check cannot compete for its updates. Not for the server.
 
 Runtime properties:
 
-- No published ports; the bot reaches `bot-api` on the internal Compose network, which polls
-  Telegram outbound.
+- No published ports; outbound long polling only. In production the bot reaches `bot-api` on
+  the internal Compose network.
 - Read-only root filesystem; `/tmp` is a 16 MiB tmpfs counted against memory.
 - Logs rotate at 5 MiB, two files.
 - SQLite at `/data/djgurda.sqlite3` and downloads in `/data/work` on the named volume `data`,
   one per Compose project; leftover downloads are removed on startup.
   Deployments keep it; `down -v` deletes it.
-- Bot API state lives in the named volume `bot-api`.
-- The bot starts after `bot-api` is healthy (its statistics port answers). The bot healthcheck
+- Production keeps Bot API state in the named volume `bot-api` and starts the bot after
+  `bot-api` is healthy (its statistics port answers). The bot healthcheck
   confirms completed initialization (Telegram lookup and admin notifications), not ongoing
   connectivity.
 
@@ -64,7 +66,7 @@ Runtime properties:
 | PR to `development` | `branch-policy`, `version-check`, `tests`, `lint` | — |
 | PR to `main` | `branch-policy` | — |
 | Merge to `development` | Build image | temporary deployment check, then stop |
-| Merge to `main` | Build image | production |
+| Merge to `main` | Build bot and Bot API images | production |
 
 - `branch-policy`: PRs into `main` only from `development`; no PRs from `main` into `development`.
 - `version-check`: `pyproject.toml` version, `GENERATION.MAJOR.MINOR.PATCH` (e.g. `2.0.4.0`),
@@ -81,8 +83,8 @@ GitHub Environments `development` and `production`, limited to their branches.
 | Name | Kind | Meaning |
 | --- | --- | --- |
 | `BOT_TOKEN` | Environment secret | `<id>:<secret>` from @BotFather; a different bot per environment |
-| `TELEGRAM_API_ID` | Secret | Application ID from my.telegram.org for the local Bot API |
-| `TELEGRAM_API_HASH` | Secret | Application hash from my.telegram.org |
+| `TELEGRAM_API_ID` | Production environment secret | Application ID from my.telegram.org for the local Bot API |
+| `TELEGRAM_API_HASH` | Production environment secret | Application hash from my.telegram.org |
 | `YANDEX_MUSIC_TOKEN` | Secret | Optional; Yandex Music account token with a subscription |
 | `ADMIN_IDS` | Secret | Nonempty JSON array of positive integers, e.g. `[123456789]` |
 | `DEPLOY_SSH_PRIVATE_KEY` | Secret | SSH key for `DEPLOY_USER` |
@@ -103,9 +105,9 @@ Docker without sudo and can write `DEPLOY_APP_DIR`.
 Rollout, serialized by a server lock:
 
 1. Pull the image by digest into a candidate under `<env>/releases`.
-2. Wait up to 180 s for health, then watch health, restarts, OOM and digest of `bot` and
-   `bot-api` for 30 s.
-3. In development, stop both services after the check. On success, switch `current` to the candidate
+2. Wait up to 180 s for health, then watch health, restarts, OOM and digest of every service
+   (`bot`, and `bot-api` in production) for 30 s.
+3. In development, stop the bot after the check. On success, switch `current` to the candidate
    and keep the prior one as `previous`.
 4. On failure, fail the job. Production restarts `current`, or stops the candidate if no prior
    release exists. Development stops the candidate without restarting the prior release.

@@ -7,7 +7,7 @@ from urllib.parse import SplitResult, urlsplit
 from yandex_music import Client
 from yandex_music.exceptions import YandexMusicError
 
-from djgurda.media import LONG_DURATION, Admit, Info, Media, MediaError, megabytes, thumbnail
+from djgurda.media import LONG_DURATION, Info, Job, Media, MediaError, megabytes, thumbnail
 from djgurda.sources.base import Source
 
 # The client reads the whole file into memory, so tracks keep the short lane and a small cap.
@@ -44,7 +44,7 @@ def media_id(url: SplitResult) -> str | None:
     return path[path.index("track") + 1] if kind(url) == "track" else None
 
 
-def fetch(url: str, target: Path, admit: Admit) -> Media:
+def fetch(url: str, target: Path, job: Job) -> Media:
     global client
     if not token:
         logger.error("YANDEX_MUSIC_TOKEN is not set; Yandex Music links cannot be downloaded")
@@ -58,9 +58,10 @@ def fetch(url: str, target: Path, admit: Admit) -> Media:
         track = tracks[0]
         if (track.duration_ms or 0) > MAX_DURATION * 1000:
             raise MediaError(f"трек длиннее {MAX_DURATION // 60} минут")
-        admit((track.duration_ms or 0) // 1000 or None)
+        job.admit((track.duration_ms or 0) // 1000 or None)
         best = max(track.get_download_info(), key=lambda item: item.bitrate_in_kbps or 0)
         path = target / f"track.{'m4a' if best.codec == 'aac' else best.codec}"
+        job.stage = "скачивание"
         track.download(str(path), codec=best.codec, bitrate_in_kbps=best.bitrate_in_kbps)
         cover = None
         if track.cover_uri:

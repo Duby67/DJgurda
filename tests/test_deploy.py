@@ -39,6 +39,11 @@ elif args[0] == 'compose':
             raise SystemExit(1)
     elif 'stop' in args:
         state.unlink(missing_ok=True)
+    elif '--services' in args:
+        override = pathlib.Path(args[len(args) - 1 - args[::-1].index('-f') + 1]).read_text()
+        print('bot')
+        if 'bot-api:' in override:
+            print('bot-api')
     elif 'ps' in args:
         print(args[-1])  # The service name stands in for the container ID.
 elif args[0] == 'inspect':
@@ -135,7 +140,7 @@ def test_development_stops_after_success_and_failure(deployment: tuple[Path, Run
     assert not (root / "running-image").exists()
     assert not (env / "current").exists()
     result = run("b", environment="development")
-    assert "Bot API stopped" in result.stdout
+    assert "bot stopped" in result.stdout
     assert not (root / "running-image").exists()
     current = (env / "current").resolve()
     run("c", fail=True, environment="development")

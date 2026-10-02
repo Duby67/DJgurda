@@ -72,14 +72,15 @@ chmod 600 "$candidate/"*
 select_compose "$candidate"
 activated=1
 "${compose[@]}" up -d --no-build --pull never --force-recreate --wait --wait-timeout 180 bot
-declare -A images=([bot]=DJGURDA_IMAGE [bot-api]=BOT_API_IMAGE)
-for service in "${!images[@]}"; do
+# Development runs only the bot; production adds its Bot API server.
+declare -A variables=([bot]=DJGURDA_IMAGE [bot-api]=BOT_API_IMAGE) images=()
+for service in $("${compose[@]}" config --services); do
   container=$("${compose[@]}" ps -q "$service")
   if [[ -z "$container" ]]; then
     echo "Deployment failed: $service container is missing." >&2
     exit 1
   fi
-  images[$service]="$container $(sed -n "s/^${images[$service]}=//p" "$candidate/runtime.env")"
+  images[$service]="$container $(sed -n "s/^${variables[$service]}=//p" "$candidate/runtime.env")"
 done
 for ((attempt=0; attempt<6; attempt++)); do
   sleep 5
@@ -115,7 +116,7 @@ for directory in "$environment"/releases/release.*; do
     rm -rf -- "$directory"
   fi
 done
-printf 'Deployment to %s completed; bot and Bot API stayed healthy for 30 seconds.\n' "$environment"
+printf 'Deployment to %s completed; services stayed healthy for 30 seconds.\n' "$environment"
 if [[ "$environment" == development ]]; then
-  echo 'Development deployment check completed; bot and Bot API stopped.'
+  echo 'Development deployment check completed; bot stopped.'
 fi
