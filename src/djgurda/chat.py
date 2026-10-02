@@ -18,7 +18,7 @@ from aiogram.exceptions import (
 )
 from aiogram.filters import Command, CommandObject
 from aiogram.methods import SendAudio, SendVideo
-from aiogram.types import FSInputFile, Message
+from aiogram.types import FSInputFile, Message, MessageOriginUser
 from aiogram.utils.chat_action import ChatActionSender
 
 from djgurda import caption, emoji
@@ -290,6 +290,9 @@ def create_router(storage: Storage, work_dir: Path, local_api: bool) -> Router:
 
     @router.message(is_active)
     async def links(message: Message, bot: Bot) -> None:
+        origin = message.forward_origin
+        if isinstance(origin, MessageOriginUser) and origin.sender_user.id == bot.id:
+            return  # Our own delivery forwarded from another chat: already processed.
         found = [link for link in map(classify, extract_links(message)) if link]
         text = strip_links(message)
         if not found or not caption.fits(text, author(message), found[0].source.name):

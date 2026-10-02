@@ -29,6 +29,7 @@ from aiogram.types import (
     FSInputFile,
     Message,
     MessageEntity,
+    MessageOriginUser,
     PhotoSize,
     Update,
     User,
@@ -53,7 +54,9 @@ def storage(tmp_path: Path) -> Iterator[Storage]:
     storage.close()
 
 
-def message(update_id: int, chat_id: int, text: str) -> Update:
+def message(
+    update_id: int, chat_id: int, text: str, forward_origin: MessageOriginUser | None = None
+) -> Update:
     entities = []
     if text.startswith("/"):
         entities.append(MessageEntity(type="bot_command", offset=0, length=len(text.split()[0])))
@@ -68,6 +71,7 @@ def message(update_id: int, chat_id: int, text: str) -> Update:
             from_user=User(id=42, is_bot=False, first_name="Test"),
             text=text,
             entities=entities,
+            forward_origin=forward_origin,
         ),
     )
 
@@ -218,6 +222,27 @@ def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     assert isinstance(uploaded.cover, FSInputFile)
     assert [(video.video, video.cover) for video in cached] == [("file-1", "cover-1")] * 2
     assert not list(tmp_path.glob("download-*"))
+
+
+def test_forwarded_delivery_is_ignored(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(chat, "fetch", lambda link, target, job: pytest.fail("downloaded"))
+    request = AsyncMock(side_effect=telegram)
+
+    async def scenario() -> None:
+        async with Bot(token="123456789:offline-test-token") as bot:
+            bot.session.make_request = request  # type: ignore[method-assign]
+            storage = Storage(tmp_path / "db.sqlite3")
+            dispatcher = create_dispatcher([100], storage, tmp_path, local_api=True)
+            await dispatcher.feed_update(bot, message(1, 42, "/start"))
+            origin = MessageOriginUser(
+                date=datetime(2026, 1, 1, tzinfo=UTC),
+                sender_user=User(id=bot.id, is_bot=True, first_name="DJgurda"),
+            )
+            await dispatcher.feed_update(bot, message(2, 42, "Title\n\nyoutu.be/ok", origin))
+            storage.close()
+
+    asyncio.run(scenario())
+    assert sent(request) == [(42, f"{emoji.html('success')} Бот активен в этом чате")]
 
 
 def test_long_media_has_its_own_lane(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
