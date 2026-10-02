@@ -1,0 +1,47 @@
+# Bot API server for production, deployed only from branch production-botapi.
+services:
+  bot-api:
+    image: ${BOT_API_IMAGE:?Set BOT_API_IMAGE to the Bot API image tag or digest}
+    command:
+      - --local  # Uploads up to 2000 MB, read by file:// path from the bot's volume.
+      - --http-port=8081
+      - --http-stat-ip-address=127.0.0.1
+      - --http-stat-port=8082
+      - --dir=/var/lib/telegram-bot-api
+      - --temp-dir=/tmp
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:?Set TELEGRAM_API_ID from my.telegram.org}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:?Set TELEGRAM_API_HASH from my.telegram.org}
+    volumes:
+      - data:/data:ro
+      - state:/var/lib/telegram-bot-api
+    init: true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8082/"]
+      interval: 5s
+      timeout: 2s
+      start_period: 30s
+      retries: 3
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=16m,mode=1777  # Small multipart uploads such as covers.
+    pids_limit: 64
+    stop_grace_period: 30s
+    logging:
+      driver: local
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+networks:
+  default:
+    name: djgurda-bot-api  # The production bot joins it as an external network.
+
+volumes:
+  data:
+    external: true  # The production bot's downloads, read by file:// path.
+    name: djgurda-production_data
+  state:

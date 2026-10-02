@@ -4,7 +4,7 @@ set -Eeuo pipefail
 umask 077
 stage=$1
 environment=$2
-case "$environment" in development|production) ;; *) echo 'Invalid environment' >&2; exit 1 ;; esac
+case "$environment" in development|production|production-botapi) ;; *) echo 'Invalid environment' >&2; exit 1 ;; esac
 
 export DOCKER_CONFIG="$PWD/$stage/docker-config"
 mkdir -p "$DOCKER_CONFIG"
@@ -49,7 +49,7 @@ finish() {
       elif [[ -n "$current" ]]; then
         select_compose "$environment/$current"
         if "${compose[@]}" up -d --no-build --pull never --force-recreate --remove-orphans \
-          --wait --wait-timeout 180 bot; then
+          --wait --wait-timeout 180; then
           echo 'Deployment failed; restored the last successful release.' >&2
         else
           echo 'Deployment and recovery failed; inspect server logs privately.' >&2
@@ -71,8 +71,10 @@ cp "$stage/runtime.env" "$stage/compose.yaml" "$stage/compose.environment.yaml" 
 chmod 600 "$candidate/"*
 select_compose "$candidate"
 activated=1
-"${compose[@]}" up -d --no-build --pull never --force-recreate --wait --wait-timeout 180 bot
-# Development runs only the bot; production adds its Bot API server.
+# Each project has one service: the bot, or the production Bot API in production-botapi.
+# Orphans are services the project no longer defines, such as a former in-project bot-api.
+"${compose[@]}" up -d --no-build --pull never --force-recreate --remove-orphans \
+  --wait --wait-timeout 180
 declare -A variables=([bot]=DJGURDA_IMAGE [bot-api]=BOT_API_IMAGE) images=()
 for service in $("${compose[@]}" config --services); do
   container=$("${compose[@]}" ps -q "$service")

@@ -2,11 +2,13 @@
 # Runs on the GitHub-hosted runner. Never enable shell tracing here.
 set -euo pipefail
 
-required=(DEPLOY_ENV DJGURDA_IMAGE DEPLOY_APP_DIR DEPLOY_HOST DEPLOY_PORT DEPLOY_USER \
-  DEPLOY_KNOWN_HOSTS DEPLOY_SSH_PRIVATE_KEY BOT_TOKEN ADMIN_IDS GHCR_USER GHCR_TOKEN)
-# Only production runs its own Bot API server.
-if [[ ${DEPLOY_ENV:-} == production ]]; then
+required=(DEPLOY_ENV DEPLOY_APP_DIR DEPLOY_HOST DEPLOY_PORT DEPLOY_USER \
+  DEPLOY_KNOWN_HOSTS DEPLOY_SSH_PRIVATE_KEY GHCR_USER GHCR_TOKEN)
+# production-botapi deploys only the production Bot API server; the others deploy only the bot.
+if [[ ${DEPLOY_ENV:-} == production-botapi ]]; then
   required+=(BOT_API_IMAGE TELEGRAM_API_ID TELEGRAM_API_HASH)
+else
+  required+=(DJGURDA_IMAGE BOT_TOKEN ADMIN_IDS)
 fi
 for name in "${required[@]}"; do
   if [[ -z ${!name:-} ]]; then
@@ -24,17 +26,18 @@ def require(condition, message):
         raise SystemExit(message)
 
 e = os.environ
-require(e['DEPLOY_ENV'] in ('development', 'production'), 'Invalid DEPLOY_ENV')
+require(e['DEPLOY_ENV'] in ('development', 'production', 'production-botapi'), 'Invalid DEPLOY_ENV')
 require(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.-]*', e['DEPLOY_HOST']), 'DEPLOY_HOST must be a hostname or IPv4 address')
 require(re.fullmatch(r'[A-Za-z_][A-Za-z0-9_-]*', e['DEPLOY_USER']), 'Invalid DEPLOY_USER')
 require(e['DEPLOY_PORT'].isdigit() and 1 <= int(e['DEPLOY_PORT']) <= 65535, 'Invalid DEPLOY_PORT')
 p = PurePosixPath(e['DEPLOY_APP_DIR'])
 require(p.is_absolute() and len(p.parts) > 1 and '..' not in p.parts and re.fullmatch(r'/[A-Za-z0-9_./-]+', str(p)), 'DEPLOY_APP_DIR must be an absolute non-root path without spaces or ..')
-require(re.fullmatch(r'ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}', e['DJGURDA_IMAGE']), 'DJGURDA_IMAGE must be a GHCR digest')
-if e['DEPLOY_ENV'] == 'production':
+if e['DEPLOY_ENV'] == 'production-botapi':
     require(re.fullmatch(r'ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}', e['BOT_API_IMAGE']), 'BOT_API_IMAGE must be a GHCR digest')
     require(re.fullmatch(r'[1-9][0-9]*', e['TELEGRAM_API_ID']), 'TELEGRAM_API_ID must be a positive integer from my.telegram.org')
     require(re.fullmatch(r'[a-f0-9]{32}', e['TELEGRAM_API_HASH']), 'TELEGRAM_API_HASH must be 32 hex characters from my.telegram.org')
+    raise SystemExit(0)
+require(re.fullmatch(r'ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}', e['DJGURDA_IMAGE']), 'DJGURDA_IMAGE must be a GHCR digest')
 require(re.fullmatch(r'[0-9]+:[A-Za-z0-9_-]+', e['BOT_TOKEN']), 'Invalid BOT_TOKEN format')
 require(re.fullmatch(r'[A-Za-z0-9_.-]*', e.get('YANDEX_MUSIC_TOKEN', '')), 'Invalid YANDEX_MUSIC_TOKEN format')
 try:
@@ -50,7 +53,9 @@ trap 'rm -rf "$work"' EXIT
 printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$work/key"
 printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$work/known_hosts"
 mkdir "$work/payload"
-cp deploy/compose.yaml "$work/payload/compose.yaml"
+base=deploy/compose.yaml
+[[ $DEPLOY_ENV == production-botapi ]] && base=deploy/compose.bot-api.yaml
+cp "$base" "$work/payload/compose.yaml"
 cp "deploy/compose.$DEPLOY_ENV.yaml" "$work/payload/compose.environment.yaml"
 cp scripts/deploy-remote.sh "$work/payload/deploy-remote.sh"
 printf '%s' "$GHCR_TOKEN" > "$work/payload/registry-token"
@@ -58,15 +63,16 @@ printf '%s' "$GHCR_USER" > "$work/payload/registry-user"
 python3 - "$work/payload/runtime.env" <<'PY'
 import json, os, sys
 from pathlib import Path
-values = {
-    'DJGURDA_IMAGE': os.environ['DJGURDA_IMAGE'],
-    'BOT_TOKEN': os.environ['BOT_TOKEN'],
-    'ADMIN_IDS': json.dumps(json.loads(os.environ['ADMIN_IDS']), separators=(',', ':')),
-    'YANDEX_MUSIC_TOKEN': os.environ.get('YANDEX_MUSIC_TOKEN', ''),  # Optional.
-    'LOG_LEVEL': 'INFO',
-}
-if os.environ['DEPLOY_ENV'] == 'production':
-    values |= {name: os.environ[name] for name in ('BOT_API_IMAGE', 'TELEGRAM_API_ID', 'TELEGRAM_API_HASH')}
+if os.environ['DEPLOY_ENV'] == 'production-botapi':
+    values = {name: os.environ[name] for name in ('BOT_API_IMAGE', 'TELEGRAM_API_ID', 'TELEGRAM_API_HASH')}
+else:
+    values = {
+        'DJGURDA_IMAGE': os.environ['DJGURDA_IMAGE'],
+        'BOT_TOKEN': os.environ['BOT_TOKEN'],
+        'ADMIN_IDS': json.dumps(json.loads(os.environ['ADMIN_IDS']), separators=(',', ':')),
+        'YANDEX_MUSIC_TOKEN': os.environ.get('YANDEX_MUSIC_TOKEN', ''),  # Optional.
+        'LOG_LEVEL': 'INFO',
+    }
 Path(sys.argv[1]).write_text(''.join(f'{key}={value}\n' for key, value in values.items()))
 PY
 

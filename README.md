@@ -52,7 +52,8 @@ Premium у владельца бота либо дополнительный use
 
 | Ветка | Назначение |
 | --- | --- |
-| `main` | Production |
+| `main` | Production: бот |
+| `production-botapi` | Production: локальный Bot API; в него попадает через PR из `development` |
 | `development` | Интеграция изменений; в `main` попадает через PR |
 | `legacy` | Предыдущая реализация |
 
