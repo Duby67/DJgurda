@@ -2,6 +2,7 @@
 
 import asyncio
 import re
+import threading
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from importlib.metadata import version
@@ -35,7 +36,7 @@ from aiogram.types import (
 from djgurda import caption, chat, emoji
 from djgurda.bot import create_dispatcher
 from djgurda.chat import HELP
-from djgurda.media import Info, Media, MediaError
+from djgurda.media import LONG_DURATION, Admit, Info, Media, MediaError
 from djgurda.sources import classify
 from djgurda.sources.base import Link
 from djgurda.storage import Storage
@@ -163,7 +164,7 @@ def test_chat_lifecycle(tmp_path: Path) -> None:
 def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     downloads = []
 
-    def fetch(link: Link, target: Path) -> Media:
+    def fetch(link: Link, target: Path, admit: Admit) -> Media:
         assert target.parent == tmp_path
         url = link.url
         downloads.append(url)
@@ -206,10 +207,54 @@ def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     assert downloads == ["https://youtu.be/ok", "https://youtu.be/fail"]
     videos = [c.args[1] for c in request.await_args_list if isinstance(c.args[1], SendVideo)]
     uploaded, *cached = videos
-    assert isinstance(uploaded.video, FSInputFile) and isinstance(uploaded.thumbnail, FSInputFile)
+    assert str(uploaded.video).startswith("file://") and str(uploaded.video).endswith("/video.mp4")
+    assert isinstance(uploaded.thumbnail, FSInputFile)
     assert isinstance(uploaded.cover, FSInputFile)
     assert [(video.video, video.cover) for video in cached] == [("file-1", "cover-1")] * 2
     assert not list(tmp_path.glob("download-*"))
+
+
+def test_long_media_has_its_own_lane(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    long_admitted, release = threading.Event(), threading.Event()
+
+    def fetch(link: Link, target: Path, admit: Admit) -> Media:
+        long = "long" in link.url
+        admit(LONG_DURATION + 1 if long else 60)
+        if long:
+            long_admitted.set()
+            release.wait(5)
+        return Media(target / "video.mp4", Info("", "", 1, 2, 3))
+
+    monkeypatch.setattr(chat, "fetch", fetch)
+    request = AsyncMock(side_effect=telegram)
+
+    async def scenario() -> None:
+        async with Bot(token="123456789:offline-test-token") as bot:
+            bot.session.make_request = request  # type: ignore[method-assign]
+            storage = Storage(tmp_path / "db.sqlite3")
+            dispatcher = create_dispatcher([100], storage, tmp_path)
+            await dispatcher.feed_update(bot, message(1, 42, "/start"))
+            first = asyncio.create_task(
+                dispatcher.feed_update(bot, message(2, 42, "youtu.be/long1"))
+            )
+            assert await asyncio.to_thread(long_admitted.wait, 5)
+            # While the long download runs, another long one is refused and a short one passes.
+            await dispatcher.feed_update(bot, message(3, 42, "youtu.be/long2"))
+            await dispatcher.feed_update(bot, message(4, 42, "youtu.be/short"))
+            release.set()
+            await first
+            storage.close()
+
+    asyncio.run(scenario())
+    methods = [c.args[1] for c in request.await_args_list]
+    assert [m.message_id for m in methods if isinstance(m, DeleteMessage)] == [4, 2]
+    assert any(
+        isinstance(m, SendMessage) and "уже скачивается длинное видео" in m.text for m in methods
+    )
+    timeouts = [
+        c.kwargs["timeout"] for c in request.await_args_list if isinstance(c.args[1], SendVideo)
+    ]
+    assert timeouts == [chat.UPLOAD_TIMEOUT, chat.LONG_UPLOAD_TIMEOUT]
 
 
 @pytest.mark.parametrize("notification_fails", [False, True])
@@ -220,7 +265,9 @@ def test_upload_failure_keeps_original_and_continues(
     notification_fails: bool,
 ) -> None:
     monkeypatch.setattr(
-        chat, "fetch", lambda link, target: Media(target / "video.mp4", Info("", "", 1, 2, 3))
+        chat,
+        "fetch",
+        lambda link, target, admit: Media(target / "video.mp4", Info("", "", 1, 2, 3)),
     )
     uploads = 0
 
@@ -251,7 +298,7 @@ def test_upload_failure_keeps_original_and_continues(
 def test_unexpected_download_failure_is_visible(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    def fetch(link: Link, target: Path) -> Media:
+    def fetch(link: Link, target: Path, admit: Admit) -> Media:
         raise OSError("Disk full")
 
     monkeypatch.setattr(chat, "fetch", fetch)
@@ -310,7 +357,7 @@ def test_youtube_start(url: str, start: int | None) -> None:
 
 
 def test_audio_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    def fetch(link: Link, target: Path) -> Media:
+    def fetch(link: Link, target: Path, admit: Admit) -> Media:
         path = target / "track.mp3"
         return Media(path, Info("Song", "Artist", duration=1, width=None, height=None))
 
@@ -320,7 +367,7 @@ def test_audio_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     run_script(request, tmp_path, [(42, "/start"), (42, f"Слушай <это> {track}"), (42, track)])
 
     audios = [c.args[1] for c in request.await_args_list if isinstance(c.args[1], SendAudio)]
-    assert [(a.title, a.performer, isinstance(a.audio, FSInputFile)) for a in audios] == [
+    assert [(a.title, a.performer, str(a.audio).startswith("file://")) for a in audios] == [
         ("Song", "Artist", True),
         ("Song", "Artist", False),
     ]

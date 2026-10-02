@@ -13,7 +13,7 @@ docker login ghcr.io --username "$(cat "$stage/registry-user")" \
 compose=(docker compose --env-file "$stage/runtime.env" \
   -f "$stage/compose.yaml" -f "$stage/compose.environment.yaml")
 "${compose[@]}" config --quiet
-"${compose[@]}" pull --quiet bot
+"${compose[@]}" pull --quiet
 
 mkdir -p "$environment/releases"
 chmod 700 "$environment" "$environment/releases"
@@ -42,20 +42,21 @@ finish() {
     if ((activated)); then
       if [[ "$environment" == development ]]; then
         select_compose "$candidate"
-        if ! "${compose[@]}" stop bot; then
+        if ! "${compose[@]}" stop; then
           echo 'Development cleanup failed; stop its container before retrying.' >&2
         fi
         echo 'Deployment check failed; development is not restored as a running service.' >&2
       elif [[ -n "$current" ]]; then
         select_compose "$environment/$current"
-        if "${compose[@]}" up -d --no-build --pull never --force-recreate --wait --wait-timeout 180 bot; then
+        if "${compose[@]}" up -d --no-build --pull never --force-recreate --remove-orphans \
+          --wait --wait-timeout 180 bot; then
           echo 'Deployment failed; restored the last successful release.' >&2
         else
           echo 'Deployment and recovery failed; inspect server logs privately.' >&2
         fi
       else
         select_compose "$candidate"
-        "${compose[@]}" stop bot
+        "${compose[@]}" stop
         echo 'Deployment failed; no successful release exists, candidate stopped.' >&2
       fi
     fi
@@ -71,25 +72,31 @@ chmod 600 "$candidate/"*
 select_compose "$candidate"
 activated=1
 "${compose[@]}" up -d --no-build --pull never --force-recreate --wait --wait-timeout 180 bot
-container=$("${compose[@]}" ps -q bot)
-if [[ -z "$container" ]]; then
-  echo 'Deployment failed: bot container is missing.' >&2
-  exit 1
-fi
-expected_image=$(sed -n 's/^DJGURDA_IMAGE=//p' "$candidate/runtime.env")
-for ((attempt=0; attempt<6; attempt++)); do
-  sleep 5
-  state=$(docker inspect --format '{{.State.Running}} {{.RestartCount}} {{.State.OOMKilled}} {{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$container")
-  actual_image=$(docker inspect --format '{{.Config.Image}}' "$container")
-  if [[ "$state" != 'true 0 false healthy' || "$actual_image" != "$expected_image" ]]; then
-    echo 'Deployment failed: bot is not ready, restarted, or has the wrong image; inspect server logs privately.' >&2
+declare -A images=([bot]=DJGURDA_IMAGE [bot-api]=BOT_API_IMAGE)
+for service in "${!images[@]}"; do
+  container=$("${compose[@]}" ps -q "$service")
+  if [[ -z "$container" ]]; then
+    echo "Deployment failed: $service container is missing." >&2
     exit 1
   fi
+  images[$service]="$container $(sed -n "s/^${images[$service]}=//p" "$candidate/runtime.env")"
+done
+for ((attempt=0; attempt<6; attempt++)); do
+  sleep 5
+  for service in "${!images[@]}"; do
+    read -r container expected_image <<< "${images[$service]}"
+    state=$(docker inspect --format '{{.State.Running}} {{.RestartCount}} {{.State.OOMKilled}} {{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$container")
+    actual_image=$(docker inspect --format '{{.Config.Image}}' "$container")
+    if [[ "$state" != 'true 0 false healthy' || "$actual_image" != "$expected_image" ]]; then
+      echo "Deployment failed: $service is not ready, restarted, or has the wrong image; inspect server logs privately." >&2
+      exit 1
+    fi
+  done
 done
 
 # Development proves the rollout, then releases its runtime resources.
 if [[ "$environment" == development ]]; then
-  "${compose[@]}" stop bot
+  "${compose[@]}" stop
 fi
 
 # Promote only a proven candidate. A failed retry never overwrites these pointers.
@@ -108,7 +115,7 @@ for directory in "$environment"/releases/release.*; do
     rm -rf -- "$directory"
   fi
 done
-printf 'Deployment to %s completed; initialized bot stayed healthy for 30 seconds.\n' "$environment"
+printf 'Deployment to %s completed; bot and Bot API stayed healthy for 30 seconds.\n' "$environment"
 if [[ "$environment" == development ]]; then
-  echo 'Development deployment check completed; bot stopped.'
+  echo 'Development deployment check completed; bot and Bot API stopped.'
 fi

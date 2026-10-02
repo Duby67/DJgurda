@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, PositiveInt, SecretStr, field_validator
+from pydantic import AnyHttpUrl, Field, PositiveInt, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     )
 
     bot_token: SecretStr
+    bot_api_url: AnyHttpUrl  # Local Bot API server; it must see work_dir at the same path.
     admin_ids: list[PositiveInt] = Field(min_length=1, repr=False)
     database_path: Path
     work_dir: Path

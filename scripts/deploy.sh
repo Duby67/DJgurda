@@ -2,7 +2,7 @@
 # Runs on the GitHub-hosted runner. Never enable shell tracing here.
 set -euo pipefail
 
-for name in DEPLOY_ENV DJGURDA_IMAGE DEPLOY_APP_DIR DEPLOY_HOST DEPLOY_PORT DEPLOY_USER \
+for name in DEPLOY_ENV DJGURDA_IMAGE BOT_API_IMAGE TELEGRAM_API_ID TELEGRAM_API_HASH DEPLOY_APP_DIR DEPLOY_HOST DEPLOY_PORT DEPLOY_USER \
   DEPLOY_KNOWN_HOSTS DEPLOY_SSH_PRIVATE_KEY BOT_TOKEN ADMIN_IDS GHCR_USER GHCR_TOKEN; do
   if [[ -z ${!name:-} ]]; then
     echo "Missing required deployment setting: $name" >&2
@@ -26,6 +26,9 @@ require(e['DEPLOY_PORT'].isdigit() and 1 <= int(e['DEPLOY_PORT']) <= 65535, 'Inv
 p = PurePosixPath(e['DEPLOY_APP_DIR'])
 require(p.is_absolute() and len(p.parts) > 1 and '..' not in p.parts and re.fullmatch(r'/[A-Za-z0-9_./-]+', str(p)), 'DEPLOY_APP_DIR must be an absolute non-root path without spaces or ..')
 require(re.fullmatch(r'ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}', e['DJGURDA_IMAGE']), 'DJGURDA_IMAGE must be a GHCR digest')
+require(re.fullmatch(r'ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}', e['BOT_API_IMAGE']), 'BOT_API_IMAGE must be a GHCR digest')
+require(re.fullmatch(r'[1-9][0-9]*', e['TELEGRAM_API_ID']), 'TELEGRAM_API_ID must be a positive integer from my.telegram.org')
+require(re.fullmatch(r'[a-f0-9]{32}', e['TELEGRAM_API_HASH']), 'TELEGRAM_API_HASH must be 32 hex characters from my.telegram.org')
 require(re.fullmatch(r'[0-9]+:[A-Za-z0-9_-]+', e['BOT_TOKEN']), 'Invalid BOT_TOKEN format')
 require(re.fullmatch(r'[A-Za-z0-9_.-]*', e.get('YANDEX_MUSIC_TOKEN', '')), 'Invalid YANDEX_MUSIC_TOKEN format')
 try:
@@ -51,6 +54,9 @@ import json, os, sys
 from pathlib import Path
 values = {
     'DJGURDA_IMAGE': os.environ['DJGURDA_IMAGE'],
+    'BOT_API_IMAGE': os.environ['BOT_API_IMAGE'],
+    'TELEGRAM_API_ID': os.environ['TELEGRAM_API_ID'],
+    'TELEGRAM_API_HASH': os.environ['TELEGRAM_API_HASH'],
     'BOT_TOKEN': os.environ['BOT_TOKEN'],
     'ADMIN_IDS': json.dumps(json.loads(os.environ['ADMIN_IDS']), separators=(',', ':')),
     'YANDEX_MUSIC_TOKEN': os.environ.get('YANDEX_MUSIC_TOKEN', ''),  # Optional.

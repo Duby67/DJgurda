@@ -12,3 +12,15 @@ services:
     user: ${LOCAL_USER:?Start through scripts/local.sh}
     volumes:
       - ../.data:/data
+  bot-api:
+    build:
+      context: ..
+      dockerfile: deploy/bot-api.Dockerfile
+    pull_policy: never
+    cpus: 0.50
+    mem_limit: 256m
+    memswap_limit: 256m
+    user: ${LOCAL_USER:?Start through scripts/local.sh}
+    volumes:
+      - ../.data:/data:ro
+      - ../.data/bot-api:/var/lib/telegram-bot-api

@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).parents[1]
+BOT_API_IMAGE = "ghcr.io/example/bot-api@sha256:" + "e" * 64
 
 
 Run = Callable[..., subprocess.CompletedProcess[str]]
@@ -39,10 +40,13 @@ elif args[0] == 'compose':
     elif 'stop' in args:
         state.unlink(missing_ok=True)
     elif 'ps' in args:
-        print('offline-container')
+        print(args[-1])  # The service name stands in for the container ID.
 elif args[0] == 'inspect':
     image_field = args[args.index('--format') + 1] == '{{.Config.Image}}'
-    print(state.read_text() if image_field else 'true 0 false healthy')
+    if not image_field:
+        print('true 0 false healthy')
+    else:
+        print(state.read_text() if args[-1] == 'bot' else os.environ['BOT_API_IMAGE'])
 """
     )
     docker.chmod(0o755)
@@ -66,7 +70,9 @@ elif args[0] == 'inspect':
             (ROOT / "deploy" / f"compose.{environment}.yaml").read_bytes()
         )
         image = "ghcr.io/example/bot@sha256:" + digest * 64
-        (stage / "runtime.env").write_text(f"DJGURDA_IMAGE={image}\nBOT_TOKEN=offline-bot-secret\n")
+        (stage / "runtime.env").write_text(
+            f"DJGURDA_IMAGE={image}\nBOT_API_IMAGE={BOT_API_IMAGE}\nBOT_TOKEN=offline-bot-secret\n"
+        )
         result = subprocess.run(
             ["bash", str(ROOT / "scripts/deploy-remote.sh"), "stage", environment],
             cwd=tmp_path,
@@ -77,6 +83,7 @@ elif args[0] == 'inspect':
                 "PATH": str(tools) + ":" + os.environ["PATH"],
                 "FAKE_STATE": str(tmp_path / "running-image"),
                 "FAIL_IMAGE": image if fail else "",
+                "BOT_API_IMAGE": BOT_API_IMAGE,
             },
         )
         assert (result.returncode != 0) == fail, result.stdout + result.stderr
@@ -128,7 +135,7 @@ def test_development_stops_after_success_and_failure(deployment: tuple[Path, Run
     assert not (root / "running-image").exists()
     assert not (env / "current").exists()
     result = run("b", environment="development")
-    assert "bot stopped" in result.stdout
+    assert "Bot API stopped" in result.stdout
     assert not (root / "running-image").exists()
     current = (env / "current").resolve()
     run("c", fail=True, environment="development")
