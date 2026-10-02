@@ -153,27 +153,29 @@ def download(url: str, target: Path, job: Job, headers: dict[str, str] | None = 
     try:
         with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=False)
-            if info.get("is_live"):
-                raise MediaError("прямые трансляции не поддерживаются")
-            duration = info.get("duration") or 0
-            if duration > MAX_DURATION:
-                raise MediaError(f"видео длиннее {MAX_DURATION // 3600} ч")
-            formats = info.get("requested_formats") or [info]
-            if info.get("section_start") is not None:
-                # Clips: format sizes describe the whole video, so estimate from bitrate (kbit/s).
-                bitrate = sum(item.get("tbr") or 0 for item in formats)
-                size = bitrate * 125 * (info.get("duration") or 0)
-            else:
-                size = sum(
-                    item.get("filesize") or item.get("filesize_approx") or 0 for item in formats
-                )
-            if size > job.max_bytes:
-                raise MediaError(f"файл больше {megabytes(job.max_bytes)}")
-            require_space(target, int(size), job)
-            job.admit(duration or None)
-            if duration > LONG_DURATION:
-                limit = LONG_DOWNLOAD_TIMEOUT
-                deadline = time.monotonic() + limit
+        if info.get("is_live"):
+            raise MediaError("прямые трансляции не поддерживаются")
+        duration = info.get("duration") or 0
+        if duration > MAX_DURATION:
+            raise MediaError(f"видео длиннее {MAX_DURATION // 3600} ч")
+        size = estimated_size(info)
+        if size > job.max_bytes and info.get("section_start") is None:
+            # The preferred quality does not fit: choose again among the fetched formats.
+            options["format"] = fitting_format(info, job.max_bytes)
+            try:
+                with yt_dlp.YoutubeDL(options) as ydl:
+                    info = ydl.process_ie_result(info, download=False)
+            except yt_dlp.utils.ExtractorError as error:  # No format fits.
+                raise MediaError(f"файл больше {megabytes(job.max_bytes)}") from error
+            size = estimated_size(info)
+        if size > job.max_bytes:
+            raise MediaError(f"файл больше {megabytes(job.max_bytes)}")
+        require_space(target, int(size), job)
+        job.admit(duration or None)
+        if duration > LONG_DURATION:
+            limit = LONG_DOWNLOAD_TIMEOUT
+            deadline = time.monotonic() + limit
+        with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.process_ie_result(info, download=True)
     except Timeout as error:
         raise MediaError(f"загрузка не уложилась в {limit // 60} мин") from error
@@ -193,6 +195,31 @@ def download(url: str, target: Path, job: Job, headers: dict[str, str] | None = 
         logger.info("No preview image for %s; Telegram will use the first frame", url)
         return Media(path, details)
     return Media(path, details, cover, thumbnail(cover))
+
+
+def format_size(item: dict[str, Any]) -> int:
+    return int(item.get("filesize") or item.get("filesize_approx") or 0)
+
+
+def estimated_size(info: dict[str, Any]) -> int:
+    """Size of the selected formats; unknown sizes count as zero."""
+    formats = info.get("requested_formats") or [info]
+    if info.get("section_start") is not None:
+        # Clips: format sizes describe the whole video, so estimate from bitrate (kbit/s).
+        bitrate = sum(item.get("tbr") or 0 for item in formats)
+        return int(bitrate * 125 * (info.get("duration") or 0))
+    return sum(format_size(item) for item in formats)
+
+
+def fitting_format(info: dict[str, Any], max_bytes: int) -> str:
+    """Format spec for the preferred quality whose video and audio fit `max_bytes` together."""
+    formats = info.get("requested_formats") or []
+    audio = sum(format_size(item) for item in formats if item.get("vcodec") == "none")
+    room = max_bytes - audio
+    return (
+        f"bv*[filesize<?{room}][filesize_approx<?{room}]+ba"
+        f"/b[filesize<?{max_bytes}][filesize_approx<?{max_bytes}]"
+    )
 
 
 def probe(path: Path, info: Info) -> Info:

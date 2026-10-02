@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = "==3.14.*"
 
 [[package]]
@@ -313,7 +313,7 @@ wheels = [
 
 [[package]]
 name = "djgurda"
-version = "2.1.0.0"
+version = "2.1.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiogram" },
