@@ -313,7 +313,7 @@ wheels = [
 
 [[package]]
 name = "djgurda"
-version = "2.0.5.5"
+version = "2.1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiogram" },

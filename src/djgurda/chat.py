@@ -1,6 +1,7 @@
 """Per-chat commands and link handling shared by all sources."""
 
 import asyncio
+import json
 import logging
 from collections.abc import AsyncIterator, Callable, Coroutine
 from contextlib import asynccontextmanager
@@ -31,6 +32,7 @@ from aiogram.types import (
     InlineQueryResultArticle,
     InlineQueryResultCachedVideo,
     InlineQueryResultsButton,
+    InlineQueryResultUnion,
     InputMediaVideo,
     InputTextMessageContent,
     Message,
@@ -69,11 +71,37 @@ HELP = "\n".join(
     ]
 )
 QUEUE_LIMIT = 5  # Short links waiting or downloading; more are refused instead of piling up.
-UPLOAD_TIMEOUT = 5 * 60  # Seconds; the local Bot API forwards the file to Telegram meanwhile.
-LONG_UPLOAD_TIMEOUT = 2 * 60 * 60  # 2000 MB at about 2.5 Mbit/s.
+# Seconds, as for downloads; the local Bot API forwards the file to Telegram meanwhile.
+UPLOAD_TIMEOUT = 2 * 60
+LONG_UPLOAD_TIMEOUT = 20 * 60  # 2000 MB at about 14 Mbit/s.
 PROGRESS_INTERVAL = 10  # Seconds between status edits; quick links finish without one.
 INLINE_DOWNLOAD = "download"  # Result id of the placeholder replaced after the download.
+INLINE_REDOWNLOAD = "redownload"  # The same, ignoring a cached file_id Telegram cannot send.
 MESSAGE_LIMIT = 4096
+ATTEMPTS = 2  # Starts of one delivery, restarts included; guards against a crash loop.
+INTERRUPTED = "загрузка прерывалась перезапуском бота, попробуйте снова"
+# What a resumed chat delivery needs from the original message: no text and no sender.
+MESSAGE_FIELDS: dict[str, Any] = {
+    "message_id": True,
+    "date": True,
+    "chat": {"id", "type"},
+    "message_thread_id": True,
+    "is_topic_message": True,
+    "business_connection_id": True,
+}
+# Bad Request texts about the chat, message or query rather than the file.
+NOT_FILE_ERRORS = (
+    "rights",
+    "forbidden",
+    "chat not found",
+    "message to edit not found",
+    "message_id_invalid",
+    "message is not modified",
+    "thread not found",
+    "topic",
+    "query is too old",
+    "query id is invalid",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +118,18 @@ def delivery_reason(error: Exception) -> str:
     if isinstance(error, TelegramAPIError):
         return "не удалось отправить медиа: Telegram отклонил запрос"
     return "не удалось обработать ссылку из-за внутренней ошибки бота"
+
+
+def file_rejected(error: Exception) -> bool:
+    """Whether Telegram refused the file itself, so its cached file_id must be forgotten.
+
+    Unknown Bad Request texts count as file errors: a needless download costs less than a
+    cache entry that never recovers.
+    """
+    if not isinstance(error, TelegramBadRequest):
+        return False
+    text = error.message.lower()
+    return not any(part in text for part in NOT_FILE_ERRORS)
 
 
 def parse_query(query: str) -> Link | None:
@@ -125,14 +165,24 @@ async def report_progress(
             logger.warning("Cannot show progress: %s", redact(str(error)))
 
 
-async def show_progress(message: Message, bot: Bot, link: Link, job: Job) -> None:
-    """Reply with the job stage, edit it when it changes, delete it when cancelled."""
+async def show_progress(
+    message: Message,
+    bot: Bot,
+    link: Link,
+    remember: Callable[[int | None], None],
+    job: Job,
+) -> None:
+    """Reply with the job stage, edit it when it changes, delete it when cancelled.
+
+    `remember` keeps the status message id, so a restart can delete a status left behind.
+    """
     status: int | None = None
 
     async def show(text: str) -> None:
         nonlocal status
         if status is None:
             status = (await message.reply(text)).message_id
+            remember(status)
         else:
             await bot.edit_message_text(text, chat_id=message.chat.id, message_id=status)
 
@@ -142,6 +192,7 @@ async def show_progress(message: Message, bot: Bot, link: Link, job: Job) -> Non
         if status is not None:
             try:
                 await bot.delete_message(chat_id=message.chat.id, message_id=status)
+                remember(None)
             except Exception as error:
                 logger.warning("Cannot delete progress: %s", redact(str(error)))
 
@@ -155,6 +206,8 @@ def create_router(
     downloads = asyncio.Semaphore(1)
     pending = 0
     long_busy = False
+    running: dict[str, asyncio.Event] = {}  # Media keys being delivered.
+    resumed: set[asyncio.Task[None]] = set()  # Keeps the resume task alive.
     router = Router()
 
     async def is_active(message: Message) -> bool:
@@ -270,43 +323,66 @@ def create_router(
                 if acquired:
                     downloads.release()
 
-    async def deliver(message: Message, bot: Bot, link: Link) -> None:
-        hit = storage.cached(link.key) if link.key else None
-        if link.key and hit:
-            file_id, cover_id, info = hit
-            try:
-                await send(message, bot, link, info, file_id, cover_id)
-                return
-            except TelegramBadRequest as error:
-                logger.warning(
-                    "Cached file for %s is unusable, downloading: %s", link.key, redact(str(error))
+    @asynccontextmanager
+    async def single_download(link: Link) -> AsyncIterator[None]:
+        """Deliver the same media one at a time, so later requests reuse the cached file_id."""
+        key = link.key
+        if key is None:
+            yield
+            return
+        while event := running.get(key):
+            await event.wait()
+        running[key] = done = asyncio.Event()
+        try:
+            yield
+        finally:
+            del running[key]
+            done.set()
+
+    async def deliver(
+        message: Message, bot: Bot, link: Link, remember: Callable[[int | None], None]
+    ) -> None:
+        async with single_download(link):
+            hit = storage.cached(link.key) if link.key else None
+            if link.key and hit:
+                file_id, cover_id, info = hit
+                try:
+                    await send(message, bot, link, info, file_id, cover_id)
+                    return
+                except TelegramBadRequest as error:
+                    if not file_rejected(error):
+                        raise
+                    logger.warning(
+                        "Cached file for %s is unusable, downloading: %s",
+                        link.key,
+                        redact(str(error)),
+                    )
+                    storage.forget(link.key, file_id)
+            async with ChatActionSender(
+                bot=bot,
+                chat_id=message.chat.id,
+                message_thread_id=message.message_thread_id,
+                action="upload_voice" if link.audio else "upload_video",
+            ):
+                watch = partial(show_progress, message, bot, link, remember)
+                async with download_slot(link, watch) as (media, job):
+                    job.stage = "отправка в Telegram"
+                    sent = await send(
+                        message,
+                        bot,
+                        link,
+                        media.info,
+                        upload_file(media),
+                        FSInputFile(media.cover) if media.cover else None,
+                        FSInputFile(media.thumbnail) if media.thumbnail else None,
+                        LONG_UPLOAD_TIMEOUT if job.long else UPLOAD_TIMEOUT,
+                    )
+            file = sent.audio or sent.video
+            if link.key and file:  # Repeated links are resent by file_id without downloading.
+                covers = sent.video.cover if sent.video else None
+                storage.cache(
+                    link.key, file.file_id, covers[-1].file_id if covers else None, media.info
                 )
-                storage.forget(link.key)
-        async with ChatActionSender(
-            bot=bot,
-            chat_id=message.chat.id,
-            message_thread_id=message.message_thread_id,
-            action="upload_voice" if link.audio else "upload_video",
-        ):
-            watch = partial(show_progress, message, bot, link)
-            async with download_slot(link, watch) as (media, job):
-                job.stage = "отправка в Telegram"
-                sent = await send(
-                    message,
-                    bot,
-                    link,
-                    media.info,
-                    upload_file(media),
-                    FSInputFile(media.cover) if media.cover else None,
-                    FSInputFile(media.thumbnail) if media.thumbnail else None,
-                    LONG_UPLOAD_TIMEOUT if job.long else UPLOAD_TIMEOUT,
-                )
-        file = sent.audio or sent.video
-        if link.key and file:  # Repeated links are resent by file_id without downloading.
-            covers = sent.video.cover if sent.video else None
-            storage.cache(
-                link.key, file.file_id, covers[-1].file_id if covers else None, media.info
-            )
 
     @router.message(is_active)
     async def links(message: Message, bot: Bot) -> None:
@@ -315,29 +391,59 @@ def create_router(
             return  # Our own delivery forwarded from another chat: already processed.
         if message.via_bot and message.via_bot.id == bot.id:
             return  # Sent through our inline mode: already processed.
-        found = [link for link in map(classify, extract_links(message)) if link]
-        if not found:
-            return
-        delivered = 0
-        for link in found:
-            if not link.downloadable:
+        urls = [url for url in extract_links(message) if classify(url)]
+        if urls:
+            await process_message(message, bot, urls, failed=False)
+
+    async def process_message(message: Message, bot: Bot, urls: list[str], failed: bool) -> None:
+        """Deliver the links one by one; the original goes once all of them are delivered.
+
+        The journal keeps the links still to deliver, so a restart neither loses nor repeats
+        one; it is kept on cancellation, so a shutdown leaves it for the next start.
+        """
+        delivery_id = f"chat:{message.chat.id}:{message.message_id}"
+        state = {
+            "message": message.model_dump(mode="json", include=MESSAGE_FIELDS),
+            "urls": urls,
+            "failed": failed,
+            "status": None,
+        }
+        attempts = storage.begin(delivery_id, json.dumps(state))
+
+        def remember(status: int | None) -> None:
+            state["status"] = status
+            storage.save(delivery_id, json.dumps(state))
+
+        for index, url in enumerate(urls):
+            link = classify(url)
+            if link is None:
+                raise ValueError(f"Unrecognized link in the delivery journal: {url}")
+            if attempts > ATTEMPTS:
+                await report_failure(message, bot, link, MediaError(INTERRUPTED), INTERRUPTED)
+                failed = True
+            elif not link.downloadable:
                 await message.reply(
                     f"{emoji.html('warning')} {escape(link.label)}: обработка ещё не реализована",
                     parse_mode="HTML",
                 )
-                continue
-            try:
-                await deliver(message, bot, link)
-                delivered += 1
-            except MediaError as error:
-                await report_failure(message, bot, link, error, str(error))
-            except Exception as error:
-                await report_failure(message, bot, link, error, delivery_reason(error))
-        if delivered == len(found):
+                failed = True
+            else:
+                try:
+                    await deliver(message, bot, link, remember)
+                except MediaError as error:
+                    await report_failure(message, bot, link, error, str(error))
+                    failed = True
+                except Exception as error:
+                    await report_failure(message, bot, link, error, delivery_reason(error))
+                    failed = True
+            state.update(urls=urls[index + 1 :], failed=failed, status=None)
+            storage.save(delivery_id, json.dumps(state))
+        if not failed:
             try:
                 await message.delete()
             except TelegramAPIError as error:
                 logger.warning("Cannot delete the original message: %s", redact(str(error)))
+        storage.end(delivery_id)
 
     async def report_error(bot: Bot, link: Link, reason: str, error: Exception, where: str) -> None:
         """Post a failure to the inline upload chat, where it is seen without server logs."""
@@ -375,30 +481,13 @@ def create_router(
                 diagnostic(notification_error),
             )
 
-    @router.inline_query()
-    async def inline_query(query: InlineQuery) -> None:
-        link = parse_query(query.query)
-        if link is None:
-            await query.answer([], cache_time=0, is_personal=True)
-            return
-        hit = storage.cached(link.key) if link.key else None
-        if hit:
-            file_id, _, info = hit
-            result = InlineQueryResultCachedVideo(
-                id="cached", video_file_id=file_id, title=info.title or link.label
-            )
-            await query.answer([result], cache_time=0, is_personal=True)
-            return
-        if inline_chat_id is None:  # New files need a chat to upload to before the edit.
-            button = InlineQueryResultsButton(
-                text="Загрузка новых ссылок не настроена", start_parameter="inline"
-            )
-            await query.answer([], cache_time=0, is_personal=True, button=button)
-            return
-        placeholder = InlineQueryResultArticle(
-            id=INLINE_DOWNLOAD,
-            title=f"Скачать и отправить: {link.label}",
-            description="Видео придёт после загрузки",
+    def placeholder(link: Link, fresh: bool) -> InlineQueryResultArticle:
+        return InlineQueryResultArticle(
+            id=INLINE_REDOWNLOAD if fresh else INLINE_DOWNLOAD,
+            title=f"{'Скачать заново' if fresh else 'Скачать и отправить'}: {link.label}",
+            description="Если видео выше не отправляется"
+            if fresh
+            else "Видео придёт после загрузки",
             input_message_content=InputTextMessageContent(
                 message_text=f"⏳ {link.label}: скачивание…"
             ),
@@ -407,19 +496,113 @@ def create_router(
                 inline_keyboard=[[InlineKeyboardButton(text="Источник", url=link.url)]]
             ),
         )
-        await query.answer([placeholder], cache_time=0, is_personal=True)
 
-    @router.chosen_inline_result(F.result_id == INLINE_DOWNLOAD)
+    async def answer_inline(
+        query: InlineQuery, link: Link, hit: tuple[str, str | None, Info] | None
+    ) -> None:
+        results: list[InlineQueryResultUnion] = []
+        if hit:
+            file_id, _, info = hit
+            results.append(
+                InlineQueryResultCachedVideo(
+                    id="cached", video_file_id=file_id, title=info.title or link.label
+                )
+            )
+        if inline_chat_id is not None:  # New files need a chat to upload to before the edit.
+            results.append(placeholder(link, fresh=hit is not None))
+        button = (
+            None
+            if results
+            else InlineQueryResultsButton(
+                text="Загрузка новых ссылок не настроена", start_parameter="inline"
+            )
+        )
+        await query.answer(results, cache_time=0, is_personal=True, button=button)
+
+    @router.inline_query()
+    async def inline_query(query: InlineQuery) -> None:
+        link = parse_query(query.query)
+        if link is None:
+            await query.answer([], cache_time=0, is_personal=True)
+            return
+        hit = storage.cached(link.key) if link.key else None
+        try:
+            await answer_inline(query, link, hit)
+        except TelegramBadRequest as error:
+            if not (hit and link.key and file_rejected(error)):
+                raise
+            logger.warning(
+                "Cached file for %s is unusable inline, offering a download: %s",
+                link.key,
+                redact(str(error)),
+            )
+            storage.forget(link.key, hit[0])
+            await answer_inline(query, link, None)
+
+    @router.chosen_inline_result(F.result_id.in_({INLINE_DOWNLOAD, INLINE_REDOWNLOAD}))
     async def inline_download(chosen: ChosenInlineResult, bot: Bot) -> None:
         link = parse_query(chosen.query)
         message_id = chosen.inline_message_id
         if link is None or message_id is None or inline_chat_id is None:
             logger.error("Inline result cannot be processed: no link, message or upload chat")
             return
+        redownload = chosen.result_id == INLINE_REDOWNLOAD
+        await deliver_inline(bot, link, inline_chat_id, message_id, redownload)
+
+    @router.startup()
+    async def resume(bot: Bot) -> None:
+        """Finish deliveries a restart interrupted, one by one so they fit the queue."""
+        unfinished = storage.unfinished()
+        if unfinished:
+            task = asyncio.create_task(resume_all(bot, unfinished))
+            resumed.add(task)
+            task.add_done_callback(resumed.discard)
+
+    async def resume_all(bot: Bot, unfinished: list[tuple[str, str]]) -> None:
+        for delivery_id, text in unfinished:
+            try:
+                await resume_one(bot, delivery_id, json.loads(text))
+            except Exception as error:  # One broken record must not block the rest.
+                logger.error("Cannot resume %s\n%s", delivery_id, diagnostic(error))
+                storage.end(delivery_id)
+
+    async def resume_one(bot: Bot, delivery_id: str, state: dict[str, Any]) -> None:
+        if delivery_id.startswith("inline:"):
+            link = classify(state["url"])
+            if link is None or inline_chat_id is None:
+                raise ValueError(f"Inline delivery needs a link and INLINE_CHAT_ID: {link}")
+            message_id = delivery_id.removeprefix("inline:")
+            await deliver_inline(bot, link, inline_chat_id, message_id, state["redownload"])
+            return
+        message = Message.model_validate(state["message"]).as_(bot)
+        if state["status"] is not None:  # The status of the interrupted download.
+            try:
+                await bot.delete_message(message.chat.id, state["status"])
+            except TelegramAPIError as error:
+                logger.warning("Cannot delete progress: %s", redact(str(error)))
+        await process_message(message, bot, state["urls"], state["failed"])
+
+    async def deliver_inline(
+        bot: Bot, link: Link, chat_id: int, message_id: str, redownload: bool
+    ) -> None:
+        """Replace the placeholder with the video or an error; a restart resumes it.
+
+        The record is kept on cancellation, so a shutdown leaves it for the next start.
+        """
+        delivery_id = f"inline:{message_id}"
+        attempts = storage.begin(
+            delivery_id, json.dumps({"url": link.url, "redownload": redownload})
+        )
         show = partial(bot.edit_message_text, inline_message_id=message_id)
         watch = partial(report_progress, link, show=show)
+        file_id = None
         try:
-            file_id, cover_id, info = await upload_inline(bot, link, inline_chat_id, watch)
+            if attempts > ATTEMPTS:
+                raise MediaError(INTERRUPTED)
+            # The file the user saw and reported as unusable, read before waiting for others.
+            hit = storage.cached(link.key) if link.key else None
+            stale = hit[0] if hit and redownload else None
+            file_id, cover_id, info = await upload_inline(bot, link, chat_id, watch, stale)
             media = InputMediaVideo(
                 media=file_id,
                 cover=cover_id,
@@ -431,6 +614,8 @@ def create_router(
             )
             await bot.edit_message_media(media=media, inline_message_id=message_id)
         except Exception as error:
+            if link.key and file_id and file_rejected(error):
+                storage.forget(link.key, file_id)  # The next attempt downloads it again.
             reason = str(error) if isinstance(error, MediaError) else delivery_reason(error)
             logger.error(
                 "Inline delivery failed source=%s reason=%s\n%s",
@@ -447,14 +632,30 @@ def create_router(
                 )
             except Exception as notification_error:
                 logger.error("Cannot show inline failure\n%s", diagnostic(notification_error))
+        storage.end(delivery_id)
 
     async def upload_inline(
+        bot: Bot,
+        link: Link,
+        chat_id: int,
+        watch: Callable[[Job], Coroutine[Any, Any, None]],
+        stale: str | None,
+    ) -> tuple[str, str | None, Info]:
+        """Download a video and upload it to the upload chat for its file_id.
+
+        `stale` is a cached file_id the user reported as unusable; it is not reused.
+        """
+        async with single_download(link):
+            if stale and link.key:
+                storage.forget(link.key, stale)
+            hit = storage.cached(link.key) if link.key else None
+            if hit:  # Another inline or chat delivery finished first.
+                return hit
+            return await upload_new(bot, link, chat_id, watch)
+
+    async def upload_new(
         bot: Bot, link: Link, chat_id: int, watch: Callable[[Job], Coroutine[Any, Any, None]]
     ) -> tuple[str, str | None, Info]:
-        """Download a video and upload it to the upload chat for its file_id."""
-        hit = storage.cached(link.key) if link.key else None
-        if hit:  # Another inline or chat delivery finished first.
-            return hit
         async with download_slot(link, watch) as (media, job):
             job.stage = "отправка в Telegram"
             sent = await bot.send_video(

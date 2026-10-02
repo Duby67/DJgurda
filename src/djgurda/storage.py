@@ -21,6 +21,11 @@ CREATE TABLE IF NOT EXISTS media_cache (
     width INTEGER,
     height INTEGER
 );
+CREATE TABLE IF NOT EXISTS deliveries (
+    id TEXT PRIMARY KEY,
+    state TEXT NOT NULL,
+    attempts INTEGER NOT NULL
+);
 """
 
 
@@ -60,8 +65,28 @@ class Storage:
             (key, file_id, cover_id, *astuple(info)),
         )
 
-    def forget(self, key: str) -> None:
-        self._db.execute("DELETE FROM media_cache WHERE key = ?", (key,))
+    def forget(self, key: str, file_id: str) -> None:
+        """Drop an unusable file_id; a newer one cached meanwhile stays."""
+        self._db.execute("DELETE FROM media_cache WHERE key = ? AND file_id = ?", (key, file_id))
+
+    def begin(self, delivery_id: str, state: str) -> int:
+        """Record a delivery until it ends and return how many times it has started."""
+        row = self._db.execute(
+            "INSERT INTO deliveries VALUES (?, ?, 1) ON CONFLICT (id)"
+            " DO UPDATE SET state = excluded.state, attempts = attempts + 1 RETURNING attempts",
+            (delivery_id, state),
+        ).fetchone()
+        return int(row[0])
+
+    def save(self, delivery_id: str, state: str) -> None:
+        self._db.execute("UPDATE deliveries SET state = ? WHERE id = ?", (state, delivery_id))
+
+    def end(self, delivery_id: str) -> None:
+        self._db.execute("DELETE FROM deliveries WHERE id = ?", (delivery_id,))
+
+    def unfinished(self) -> list[tuple[str, str]]:
+        """Deliveries a restart interrupted, oldest first: id and JSON state."""
+        return list(self._db.execute("SELECT id, state FROM deliveries ORDER BY rowid"))
 
     def close(self) -> None:
         self._db.close()
