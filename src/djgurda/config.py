@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     database_path: Path
     work_dir: Path
     yandex_music_token: SecretStr | None = None  # Optional: Yandex Music downloads.
+    # Optional: chat where inline mode uploads new videos for their file_id; the bot posts there.
+    inline_chat_id: int | None = None
     app_env: Literal["development", "production"] = "development"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
@@ -29,6 +31,11 @@ class Settings(BaseSettings):
     @classmethod
     def blank_token_is_unset(cls, value: SecretStr | None) -> SecretStr | None:
         return value if value and value.get_secret_value().strip() else None
+
+    @field_validator("inline_chat_id", mode="before")
+    @classmethod
+    def blank_chat_is_unset(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
 
     @model_validator(mode="after")
     def production_uses_local_api(self) -> Settings:

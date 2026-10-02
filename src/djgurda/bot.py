@@ -12,7 +12,11 @@ from djgurda.storage import Storage
 
 
 def create_dispatcher(
-    admin_ids: list[int], storage: Storage, work_dir: Path, local_api: bool
+    admin_ids: list[int],
+    storage: Storage,
+    work_dir: Path,
+    local_api: bool,
+    inline_chat_id: int | None = None,
 ) -> Dispatcher:
     async def send_to_admins(bot: Bot, text: str) -> None:
         for admin_id in dict.fromkeys(admin_ids):
@@ -34,5 +38,5 @@ def create_dispatcher(
     dispatcher = Dispatcher()
     dispatcher.startup.register(notify_startup)
     dispatcher.shutdown.register(notify_shutdown)
-    dispatcher.include_router(create_router(storage, work_dir, local_api))
+    dispatcher.include_router(create_router(storage, work_dir, local_api, inline_chat_id))
     return dispatcher

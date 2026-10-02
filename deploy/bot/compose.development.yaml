@@ -8,3 +8,6 @@ services:
     cpu_shares: 128
     mem_limit: 256m
     memswap_limit: 256m
+    healthcheck:
+      # Startup at 0.10 CPU is slow; with the retries this stays within the 180 s deploy wait.
+      start_period: 150s

@@ -1,23 +1,9 @@
-name: djgurda-production
-# Production sends files up to 512 MB through its own Bot API server; development uses the
-# cloud Bot API (50 MB) and only checks the deployment.
+# Bot API server for production, deployed only from branch production-botapi.
 services:
-  bot:
-    environment:
-      APP_ENV: production
-      BOT_API_URL: http://bot-api:8081
-    depends_on:
-      bot-api:
-        condition: service_healthy
-    restart: unless-stopped
-    cpus: 0.85
-    cpu_shares: 1024
-    mem_limit: 1152m
-    memswap_limit: 1152m
   bot-api:
     image: ${BOT_API_IMAGE:?Set BOT_API_IMAGE to the Bot API image tag or digest}
     command:
-      - --local  # Uploads up to 2000 MB, read by file:// path from the shared volume.
+      - --local  # Uploads up to 2000 MB, read by file:// path from the bot's volume.
       - --http-port=8081
       - --http-stat-ip-address=127.0.0.1
       - --http-stat-port=8082
@@ -28,13 +14,8 @@ services:
       TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:?Set TELEGRAM_API_HASH from my.telegram.org}
     volumes:
       - data:/data:ro
-      - bot-api:/var/lib/telegram-bot-api
+      - state:/var/lib/telegram-bot-api
     init: true
-    restart: unless-stopped
-    cpus: 0.50
-    cpu_shares: 1024
-    mem_limit: 256m
-    memswap_limit: 256m
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8082/"]
       interval: 5s
@@ -55,5 +36,12 @@ services:
         max-size: "5m"
         max-file: "2"
 
+networks:
+  default:
+    name: djgurda-bot-api  # The production bot joins it as an external network.
+
 volumes:
-  bot-api:
+  data:
+    external: true  # The production bot's downloads, read by file:// path.
+    name: djgurda-production_data
+  state:

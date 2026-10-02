@@ -2,7 +2,7 @@ name: PR checks
 
 on:
   pull_request:
-    branches: [development, main]
+    branches: [development, main, production-botapi]
     types: [opened, synchronize, reopened, edited, ready_for_review]
 
 permissions:
@@ -26,12 +26,12 @@ jobs:
               event = json.load(file)
           pr = event['pull_request']
           base, head = pr['base']['ref'], pr['head']['ref']
-          if base == 'main':
+          if base in ('main', 'production-botapi'):
               allowed = head == 'development' and pr['head']['repo']['full_name'] == event['repository']['full_name']
-              message = 'PR to main must come from development in this repository'
+              message = f'PR to {base} must come from development in this repository'
           else:
-              allowed = base == 'development' and head not in ('main', 'production')
-              message = 'PR to development must not come from main or production'
+              allowed = base == 'development' and head not in ('main', 'production', 'production-botapi')
+              message = 'PR to development must not come from main, production or production-botapi'
           if not allowed:
               raise SystemExit(message)
           print('PR direction: OK')
