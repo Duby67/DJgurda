@@ -2,10 +2,14 @@
 
 import asyncio
 import logging
+from collections.abc import AsyncIterator, Callable, Coroutine
+from contextlib import asynccontextmanager
+from functools import partial
 from html import escape
 from importlib.metadata import version
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import (
@@ -16,7 +20,7 @@ from aiogram.exceptions import (
     TelegramRetryAfter,
     TelegramServerError,
 )
-from aiogram.filters import Command, CommandObject
+from aiogram.filters import Command
 from aiogram.methods import SendAudio, SendVideo
 from aiogram.types import (
     ChosenInlineResult,
@@ -31,13 +35,12 @@ from aiogram.types import (
     InputTextMessageContent,
     Message,
     MessageOriginUser,
-    User,
 )
 from aiogram.utils.chat_action import ChatActionSender
 
-from djgurda import caption, emoji
+from djgurda import emoji
 from djgurda.diagnostics import diagnostic, redact
-from djgurda.links import extract_links, strip_links
+from djgurda.links import extract_links
 from djgurda.media import (
     CLOUD_MAX_BYTES,
     DOWNLOAD_PREFIX,
@@ -60,14 +63,11 @@ HELP = "\n".join(
         "/start — включить бота в чате",
         "/stop — приостановить бота в чате",
         "/status — состояние бота и версия",
-        "/saymyname имя — имя в подписях в этом чате; без имени — сбросить",
         "/help — эта справка",
         "",
-        "В любом чате, даже без бота: @имя_бота ссылка комментарий",
-        f"(только видео до {LONG_DURATION // 60} минут).",
+        "В любом чате, даже без бота: @имя_бота ссылка (только видео).",
     ]
 )
-NICKNAME_LIMIT = 32
 QUEUE_LIMIT = 5  # Short links waiting or downloading; more are refused instead of piling up.
 UPLOAD_TIMEOUT = 5 * 60  # Seconds; the local Bot API forwards the file to Telegram meanwhile.
 LONG_UPLOAD_TIMEOUT = 2 * 60 * 60  # 2000 MB at about 2.5 Mbit/s.
@@ -91,19 +91,13 @@ def delivery_reason(error: Exception) -> str:
     return "не удалось обработать ссылку из-за внутренней ошибки бота"
 
 
-def parse_query(query: str) -> tuple[Link, str] | None:
-    """Return the first downloadable video link of an inline query and the remaining text."""
-    words = query.split()
-    for index, word in enumerate(words):
+def parse_query(query: str) -> Link | None:
+    """Return the first downloadable video link of an inline query."""
+    for word in query.split():
         link = classify(word)
         if link and link.downloadable and not link.audio:
-            return link, " ".join(words[:index] + words[index + 1 :])
+            return link
     return None
-
-
-def inline_author(user: User) -> caption.Author:
-    url = f"https://t.me/{user.username}" if user.username else f"tg://user?id={user.id}"
-    return caption.Author(user.full_name, url)
 
 
 def fetch(link: Link, target: Path, job: Job) -> Media:
@@ -180,52 +174,20 @@ def create_router(
     async def help_(message: Message) -> None:
         await message.answer(HELP, parse_mode="HTML")
 
-    @router.message(Command("saymyname"), is_active)
-    async def saymyname(message: Message, command: CommandObject) -> None:
-        if message.from_user is None:
-            return
-        name = " ".join((command.args or "").split())
-        if len(name) > NICKNAME_LIMIT:
-            await message.reply(f"Имя должно быть не длиннее {NICKNAME_LIMIT} символов")
-            return
-        storage.set_nickname(message.chat.id, message.from_user.id, name or None)
-        await message.reply(f"Имя в этом чате: {name}" if name else "Имя в этом чате сброшено")
-
-    def author(message: Message) -> caption.Author:
-        user = message.from_user
-        if user is None:  # Anonymous admins and channels post as a chat.
-            title = message.sender_chat.title if message.sender_chat else None
-            return caption.Author(title or "", None)
-        name = storage.nickname(message.chat.id, user.id) or user.full_name
-        url = f"https://t.me/{user.username}" if user.username else f"tg://user?id={user.id}"
-        return caption.Author(name, url)
-
     async def send(
         message: Message,
         bot: Bot,
         link: Link,
-        text: str,
         info: Info,
         file: str | FSInputFile,
         cover: str | FSInputFile | None = None,
         thumbnail: FSInputFile | None = None,
         timeout: int = UPLOAD_TIMEOUT,
     ) -> Message:
-        text = caption.build(
-            info.title,
-            info.uploader,
-            text,
-            author(message),
-            link.source.name,
-            link.url,
-            include_header=not link.audio,
-        )
         method: SendAudio | SendVideo
         if link.audio:
             method = message.answer_audio(
                 file,
-                caption=text,
-                parse_mode="HTML",
                 title=info.title,
                 performer=info.uploader,
                 duration=info.duration,
@@ -237,8 +199,6 @@ def create_router(
                 cover=cover,
                 thumbnail=thumbnail,
                 start_timestamp=link.start,
-                caption=text,
-                parse_mode="HTML",
                 duration=info.duration,
                 width=info.width,
                 height=info.height,
@@ -246,31 +206,30 @@ def create_router(
             )
         return await bot(method, request_timeout=timeout)
 
-    async def deliver(message: Message, bot: Bot, link: Link, text: str) -> None:
+    def upload_file(media: Media) -> str | FSInputFile:
+        # The local Bot API reads the shared volume instead of an HTTP upload.
+        return media.path.resolve().as_uri() if local_api else FSInputFile(media.path)
+
+    @asynccontextmanager
+    async def download_slot(
+        link: Link, watch: Callable[[Job], Coroutine[Any, Any, None]] | None = None
+    ) -> AsyncIterator[tuple[Media, Job]]:
+        """Queue, download and keep the file for the upload inside the block.
+
+        A long video leaves the short queue for its own lane, refused while it is busy.
+        """
         nonlocal pending, long_busy
-        hit = storage.cached(link.key) if link.key else None
-        if link.key and hit:
-            file_id, cover_id, info = hit
-            try:
-                await send(message, bot, link, text, info, file_id, cover_id)
-                return
-            except TelegramBadRequest as error:
-                logger.warning(
-                    "Cached file for %s is unusable, downloading: %s", link.key, redact(str(error))
-                )
-                storage.forget(link.key)
         if pending >= QUEUE_LIMIT:
             raise MediaError("очередь загрузок заполнена, попробуйте позже")
         pending += 1
-        acquired = long = False
+        acquired = False
         loop = asyncio.get_running_loop()
-        progress = None
 
         async def enter_long_lane() -> None:
-            nonlocal pending, long_busy, long
+            nonlocal pending, long_busy
             if long_busy:
                 raise MediaError("уже скачивается длинное видео, попробуйте позже")
-            long_busy = long = True
+            long_busy = job.long = True
             pending -= 1
             downloads.release()
 
@@ -279,43 +238,56 @@ def create_router(
                 asyncio.run_coroutine_threadsafe(enter_long_lane(), loop).result()
 
         job = Job(LOCAL_MAX_BYTES if local_api else CLOUD_MAX_BYTES, admit)
-
+        progress = asyncio.create_task(watch(job)) if watch else None
         try:
-            async with ChatActionSender(
-                bot=bot,
-                chat_id=message.chat.id,
-                message_thread_id=message.message_thread_id,
-                action="upload_voice" if link.audio else "upload_video",
-            ):
-                progress = asyncio.create_task(show_progress(message, bot, link, job))
-                await downloads.acquire()
-                acquired = True
-                job.stage = "получение данных о видео"
-                with TemporaryDirectory(dir=work_dir, prefix=DOWNLOAD_PREFIX) as target:
-                    media = await asyncio.to_thread(fetch, link, Path(target), job)
-                    job.stage = "отправка в Telegram"
-                    sent = await send(
-                        message,
-                        bot,
-                        link,
-                        text,
-                        media.info,
-                        # The local Bot API reads the shared volume instead of an HTTP upload.
-                        media.path.resolve().as_uri() if local_api else FSInputFile(media.path),
-                        FSInputFile(media.cover) if media.cover else None,
-                        FSInputFile(media.thumbnail) if media.thumbnail else None,
-                        LONG_UPLOAD_TIMEOUT if long else UPLOAD_TIMEOUT,
-                    )
+            await downloads.acquire()
+            acquired = True
+            job.stage = "получение данных о видео"
+            with TemporaryDirectory(dir=work_dir, prefix=DOWNLOAD_PREFIX) as target:
+                media = await asyncio.to_thread(fetch, link, Path(target), job)
+                yield media, job
         finally:
             if progress:
                 progress.cancel()
                 await asyncio.gather(progress, return_exceptions=True)
-            if long:
+            if job.long:
                 long_busy = False
             else:
                 pending -= 1
                 if acquired:
                     downloads.release()
+
+    async def deliver(message: Message, bot: Bot, link: Link) -> None:
+        hit = storage.cached(link.key) if link.key else None
+        if link.key and hit:
+            file_id, cover_id, info = hit
+            try:
+                await send(message, bot, link, info, file_id, cover_id)
+                return
+            except TelegramBadRequest as error:
+                logger.warning(
+                    "Cached file for %s is unusable, downloading: %s", link.key, redact(str(error))
+                )
+                storage.forget(link.key)
+        async with ChatActionSender(
+            bot=bot,
+            chat_id=message.chat.id,
+            message_thread_id=message.message_thread_id,
+            action="upload_voice" if link.audio else "upload_video",
+        ):
+            watch = partial(show_progress, message, bot, link)
+            async with download_slot(link, watch) as (media, job):
+                job.stage = "отправка в Telegram"
+                sent = await send(
+                    message,
+                    bot,
+                    link,
+                    media.info,
+                    upload_file(media),
+                    FSInputFile(media.cover) if media.cover else None,
+                    FSInputFile(media.thumbnail) if media.thumbnail else None,
+                    LONG_UPLOAD_TIMEOUT if job.long else UPLOAD_TIMEOUT,
+                )
         file = sent.audio or sent.video
         if link.key and file:  # Repeated links are resent by file_id without downloading.
             covers = sent.video.cover if sent.video else None
@@ -331,9 +303,8 @@ def create_router(
         if message.via_bot and message.via_bot.id == bot.id:
             return  # Sent through our inline mode: already processed.
         found = [link for link in map(classify, extract_links(message)) if link]
-        text = strip_links(message)
-        if not found or not caption.fits(text, author(message), found[0].source.name):
-            return  # No supported links, or an article whose text would not survive.
+        if not found:
+            return
         delivered = 0
         for link in found:
             if not link.downloadable:
@@ -343,7 +314,7 @@ def create_router(
                 )
                 continue
             try:
-                await deliver(message, bot, link, text)
+                await deliver(message, bot, link)
                 delivered += 1
             except MediaError as error:
                 await report_failure(message, link, error, str(error))
@@ -379,29 +350,15 @@ def create_router(
 
     @router.inline_query()
     async def inline_query(query: InlineQuery) -> None:
-        parsed = parse_query(query.query)
-        if parsed is None:
+        link = parse_query(query.query)
+        if link is None:
             await query.answer([], cache_time=0, is_personal=True)
             return
-        link, text = parsed
         hit = storage.cached(link.key) if link.key else None
         if hit:
             file_id, _, info = hit
-            body = caption.build(
-                info.title,
-                info.uploader,
-                text,
-                inline_author(query.from_user),
-                link.source.name,
-                link.url,
-            )
             result = InlineQueryResultCachedVideo(
-                id="cached",
-                video_file_id=file_id,
-                title=info.title or link.label,
-                description=text or None,
-                caption=body,
-                parse_mode="HTML",
+                id="cached", video_file_id=file_id, title=info.title or link.label
             )
             await query.answer([result], cache_time=0, is_personal=True)
             return
@@ -414,7 +371,7 @@ def create_router(
         placeholder = InlineQueryResultArticle(
             id=INLINE_DOWNLOAD,
             title=f"Скачать и отправить: {link.label}",
-            description=text or f"Видео до {LONG_DURATION // 60} минут",
+            description="Видео придёт после загрузки",
             input_message_content=InputTextMessageContent(
                 message_text=f"⏳ {link.label}: скачивание…"
             ),
@@ -427,28 +384,17 @@ def create_router(
 
     @router.chosen_inline_result(F.result_id == INLINE_DOWNLOAD)
     async def inline_download(chosen: ChosenInlineResult, bot: Bot) -> None:
-        parsed = parse_query(chosen.query)
+        link = parse_query(chosen.query)
         message_id = chosen.inline_message_id
-        if parsed is None or message_id is None or inline_chat_id is None:
+        if link is None or message_id is None or inline_chat_id is None:
             logger.error("Inline result cannot be processed: no link, message or upload chat")
             return
-        link, text = parsed
         try:
             file_id, cover_id, info = await upload_inline(bot, link, inline_chat_id)
-            body = caption.build(
-                info.title,
-                info.uploader,
-                text,
-                inline_author(chosen.from_user),
-                link.source.name,
-                link.url,
-            )
             media = InputMediaVideo(
                 media=file_id,
                 cover=cover_id,
                 start_timestamp=link.start,
-                caption=body,
-                parse_mode="HTML",
                 duration=info.duration,
                 width=info.width,
                 height=info.height,
@@ -465,7 +411,7 @@ def create_router(
             )
             try:
                 await bot.edit_message_text(
-                    f"{emoji.html('error')} {escape(link.label)}: {escape(reason)}",
+                    f"{emoji.character('error')} {escape(link.label)}: {escape(reason)}",
                     inline_message_id=message_id,
                     parse_mode="HTML",
                 )
@@ -473,41 +419,24 @@ def create_router(
                 logger.error("Cannot show inline failure\n%s", diagnostic(notification_error))
 
     async def upload_inline(bot: Bot, link: Link, chat_id: int) -> tuple[str, str | None, Info]:
-        """Download a short video and upload it to the upload chat for its file_id."""
-        nonlocal pending
+        """Download a video and upload it to the upload chat for its file_id."""
         hit = storage.cached(link.key) if link.key else None
         if hit:  # Another inline or chat delivery finished first.
             return hit
-        if pending >= QUEUE_LIMIT:
-            raise MediaError("очередь загрузок заполнена, попробуйте позже")
-
-        def admit(duration: int | None) -> None:  # Runs in the download thread.
-            if (duration or 0) > LONG_DURATION:
-                raise MediaError(
-                    f"через @-упоминание — только видео до {LONG_DURATION // 60} минут"
-                )
-
-        job = Job(LOCAL_MAX_BYTES if local_api else CLOUD_MAX_BYTES, admit)
-        pending += 1
-        try:
-            async with downloads:
-                with TemporaryDirectory(dir=work_dir, prefix=DOWNLOAD_PREFIX) as target:
-                    media = await asyncio.to_thread(fetch, link, Path(target), job)
-                    sent = await bot.send_video(
-                        chat_id,
-                        media.path.resolve().as_uri() if local_api else FSInputFile(media.path),
-                        cover=FSInputFile(media.cover) if media.cover else None,
-                        thumbnail=FSInputFile(media.thumbnail) if media.thumbnail else None,
-                        caption=link.url,
-                        duration=media.info.duration,
-                        width=media.info.width,
-                        height=media.info.height,
-                        supports_streaming=True,
-                        disable_notification=True,
-                        request_timeout=UPLOAD_TIMEOUT,
-                    )
-        finally:
-            pending -= 1
+        async with download_slot(link) as (media, job):
+            sent = await bot.send_video(
+                chat_id,
+                upload_file(media),
+                cover=FSInputFile(media.cover) if media.cover else None,
+                thumbnail=FSInputFile(media.thumbnail) if media.thumbnail else None,
+                caption=link.url,
+                duration=media.info.duration,
+                width=media.info.width,
+                height=media.info.height,
+                supports_streaming=True,
+                disable_notification=True,
+                request_timeout=LONG_UPLOAD_TIMEOUT if job.long else UPLOAD_TIMEOUT,
+            )
         if sent.video is None:
             raise MediaError("Telegram не вернул загруженное видео")
         covers = sent.video.cover

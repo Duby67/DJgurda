@@ -11,12 +11,6 @@ from djgurda.media import Info
 SCHEMA_VERSION = 1
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY, active INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS nicknames (
-    chat_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    PRIMARY KEY (chat_id, user_id)
-);
 CREATE TABLE IF NOT EXISTS media_cache (
     key TEXT PRIMARY KEY,
     file_id TEXT NOT NULL,
@@ -49,24 +43,6 @@ class Storage:
             "INSERT INTO chats (id, active) VALUES (?, ?)"
             " ON CONFLICT (id) DO UPDATE SET active = excluded.active",
             (chat_id, active),
-        )
-
-    def nickname(self, chat_id: int, user_id: int) -> str | None:
-        row = self._db.execute(
-            "SELECT name FROM nicknames WHERE chat_id = ? AND user_id = ?", (chat_id, user_id)
-        ).fetchone()
-        return row[0] if row else None
-
-    def set_nickname(self, chat_id: int, user_id: int, name: str | None) -> None:
-        if name is None:
-            self._db.execute(
-                "DELETE FROM nicknames WHERE chat_id = ? AND user_id = ?", (chat_id, user_id)
-            )
-            return
-        self._db.execute(
-            "INSERT INTO nicknames (chat_id, user_id, name) VALUES (?, ?, ?)"
-            " ON CONFLICT (chat_id, user_id) DO UPDATE SET name = excluded.name",
-            (chat_id, user_id, name),
         )
 
     def cached(self, key: str) -> tuple[str, str | None, Info] | None:

@@ -67,6 +67,7 @@ class Job:
     # raises MediaError when the media has no free lane.
     admit: Callable[[int | None], None]
     stage: str = "в очереди"  # Shown to the user; written by the download thread.
+    long: bool = False  # Admitted to the long lane; its upload gets more time.
 
 
 def require_space(target: Path, size: int, job: Job) -> None:

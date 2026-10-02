@@ -43,7 +43,7 @@ from aiogram.types import (
     Video,
 )
 
-from djgurda import caption, chat, emoji
+from djgurda import chat, emoji
 from djgurda.bot import create_dispatcher
 from djgurda.chat import HELP
 from djgurda.media import LONG_DURATION, Info, Job, Media, MediaError
@@ -198,31 +198,23 @@ def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
 
     monkeypatch.setattr(chat, "fetch", fetch)
     request = AsyncMock(side_effect=telegram)
-    author = '<a href="tg://user?id=42">{}</a>'
-    source = emoji.html("YouTube") + ' <a href="https://youtu.be/ok">YouTube</a>'
     script = [
         (42, "/start"),
         (-7, "/start"),
-        (42, "/saymyname  Ivan228 "),
-        (42, "как  смешно youtu.be/ok\n\nда"),  # Delivered, so the original is deleted.
-        (-7, "youtu.be/ok"),  # Cached file_id; the nickname belongs to chat 42 only.
+        (42, "как  смешно youtu.be/ok\n\nда"),  # Delivered without a caption; original deleted.
+        (-7, "youtu.be/ok"),  # Cached file_id.
         (42, "youtu.be/ok youtu.be/fail youtube.com/playlist?list=1"),  # Original stays.
-        (42, "статья " * 200 + "youtu.be/ok"),  # Too long for a caption: left untouched.
     ]
     run_script(request, tmp_path, script)
 
     assert sent(request) == [
         (42, f"{emoji.html('success')} Бот активен в этом чате"),
         (-7, f"{emoji.html('success')} Бот активен в этом чате"),
-        (42, "Имя в этом чате: Ivan228"),
-        (
-            42,
-            f"Title &lt;1&gt; — Channel\n\nкак смешно\nда\n\n{author.format('Ivan228')}\n{source}",
-        ),
+        (42, "SendVideo"),
         (42, "DeleteMessage"),
-        (-7, f"Title &lt;1&gt; — Channel\n\n{author.format('Test')}\n{source}"),
+        (-7, "SendVideo"),
         (-7, "DeleteMessage"),
-        (42, f"Title &lt;1&gt; — Channel\n\n{author.format('Ivan228')}\n{source}"),
+        (42, "SendVideo"),
         (42, f"{emoji.html('error')} YouTube/video: не удалось скачать &lt;private&gt;"),
         (42, f"{emoji.html('warning')} YouTube/playlist: обработка ещё не реализована"),
     ]
@@ -262,6 +254,8 @@ def test_forwarded_delivery_is_ignored(tmp_path: Path, monkeypatch: pytest.Monke
 
 def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     def fetch(link: Link, target: Path, job: Job) -> Media:
+        if "broken" in link.url:
+            raise MediaError("видео недоступно")
         job.admit(LONG_DURATION + 1 if "long" in link.url else 60)
         return Media(target / "video.mp4", Info("Title", "Channel", 60, 2, 3))
 
@@ -295,7 +289,8 @@ def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
                 query(1, "youtu.be/ok смотри"),  # New link: a placeholder.
                 chosen(2, "youtu.be/ok смотри"),  # Uploaded, then the placeholder is replaced.
                 query(3, "смотри youtu.be/ok"),  # Cached: sent at once.
-                chosen(4, "youtu.be/long"),  # Long videos are refused in inline mode.
+                chosen(4, "youtu.be/long"),  # Long videos take the long lane.
+                chosen(5, "youtu.be/broken"),  # The placeholder shows the failure.
             ]:
                 await dispatcher.feed_update(bot, update)
             storage.close()
@@ -308,15 +303,17 @@ def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         InlineQueryResultCachedVideo,
     ]
     uploads = [m for m in methods if isinstance(m, SendVideo)]
-    assert [upload.chat_id for upload in uploads] == [-100]
-    (edit,) = [m for m in methods if isinstance(m, EditMessageMedia)]
-    assert edit.inline_message_id == "inline-2"
+    assert [upload.chat_id for upload in uploads] == [-100, -100]
+    edits = [m for m in methods if isinstance(m, EditMessageMedia)]
+    assert [edit.inline_message_id for edit in edits] == ["inline-2", "inline-4"]
+    edit = edits[0]
     assert isinstance(edit.media, InputMediaVideo)
     assert (edit.media.media, edit.media.cover) == ("file-1", "cover-1")
-    assert edit.media.caption and "смотри" in edit.media.caption
     (failure,) = [m for m in methods if isinstance(m, EditMessageText)]
-    assert failure.inline_message_id == "inline-4"
-    assert f"только видео до {LONG_DURATION // 60} минут" in (failure.text or "")
+    assert failure.inline_message_id == "inline-5"
+    # Telegram rejects custom emoji in inline messages unless the bot has a Fragment username.
+    assert failure.text == "❌ YouTube/video: видео недоступно"
+    assert edit.media.caption is None
 
 
 def test_long_media_has_its_own_lane(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -452,35 +449,6 @@ def test_unexpected_download_failure_is_visible(
 
 
 @pytest.mark.parametrize(
-    ("title", "channel", "limit", "expected"),
-    [
-        ("Смешной кот #shorts #cat", "Коты | ", 96, "Смешной кот — Коты"),
-        ("#shorts", "", 96, "Интересный контент"),
-        (
-            "Очень длинное название видео, которое никак не помещается в заголовок подписи целиком",
-            "Канал с очень длинным названием для проверки",
-            80,
-            "Очень длинное название видео, которое никак… — Канал с очень длинным названием…",
-        ),
-        ("Название", "Канал", 12, "Название"),  # No room for the channel.
-    ],
-)
-def test_caption_header(title: str, channel: str, limit: int, expected: str) -> None:
-    assert caption.header(title, channel, limit) == expected
-
-
-def test_caption_fits_telegram_limit() -> None:
-    author = caption.Author("Ivan", None)
-    text = "т" * 990
-    assert caption.fits(text, author, "YouTube")
-    assert not caption.fits(text + "т" * 20, author, "YouTube")
-    built = caption.build("Очень длинное название 🎬 " * 20, "", text, author, "YouTube", "x")
-    visible = re.sub(r"<[^>]+>", "", built)
-    assert caption.length(visible) <= caption.CAPTION_LIMIT
-    assert visible.startswith("Очень длинное") and "…\n\n" + text in visible
-
-
-@pytest.mark.parametrize(
     ("url", "start"),
     [
         ("youtu.be/x?t=90", 90),
@@ -510,11 +478,7 @@ def test_audio_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
         ("Song", "Artist", False),
     ]
     assert audios[1].audio == "audio-1"  # Cached file_id.
-    footer = (
-        f'<a href="tg://user?id=42">Test</a>\n{emoji.html("Yandex Music")} '
-        f'<a href="{track}">Yandex Music</a>'
-    )
-    assert [audio.caption for audio in audios] == [f"Слушай &lt;это&gt;\n\n{footer}", footer]
+    assert [audio.caption for audio in audios] == [None, None]
 
 
 @pytest.mark.parametrize(
