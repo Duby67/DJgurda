@@ -91,7 +91,7 @@ class Selected(Exception):
 @pytest.mark.parametrize(
     ("max_mb", "expected"),
     [
-        (50, "480+audio"),  # 720p is 62 MB with audio: the best quality that fits instead.
+        (50, "480+audio"),  # 720p H.264 exceeds 50 MB: the best H.264 that fits.
         (5, None),  # Even 360p does not fit.
     ],
 )
@@ -119,7 +119,24 @@ def test_too_big_quality_falls_back_to_one_that_fits(
         "extractor_key": "Generic",
         "webpage_url": "https://example.com/x",
         "duration": 60,
-        "formats": [audio, video(360, 5), video(480, 20), video(720, 60), video(1080, 200)],
+        "formats": [
+            audio,
+            video(360, 5),
+            video(480, 20),
+            video(720, 60),
+            # HLS states no size, and yt-dlp does not estimate manifest formats; the bitrate
+            # means 75 MB for the minute, so it does not fit either.
+            {
+                **video(720, 0),
+                "format_id": "720hls",
+                "filesize": None,
+                "tbr": 10_000,
+                "manifest_url": "https://example.com/720.m3u8",
+            },
+            # Fits, but H.264 is preferred even at a lower resolution.
+            {**video(720, 30), "format_id": "720vp9", "vcodec": "vp9"},
+            video(1080, 200),
+        ],
     }
     process = yt_dlp.YoutubeDL.process_ie_result
 

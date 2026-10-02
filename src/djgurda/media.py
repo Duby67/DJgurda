@@ -16,8 +16,8 @@ from djgurda.diagnostics import DownloadLogger
 
 LOCAL_MAX_BYTES = 2000 * 1024 * 1024  # The local Bot API upload limit.
 CLOUD_MAX_BYTES = 50 * 1024 * 1024  # Cloud Bot API upload limit.
-# Ceiling for the smaller side (vertical Shorts get 720p too): the best variant up to it; when a
-# source has nothing that small, yt-dlp picks its smallest variant instead.
+# Ceiling for the smaller side (vertical Shorts get 720p too): the best H.264 variant up to it;
+# when a source has nothing that small, yt-dlp picks its smallest variant instead.
 MAX_RESOLUTION = 720
 MAX_DURATION = 3 * 60 * 60  # Seconds; HLS sizes are often unknown, so length is the cheap guard.
 LONG_DURATION = 20 * 60  # Longer media moves to its own lane so short links keep flowing.
@@ -132,7 +132,8 @@ def download(url: str, target: Path, job: Job, headers: dict[str, str] | None = 
         "paths": {"home": str(target), "temp": str(target)},
         "outtmpl": "media.%(ext)s",  # One download per directory; ids can be URLs.
         "format": "bv*+ba/b",
-        "format_sort": [f"res:{MAX_RESOLUTION}", "vcodec:h264", "ext:mp4:m4a"],
+        # H.264 first, even at a lower resolution: every Telegram client plays it.
+        "format_sort": ["vcodec:h264", f"res:{MAX_RESOLUTION}", "ext:mp4:m4a"],
         "merge_output_format": "mp4",
         "max_filesize": job.max_bytes,
         "noplaylist": True,
@@ -197,29 +198,35 @@ def download(url: str, target: Path, job: Job, headers: dict[str, str] | None = 
     return Media(path, details, cover, thumbnail(cover))
 
 
-def format_size(item: dict[str, Any]) -> int:
-    return int(item.get("filesize") or item.get("filesize_approx") or 0)
+def format_size(item: dict[str, Any], duration: float) -> int:
+    """Stated size, else one from the bitrate (kbit/s): HLS formats often state none."""
+    size = item.get("filesize") or item.get("filesize_approx")
+    return int(size or (item.get("tbr") or 0) * 125 * duration)
 
 
 def estimated_size(info: dict[str, Any]) -> int:
-    """Size of the selected formats; unknown sizes count as zero."""
+    """Size of the selected formats; formats with neither size nor bitrate count as zero."""
     formats = info.get("requested_formats") or [info]
+    duration = info.get("duration") or 0
     if info.get("section_start") is not None:
         # Clips: format sizes describe the whole video, so estimate from bitrate (kbit/s).
-        bitrate = sum(item.get("tbr") or 0 for item in formats)
-        return int(bitrate * 125 * (info.get("duration") or 0))
-    return sum(format_size(item) for item in formats)
+        return int(sum(item.get("tbr") or 0 for item in formats) * 125 * duration)
+    return sum(format_size(item, duration) for item in formats)
 
 
 def fitting_format(info: dict[str, Any], max_bytes: int) -> str:
-    """Format spec for the preferred quality whose video and audio fit `max_bytes` together."""
-    formats = info.get("requested_formats") or []
-    audio = sum(format_size(item) for item in formats if item.get("vcodec") == "none")
+    """Format spec for the preferred quality whose video and audio fit `max_bytes` together.
+
+    Every format gets `filesize_approx` from `format_size`; one without it is left out, since
+    an unknown size could again exceed the limit after a long download.
+    """
+    duration = info.get("duration") or 0
+    for item in info.get("formats") or []:
+        item["filesize_approx"] = format_size(item, duration) or None
+    selected = info.get("requested_formats") or []
+    audio = sum(format_size(item, duration) for item in selected if item.get("vcodec") == "none")
     room = max_bytes - audio
-    return (
-        f"bv*[filesize<?{room}][filesize_approx<?{room}]+ba"
-        f"/b[filesize<?{max_bytes}][filesize_approx<?{max_bytes}]"
-    )
+    return f"bv*[filesize_approx<{room}]+ba/b[filesize_approx<{max_bytes}]"
 
 
 def probe(path: Path, info: Info) -> Info:
