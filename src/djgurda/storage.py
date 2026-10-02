@@ -11,12 +11,6 @@ from djgurda.media import Info
 SCHEMA_VERSION = 1
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY, active INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS nicknames (
-    chat_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    PRIMARY KEY (chat_id, user_id)
-);
 CREATE TABLE IF NOT EXISTS media_cache (
     key TEXT PRIMARY KEY,
     file_id TEXT NOT NULL,
@@ -26,6 +20,11 @@ CREATE TABLE IF NOT EXISTS media_cache (
     duration INTEGER,
     width INTEGER,
     height INTEGER
+);
+CREATE TABLE IF NOT EXISTS deliveries (
+    id TEXT PRIMARY KEY,
+    state TEXT NOT NULL,
+    attempts INTEGER NOT NULL
 );
 """
 
@@ -51,24 +50,6 @@ class Storage:
             (chat_id, active),
         )
 
-    def nickname(self, chat_id: int, user_id: int) -> str | None:
-        row = self._db.execute(
-            "SELECT name FROM nicknames WHERE chat_id = ? AND user_id = ?", (chat_id, user_id)
-        ).fetchone()
-        return row[0] if row else None
-
-    def set_nickname(self, chat_id: int, user_id: int, name: str | None) -> None:
-        if name is None:
-            self._db.execute(
-                "DELETE FROM nicknames WHERE chat_id = ? AND user_id = ?", (chat_id, user_id)
-            )
-            return
-        self._db.execute(
-            "INSERT INTO nicknames (chat_id, user_id, name) VALUES (?, ?, ?)"
-            " ON CONFLICT (chat_id, user_id) DO UPDATE SET name = excluded.name",
-            (chat_id, user_id, name),
-        )
-
     def cached(self, key: str) -> tuple[str, str | None, Info] | None:
         """Return the video file_id, the cover file_id and the metadata."""
         row = self._db.execute(
@@ -84,8 +65,28 @@ class Storage:
             (key, file_id, cover_id, *astuple(info)),
         )
 
-    def forget(self, key: str) -> None:
-        self._db.execute("DELETE FROM media_cache WHERE key = ?", (key,))
+    def forget(self, key: str, file_id: str) -> None:
+        """Drop an unusable file_id; a newer one cached meanwhile stays."""
+        self._db.execute("DELETE FROM media_cache WHERE key = ? AND file_id = ?", (key, file_id))
+
+    def begin(self, delivery_id: str, state: str) -> int:
+        """Record a delivery until it ends and return how many times it has started."""
+        row = self._db.execute(
+            "INSERT INTO deliveries VALUES (?, ?, 1) ON CONFLICT (id)"
+            " DO UPDATE SET state = excluded.state, attempts = attempts + 1 RETURNING attempts",
+            (delivery_id, state),
+        ).fetchone()
+        return int(row[0])
+
+    def save(self, delivery_id: str, state: str) -> None:
+        self._db.execute("UPDATE deliveries SET state = ? WHERE id = ?", (state, delivery_id))
+
+    def end(self, delivery_id: str) -> None:
+        self._db.execute("DELETE FROM deliveries WHERE id = ?", (delivery_id,))
+
+    def unfinished(self) -> list[tuple[str, str]]:
+        """Deliveries a restart interrupted, oldest first: id and JSON state."""
+        return list(self._db.execute("SELECT id, state FROM deliveries ORDER BY rowid"))
 
     def close(self) -> None:
         self._db.close()

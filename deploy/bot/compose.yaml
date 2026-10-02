@@ -6,7 +6,7 @@ services:
       ADMIN_IDS: ${ADMIN_IDS:?Set ADMIN_IDS to a nonempty JSON array of administrator IDs}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       YANDEX_MUSIC_TOKEN: ${YANDEX_MUSIC_TOKEN:-}  # Optional: Yandex Music downloads.
-      INLINE_CHAT_ID: ${INLINE_CHAT_ID:-}  # Optional: upload chat for inline mode.
+      INLINE_CHAT_ID: ${INLINE_CHAT_ID:-}  # Optional: inline uploads and error reports.
       DATABASE_PATH: /data/djgurda.sqlite3
       WORK_DIR: /data/work
     volumes:

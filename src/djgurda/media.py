@@ -16,13 +16,13 @@ from djgurda.diagnostics import DownloadLogger
 
 LOCAL_MAX_BYTES = 2000 * 1024 * 1024  # The local Bot API upload limit.
 CLOUD_MAX_BYTES = 50 * 1024 * 1024  # Cloud Bot API upload limit.
-# Preferred ceiling for the smaller side (vertical Shorts get 480p too); when a source has
-# nothing that small, yt-dlp picks its smallest variant instead.
-MAX_RESOLUTION = 480
-MAX_DURATION = 2 * 60 * 60  # Seconds; HLS sizes are often unknown, so length is the cheap guard.
+# Ceiling for the smaller side (vertical Shorts get 720p too): the best variant up to it; when a
+# source has nothing that small, yt-dlp picks its smallest variant instead.
+MAX_RESOLUTION = 720
+MAX_DURATION = 3 * 60 * 60  # Seconds; HLS sizes are often unknown, so length is the cheap guard.
 LONG_DURATION = 20 * 60  # Longer media moves to its own lane so short links keep flowing.
-DOWNLOAD_TIMEOUT = 5 * 60  # Seconds for download and merge of one link.
-LONG_DOWNLOAD_TIMEOUT = 60 * 60
+DOWNLOAD_TIMEOUT = 2 * 60  # Seconds for download and merge of one link; keeps the queue moving.
+LONG_DOWNLOAD_TIMEOUT = 20 * 60
 DOWNLOAD_PREFIX = "download-"
 THUMBNAIL_SIZE = 320  # Bot API limit for video thumbnails.
 DURATION = re.compile(r"Duration: (\d+):(\d+):(\d+)")
@@ -67,6 +67,7 @@ class Job:
     # raises MediaError when the media has no free lane.
     admit: Callable[[int | None], None]
     stage: str = "в очереди"  # Shown to the user; written by the download thread.
+    long: bool = False  # Admitted to the long lane; its upload gets more time.
 
 
 def require_space(target: Path, size: int, job: Job) -> None:
@@ -156,7 +157,7 @@ def download(url: str, target: Path, job: Job, headers: dict[str, str] | None = 
                 raise MediaError("прямые трансляции не поддерживаются")
             duration = info.get("duration") or 0
             if duration > MAX_DURATION:
-                raise MediaError(f"видео длиннее {MAX_DURATION // 60} минут")
+                raise MediaError(f"видео длиннее {MAX_DURATION // 3600} ч")
             formats = info.get("requested_formats") or [info]
             if info.get("section_start") is not None:
                 # Clips: format sizes describe the whole video, so estimate from bitrate (kbit/s).
@@ -175,7 +176,7 @@ def download(url: str, target: Path, job: Job, headers: dict[str, str] | None = 
                 deadline = time.monotonic() + limit
             info = ydl.process_ie_result(info, download=True)
     except Timeout as error:
-        raise MediaError(f"загрузка дольше {limit // 60} минут") from error
+        raise MediaError(f"загрузка не уложилась в {limit // 60} мин") from error
     except yt_dlp.utils.DownloadError as error:
         raise MediaError(download_reason(error)) from error
     downloads = info.get("requested_downloads") or []

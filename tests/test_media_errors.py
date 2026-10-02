@@ -1,6 +1,8 @@
 """Download failures keep their cause and explain the failure to the user."""
 
+import io
 import logging
+import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -9,6 +11,7 @@ import yt_dlp
 
 from djgurda import media
 from djgurda.diagnostics import DownloadLogger, diagnostic
+from djgurda.sources import yandex_music
 
 JOB = media.Job(media.CLOUD_MAX_BYTES, lambda duration: None)
 
@@ -61,3 +64,20 @@ def test_missing_download_is_not_reported_as_oversized(
     monkeypatch.setattr(yt_dlp, "YoutubeDL", lambda options: downloader)
     with pytest.raises(media.MediaError, match="не предоставил файл"):
         media.download("https://example.com/video", tmp_path, JOB)
+
+
+@pytest.mark.parametrize(
+    ("deadline", "size", "reason"),
+    [
+        (-1, 10, "загрузка не уложилась в 2 мин"),
+        (60, yandex_music.MAX_BYTES + 1, "файл больше 50 МБ"),
+    ],
+)
+def test_yandex_music_download_is_bounded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, deadline: float, size: int, reason: str
+) -> None:
+    monkeypatch.setattr(yandex_music, "urlopen", lambda url, timeout: io.BytesIO(b"x" * size))
+    with pytest.raises(media.MediaError, match=reason):
+        yandex_music.save(
+            "https://example.com/track", tmp_path / "track.mp3", deadline + time.monotonic()
+        )
