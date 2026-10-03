@@ -24,6 +24,7 @@ from aiogram.exceptions import (
 from aiogram.filters import Command
 from aiogram.methods import SendAudio, SendVideo
 from aiogram.types import (
+    CallbackQuery,
     ChosenInlineResult,
     FSInputFile,
     InlineKeyboardButton,
@@ -66,9 +67,10 @@ HELP = "\n".join(
         "/start — включить бота в чате",
         "/stop — приостановить бота в чате",
         "/status — состояние бота и версия",
+        "/caption — подпись со ссылкой на источник и отправителем",
         "/help — эта справка",
         "",
-        "В любом чате, даже без бота: @имя_бота ссылка (только видео).",
+        "В личной переписке, даже без бота: @имя_бота ссылка (только видео).",
     ]
 )
 QUEUE_LIMIT = 5  # Short links waiting or downloading; more are refused instead of piling up.
@@ -78,6 +80,10 @@ LONG_UPLOAD_TIMEOUT = 20 * 60  # 2000 MB at about 14 Mbit/s.
 PROGRESS_INTERVAL = 10  # Seconds between status edits; quick links finish without one.
 INLINE_DOWNLOAD = "download"  # Result id of the placeholder replaced after the download.
 INLINE_REDOWNLOAD = "redownload"  # The same, ignoring a cached file_id Telegram cannot send.
+# Inline mode serves personal chats; groups and channels have the bot itself.
+INLINE_CHAT_TYPES = {"private", "sender"}
+CAPTION_ON = "caption:on"
+CAPTION_OFF = "caption:off"
 MESSAGE_LIMIT = 4096
 ATTEMPTS = 2  # Starts of one delivery, restarts included; guards against a crash loop.
 INTERRUPTED = "загрузка прерывалась перезапуском бота, попробуйте снова"
@@ -119,6 +125,23 @@ def delivery_reason(error: Exception) -> str:
     if isinstance(error, TelegramAPIError):
         return "не удалось отправить медиа: Telegram отклонил запрос"
     return "не удалось обработать ссылку из-за внутренней ошибки бота"
+
+
+def sender_name(message: Message) -> str:
+    """Who posted the link, as plain text: a mention would notify them on every delivery."""
+    if chat := message.sender_chat:  # Anonymous admins and posts on behalf of a channel.
+        return chat.username or chat.title or str(chat.id)
+    if user := message.from_user:
+        return user.username or user.full_name
+    raise ValueError(f"Message {message.message_id} has no sender")
+
+
+def caption_html(link: Link, sender: str | None) -> str:
+    """The source and, in a chat, the sender, hidden under a spoiler to keep the chat quiet."""
+    lines = [f'🔗 <a href="{escape(link.url)}">Источник</a>']
+    if sender is not None:
+        lines.append(f"👤 {escape(sender)}")
+    return "<tg-spoiler>" + "\n".join(lines) + "</tg-spoiler>"
 
 
 def file_rejected(error: Exception) -> bool:
@@ -234,6 +257,38 @@ def create_router(
             parse_mode="HTML",
         )
 
+    def caption_settings(chat_id: int) -> tuple[str, InlineKeyboardMarkup]:
+        enabled = storage.caption(chat_id)
+        text = (
+            f"{emoji.html('bot')} Подпись под медиа {'включена' if enabled else 'выключена'}.\n"
+            "Под спойлером: ссылка на источник и отправитель. "
+            "В личной переписке с ботом настройка действует и на inline-режим."
+        )
+        button = InlineKeyboardButton(
+            text="Выключить" if enabled else "Включить",
+            callback_data=CAPTION_OFF if enabled else CAPTION_ON,
+        )
+        return text, InlineKeyboardMarkup(inline_keyboard=[[button]])
+
+    @router.message(Command("caption"), is_active)
+    async def caption_command(message: Message) -> None:
+        text, markup = caption_settings(message.chat.id)
+        await message.answer(text, parse_mode="HTML", reply_markup=markup)
+
+    @router.callback_query(F.data.in_({CAPTION_ON, CAPTION_OFF}))
+    async def caption_toggle(callback: CallbackQuery) -> None:
+        if callback.message is None or callback.message.chat.id not in active:
+            await callback.answer("Бот приостановлен в этом чате", show_alert=True)
+            return
+        chat_id = callback.message.chat.id
+        enabled = callback.data == CAPTION_ON
+        if storage.caption(chat_id) != enabled:  # A repeated press must not edit to the same text.
+            storage.set_caption(chat_id, enabled)
+            if isinstance(callback.message, Message):
+                text, markup = caption_settings(chat_id)
+                await callback.message.edit_text(text, parse_mode="HTML", reply_markup=markup)
+        await callback.answer(f"Подпись {'включена' if enabled else 'выключена'}")
+
     @router.message(Command("help"))
     async def help_(message: Message) -> None:
         await message.answer(HELP, parse_mode="HTML")
@@ -247,11 +302,14 @@ def create_router(
         cover: str | FSInputFile | None = None,
         thumbnail: FSInputFile | None = None,
         timeout: int = UPLOAD_TIMEOUT,
+        caption: str | None = None,
     ) -> Message:
         method: SendAudio | SendVideo
         if link.audio:
             method = message.answer_audio(
                 file,
+                caption=caption,
+                parse_mode="HTML",
                 title=info.title,
                 performer=info.uploader,
                 duration=info.duration,
@@ -260,6 +318,8 @@ def create_router(
         else:
             method = message.answer_video(
                 file,
+                caption=caption,
+                parse_mode="HTML",
                 cover=cover,
                 thumbnail=thumbnail,
                 start_timestamp=link.start,
@@ -349,14 +409,18 @@ def create_router(
             done.set()
 
     async def deliver(
-        message: Message, bot: Bot, link: Link, remember: Callable[[int | None], None]
+        message: Message,
+        bot: Bot,
+        link: Link,
+        remember: Callable[[int | None], None],
+        caption: str | None,
     ) -> None:
         async with single_download(link):
             hit = storage.cached(link.key) if link.key else None
             if link.key and hit:
                 file_id, cover_id, info = hit
                 try:
-                    await send(message, bot, link, info, file_id, cover_id)
+                    await send(message, bot, link, info, file_id, cover_id, caption=caption)
                     return
                 except TelegramBadRequest as error:
                     if not file_rejected(error):
@@ -385,6 +449,7 @@ def create_router(
                         FSInputFile(media.cover) if media.cover else None,
                         FSInputFile(media.thumbnail) if media.thumbnail else None,
                         LONG_UPLOAD_TIMEOUT if job.long else UPLOAD_TIMEOUT,
+                        caption,
                     )
             file = sent.audio or sent.video
             if link.key and file:  # Repeated links are resent by file_id without downloading.
@@ -402,13 +467,18 @@ def create_router(
             return  # Sent through our inline mode: already processed.
         urls = [url for url in extract_links(message) if classify(url)]
         if urls:
-            await process_message(message, bot, urls, failed=False)
+            sender = sender_name(message) if storage.caption(message.chat.id) else None
+            await process_message(message, bot, urls, failed=False, sender=sender)
 
-    async def process_message(message: Message, bot: Bot, urls: list[str], failed: bool) -> None:
+    async def process_message(
+        message: Message, bot: Bot, urls: list[str], failed: bool, sender: str | None
+    ) -> None:
         """Deliver the links one by one; the original goes once all of them are delivered.
 
         The journal keeps the links still to deliver, so a restart neither loses nor repeats
         one; it is kept on cancellation, so a shutdown leaves it for the next start.
+        `sender` is set only when the chat has captions on; the journal keeps it until the end,
+        because the original message is gone by then.
         """
         delivery_id = f"chat:{message.chat.id}:{message.message_id}"
         state = {
@@ -416,6 +486,7 @@ def create_router(
             "urls": urls,
             "failed": failed,
             "status": None,
+            "sender": sender,
         }
         attempts = storage.begin(delivery_id, json.dumps(state))
 
@@ -438,7 +509,8 @@ def create_router(
                 failed = True
             else:
                 try:
-                    await deliver(message, bot, link, remember)
+                    caption = caption_html(link, sender) if sender is not None else None
+                    await deliver(message, bot, link, remember, caption)
                 except MediaError as error:
                     await report_failure(message, bot, link, error, str(error))
                     failed = True
@@ -512,9 +584,15 @@ def create_router(
         results: list[InlineQueryResultUnion] = []
         if hit:
             file_id, _, info = hit
+            # The sender is visible as "via bot"; the private chat with the bot sets captions.
+            caption = caption_html(link, None) if storage.caption(query.from_user.id) else None
             results.append(
                 InlineQueryResultCachedVideo(
-                    id="cached", video_file_id=file_id, title=info.title or link.label
+                    id="cached",
+                    video_file_id=file_id,
+                    title=info.title or link.label,
+                    caption=caption,
+                    parse_mode="HTML",
                 )
             )
         if inline_chat_id is not None:  # New files need a chat to upload to before the edit.
@@ -530,6 +608,12 @@ def create_router(
 
     @router.inline_query()
     async def inline_query(query: InlineQuery) -> None:
+        if query.chat_type not in INLINE_CHAT_TYPES:
+            button = InlineQueryResultsButton(
+                text="Inline-режим работает только в личной переписке", start_parameter="inline"
+            )
+            await query.answer([], cache_time=0, is_personal=True, button=button)
+            return
         link = parse_query(query.query)
         if link is None:
             await query.answer([], cache_time=0, is_personal=True)
@@ -556,7 +640,8 @@ def create_router(
             logger.error("Inline result cannot be processed: no link, message or upload chat")
             return
         redownload = chosen.result_id == INLINE_REDOWNLOAD
-        await deliver_inline(bot, link, inline_chat_id, message_id, redownload)
+        caption = storage.caption(chosen.from_user.id)
+        await deliver_inline(bot, link, inline_chat_id, message_id, redownload, caption)
 
     @router.startup()
     async def resume(bot: Bot) -> None:
@@ -588,7 +673,11 @@ def create_router(
             if link is None or inline_chat_id is None:
                 raise ValueError(f"Inline delivery needs a link and INLINE_CHAT_ID: {link}")
             message_id = delivery_id.removeprefix("inline:")
-            await deliver_inline(bot, link, inline_chat_id, message_id, state["redownload"])
+            # Journals written before captions existed have no flag: they were captionless.
+            caption = state.get("caption", False)
+            await deliver_inline(
+                bot, link, inline_chat_id, message_id, state["redownload"], caption
+            )
             return
         message = Message.model_validate(state["message"]).as_(bot)
         if state["status"] is not None:  # The status of the interrupted download.
@@ -596,10 +685,11 @@ def create_router(
                 await bot.delete_message(message.chat.id, state["status"])
             except TelegramAPIError as error:
                 logger.warning("Cannot delete progress: %s", redact(str(error)))
-        await process_message(message, bot, state["urls"], state["failed"])
+        # Journals written before captions existed have no sender: they were captionless.
+        await process_message(message, bot, state["urls"], state["failed"], state.get("sender"))
 
     async def deliver_inline(
-        bot: Bot, link: Link, chat_id: int, message_id: str, redownload: bool
+        bot: Bot, link: Link, chat_id: int, message_id: str, redownload: bool, caption: bool
     ) -> None:
         """Replace the placeholder with the video or an error; a restart resumes it.
 
@@ -607,7 +697,8 @@ def create_router(
         """
         delivery_id = f"inline:{message_id}"
         attempts = storage.begin(
-            delivery_id, json.dumps({"url": link.url, "redownload": redownload})
+            delivery_id,
+            json.dumps({"url": link.url, "redownload": redownload, "caption": caption}),
         )
         show = partial(bot.edit_message_text, inline_message_id=message_id)
         watch = partial(report_progress, link, show=show)
@@ -621,6 +712,8 @@ def create_router(
             file_id, cover_id, info = await upload_inline(bot, link, chat_id, watch, stale)
             media = InputMediaVideo(
                 media=file_id,
+                caption=caption_html(link, None) if caption else None,
+                parse_mode="HTML",
                 cover=cover_id,
                 start_timestamp=link.start,
                 duration=info.duration,

@@ -11,6 +11,7 @@ from djgurda.media import Info
 SCHEMA_VERSION = 1
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY, active INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS captions (chat_id INTEGER PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS media_cache (
     key TEXT PRIMARY KEY,
     file_id TEXT NOT NULL,
@@ -49,6 +50,17 @@ class Storage:
             " ON CONFLICT (id) DO UPDATE SET active = excluded.active",
             (chat_id, active),
         )
+
+    def caption(self, chat_id: int) -> bool:
+        """Whether deliveries to the chat carry the source and sender caption."""
+        query = "SELECT 1 FROM captions WHERE chat_id = ?"
+        return self._db.execute(query, (chat_id,)).fetchone() is not None
+
+    def set_caption(self, chat_id: int, enabled: bool) -> None:
+        if enabled:
+            self._db.execute("INSERT OR IGNORE INTO captions VALUES (?)", (chat_id,))
+        else:
+            self._db.execute("DELETE FROM captions WHERE chat_id = ?", (chat_id,))
 
     def cached(self, key: str) -> tuple[str, str | None, Info] | None:
         """Return the video file_id, the cover file_id and the metadata."""
