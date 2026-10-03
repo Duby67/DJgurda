@@ -171,24 +171,21 @@ def test_chat_lifecycle(tmp_path: Path) -> None:
 
     run_script(request, tmp_path, script)
 
-    status = f"{emoji.html('bot')} Бот {{}} в этом чате"
-    first_lines = [(chat_id, text.split("\n")[0]) for chat_id, text in sent(request)]
-    assert first_lines == [
+    # A paused chat gets only its state; an active one also the version and the caption.
+    paused = "Бот: приостановлен"
+    running = f"DJgurda {version('djgurda')}\nБот: активен\nПодпись: выключена"
+    assert sent(request) == [
         (42, f"{emoji.html('success')} Бот активен в этом чате"),
-        (-7, status.format("приостановлен")),
-        (-7, HELP.split("\n")[0]),
-        (42, status.format("активен")),
+        (-7, paused),
+        (-7, HELP),
+        (42, running),
         (42, f"{emoji.html('warning')} VK: обработка ещё не реализована"),
         (42, f"{emoji.html('warning')} Бот приостановлен в этом чате"),
-        (42, status.format("приостановлен")),
+        (42, paused),
         (42, f"{emoji.html('success')} Бот активен в этом чате"),
-        (42, status.format("активен")),
-        (-7, status.format("приостановлен")),
+        (42, running),
+        (-7, paused),
     ]
-    # A paused chat gets only its state; an active one also the version.
-    texts = [text for _, text in sent(request)]
-    assert texts[1] == status.format("приостановлен")
-    assert f"{emoji.html('version')} Версия: {version('djgurda')}" in texts[3]
     methods = [c.args[1] for c in request.await_args_list]
     assert all(
         m.parse_mode == "HTML"
@@ -332,10 +329,13 @@ def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.text == "Подпись: выкл — настроить"
     refused = answers[1]
     assert refused.button is not None and "личной переписке" in refused.button.text
-    # The sender is shown by Telegram as "via bot", so the caption has only the source.
-    source = '<tg-spoiler>🔗 <a href="https://youtu.be/ok">Источник</a></tg-spoiler>'
+    # Telegram shows the sender as "via bot"; inline messages allow no custom emoji.
+    caption = (
+        "<blockquote expandable><b>Title</b>\nChannel\n"
+        '📹 <a href="https://youtu.be/ok">YouTube</a>\n💬 смотри</blockquote>'
+    )
     cached = answers[2].results[0]
-    assert isinstance(cached, InlineQueryResultCachedVideo) and cached.caption == source
+    assert isinstance(cached, InlineQueryResultCachedVideo) and cached.caption == caption
     uploads = [m for m in methods if isinstance(m, SendVideo)]
     assert [upload.chat_id for upload in uploads] == [-100, -100]
     edits = [m for m in methods if isinstance(m, EditMessageMedia)]
@@ -351,7 +351,8 @@ def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ]
     assert edit.media.caption is None
     assert isinstance(edits[1].media, InputMediaVideo)
-    assert edits[1].media.caption is not None and "youtu.be/long" in edits[1].media.caption
+    assert edits[1].media.caption is not None
+    assert edits[1].media.caption.endswith(f"\n{chat.CAPTION_PLACEHOLDER}</blockquote>")
     (report,) = [m for m in methods if isinstance(m, SendMessage)]
     assert report.chat_id == -100  # Failures are visible without server logs.
     assert report.text.startswith("❌ YouTube/video (inline): видео недоступно\n")
@@ -359,9 +360,8 @@ def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_status_panel(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    patch_fetch(
-        monkeypatch, lambda link, target, job: Media(target / "v.mp4", Info("", "", 1, 2, 3))
-    )
+    info = Info("Title <1>", "Channel", 1, 2, 3)
+    patch_fetch(monkeypatch, lambda link, target, job: Media(target / "v.mp4", info))
     request = AsyncMock(side_effect=telegram)
     sender = User(id=7, is_bot=False, first_name="Анна", username="anna_<b>")
 
@@ -397,7 +397,7 @@ def test_status_panel(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
                 press(7, chat.CHAT_STOP),
                 message(8, 42, "/start settings"),  # The inline mode settings button.
                 press(9, chat.CAPTION_ON, chat_id=42),
-                link(10, 42, "youtu.be/own"),
+                link(10, 42, "смотри  youtu.be/own\nэто"),
             ]:
                 await dispatcher.feed_update(bot, update)
             storage.close()
@@ -424,12 +424,28 @@ def test_status_panel(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     plain, captioned, own = [m for m in methods if isinstance(m, SendVideo)]
     assert plain.caption is None
     # A plain nickname, never a mention: a mention would notify the sender on every video.
+    # Without a comment the placeholder keeps the quote tall enough for Telegram to collapse it.
+    youtube = emoji.html("YouTube")
     assert captioned.caption == (
-        '<tg-spoiler>🔗 <a href="https://youtu.be/ok">Источник</a>\n👤 anna_&lt;b&gt;</tg-spoiler>'
+        "<blockquote expandable><b>Title &lt;1&gt;</b>\nChannel\n"
+        f'{youtube} <a href="https://youtu.be/ok">YouTube</a>\n👤 anna_&lt;b&gt;\n'
+        f"{chat.CAPTION_PLACEHOLDER}</blockquote>"
     )
     assert captioned.parse_mode == "HTML"
-    # In a private chat the sender is the reader.
-    assert own.caption == '<tg-spoiler>🔗 <a href="https://youtu.be/own">Источник</a></tg-spoiler>'
+    # In a private chat the sender is the reader; the text around the link is a comment.
+    assert own.caption == (
+        "<blockquote expandable><b>Title &lt;1&gt;</b>\nChannel\n"
+        f'{youtube} <a href="https://youtu.be/own">YouTube</a>\n💬 смотри это</blockquote>'
+    )
+
+
+def test_audio_caption_skips_the_title() -> None:
+    link = classify("https://music.yandex.ru/album/1/track/2")
+    assert link is not None and link.audio
+    caption = chat.Caption("anna", "")
+    text = chat.caption_html(link, Info("Song", "Artist", 1, None, None), caption, True)
+    assert "Song" not in text and "Artist" not in text  # The audio player shows them.
+    assert text.endswith(f"👤 anna\n{chat.CAPTION_PLACEHOLDER}</blockquote>")
 
 
 def test_outdated_status_buttons_are_refused(tmp_path: Path) -> None:
@@ -602,8 +618,8 @@ def test_deliveries_resume_after_restart(tmp_path: Path, monkeypatch: pytest.Mon
         "urls": ["youtu.be/second"],
         "failed": False,
         "status": 77,
-        "caption": True,
-        "sender": "author",  # Captions were on; the original with the sender is gone.
+        # Captions were on; the original with the sender is gone.
+        "caption": {"sender": "author", "comment": ""},
     }
 
     async def scenario() -> None:
