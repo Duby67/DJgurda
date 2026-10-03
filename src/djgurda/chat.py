@@ -42,6 +42,7 @@ from aiogram.utils.chat_action import ChatActionSender
 
 from djgurda import emoji
 from djgurda.diagnostics import diagnostic, redact
+from djgurda.downloads import fetch
 from djgurda.links import extract_links
 from djgurda.media import (
     CLOUD_MAX_BYTES,
@@ -141,10 +142,6 @@ def parse_query(query: str) -> Link | None:
     return None
 
 
-def fetch(link: Link, target: Path, job: Job) -> Media:
-    return link.source.fetch(link.url, target, job)
-
-
 async def report_progress(
     link: Link, job: Job, show: Callable[[str], Coroutine[Any, Any, object]]
 ) -> None:
@@ -205,6 +202,7 @@ def create_router(
     # refused while another is in progress, so it never takes a place in the short queue.
     downloads = asyncio.Semaphore(1)
     pending = 0
+    waiting = 0  # Requests waiting for the same media; they share the short queue limit.
     long_busy = False
     running: dict[str, asyncio.Event] = {}  # Media keys being delivered.
     resumed: set[asyncio.Task[None]] = set()  # Keeps the resume task alive.
@@ -285,7 +283,7 @@ def create_router(
         A long video leaves the short queue for its own lane, refused while it is busy.
         """
         nonlocal pending, long_busy
-        if pending >= QUEUE_LIMIT:
+        if pending + waiting >= QUEUE_LIMIT:
             raise MediaError("очередь загрузок заполнена, попробуйте позже")
         pending += 1
         acquired = False
@@ -310,7 +308,7 @@ def create_router(
             acquired = True
             job.stage = "получение данных о видео"
             with TemporaryDirectory(dir=work_dir, prefix=DOWNLOAD_PREFIX) as target:
-                media = await asyncio.to_thread(fetch, link, Path(target), job)
+                media = await fetch(link, Path(target), job)
                 yield media, job
         finally:
             if progress:
@@ -325,13 +323,24 @@ def create_router(
 
     @asynccontextmanager
     async def single_download(link: Link) -> AsyncIterator[None]:
-        """Deliver the same media one at a time, so later requests reuse the cached file_id."""
+        """Deliver the same media one at a time, so later requests reuse the cached file_id.
+
+        Only a request that must wait takes a queue place; a free cached link is sent at once.
+        """
+        nonlocal waiting
         key = link.key
         if key is None:
             yield
             return
-        while event := running.get(key):
-            await event.wait()
+        if key in running:
+            if pending + waiting >= QUEUE_LIMIT:
+                raise MediaError("очередь загрузок заполнена, попробуйте позже")
+            waiting += 1
+            try:
+                while event := running.get(key):
+                    await event.wait()
+            finally:
+                waiting -= 1
         running[key] = done = asyncio.Event()
         try:
             yield
@@ -557,6 +566,13 @@ def create_router(
             task = asyncio.create_task(resume_all(bot, unfinished))
             resumed.add(task)
             task.add_done_callback(resumed.discard)
+
+    @router.shutdown()
+    async def stop_resuming() -> None:
+        tasks = list(resumed)
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     async def resume_all(bot: Bot, unfinished: list[tuple[str, str]]) -> None:
         for delivery_id, text in unfinished:
