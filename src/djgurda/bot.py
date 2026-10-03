@@ -1,14 +1,49 @@
 """Administrator notifications and dispatcher composition."""
 
+import asyncio
 from asyncio import timeout
+from collections.abc import Awaitable, Callable
 from importlib.metadata import version
 from pathlib import Path
+from typing import Any
 
-from aiogram import Bot, Dispatcher
+from aiogram import BaseMiddleware, Bot, Dispatcher
+from aiogram.types import TelegramObject
 
 from djgurda import emoji
 from djgurda.chat import create_router
 from djgurda.storage import Storage
+
+
+class UpdateTasks(BaseMiddleware):
+    """Keep handlers alive only while their database and bot session are open."""
+
+    def __init__(self) -> None:
+        self.tasks: set[asyncio.Task[Any]] = set()
+        self.stopping = False
+
+    async def __call__(
+        self,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
+        data: dict[str, Any],
+    ) -> Any:
+        if self.stopping:
+            return None
+        task = asyncio.current_task()
+        assert task is not None
+        self.tasks.add(task)
+        try:
+            return await handler(event, data)
+        finally:
+            self.tasks.discard(task)
+
+    async def shutdown(self) -> None:
+        self.stopping = True
+        tasks = list(self.tasks - {asyncio.current_task()})
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 def create_dispatcher(
@@ -36,7 +71,12 @@ def create_dispatcher(
             await send_to_admins(bot, f"{emoji.html('warning')} Бот выключен")
 
     dispatcher = Dispatcher()
+    tasks = UpdateTasks()
+    dispatcher.update.outer_middleware(tasks)
+    dispatcher.shutdown.register(tasks.shutdown)
     dispatcher.startup.register(notify_startup)
-    dispatcher.shutdown.register(notify_shutdown)
-    dispatcher.include_router(create_router(storage, work_dir, local_api, inline_chat_id))
+    router = create_router(storage, work_dir, local_api, inline_chat_id)
+    # A failed administrator notification must not prevent delivery cleanup.
+    router.shutdown.register(notify_shutdown)
+    dispatcher.include_router(router)
     return dispatcher

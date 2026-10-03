@@ -16,6 +16,7 @@ from djgurda.sources import yandex_music
 from djgurda.storage import Storage
 
 READY_FILE = Path("/tmp/djgurda-ready")
+UPDATE_LIMIT = 16  # Leave capacity for commands and immediate queue refusals.
 
 
 async def mark_ready() -> None:
@@ -46,7 +47,9 @@ async def run(settings: Settings) -> None:
                 dispatcher.startup.register(mark_ready)
                 # Skip messages sent while offline.
                 await bot.delete_webhook(drop_pending_updates=True)
-                await dispatcher.start_polling(bot, close_bot_session=False)
+                await dispatcher.start_polling(
+                    bot, close_bot_session=False, tasks_concurrency_limit=UPDATE_LIMIT
+                )
     finally:
         READY_FILE.unlink(missing_ok=True)
 

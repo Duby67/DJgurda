@@ -5,7 +5,7 @@ import json
 import re
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
@@ -16,9 +16,11 @@ import pytest
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.methods import (
+    AnswerCallbackQuery,
     AnswerInlineQuery,
     DeleteMessage,
     EditMessageMedia,
+    EditMessageReplyMarkup,
     EditMessageText,
     SendAudio,
     SendChatAction,
@@ -28,10 +30,13 @@ from aiogram.methods import (
 )
 from aiogram.types import (
     Audio,
+    CallbackQuery,
     Chat,
     ChosenInlineResult,
     FSInputFile,
+    InlineKeyboardMarkup,
     InlineQuery,
+    InlineQueryResultCachedVideo,
     InputMediaVideo,
     Message,
     MessageEntity,
@@ -51,6 +56,13 @@ from djgurda.sources.base import Link
 from djgurda.storage import Storage
 
 RESTART = (0, "")
+
+
+def patch_fetch(monkeypatch: pytest.MonkeyPatch, fetch: Callable[[Link, Path, Job], Media]) -> None:
+    async def download(link: Link, target: Path, job: Job) -> Media:
+        return await asyncio.to_thread(fetch, link, target, job)
+
+    monkeypatch.setattr(chat, "fetch", download)
 
 
 @pytest.fixture
@@ -138,7 +150,7 @@ async def telegram(bot: Bot, method: TelegramMethod[Any], timeout: int | None = 
 
 
 def test_chat_lifecycle(tmp_path: Path) -> None:
-    request = AsyncMock(return_value=True)
+    request = AsyncMock(side_effect=telegram)
     link = "смотри vk.com/wall-1_2"
     script = [
         (42, link),
@@ -159,14 +171,12 @@ def test_chat_lifecycle(tmp_path: Path) -> None:
 
     run_script(request, tmp_path, script)
 
-    status = (
-        f"{emoji.html('bot')} Бот {{}} в этом чате\n"
-        f"{emoji.html('version')} Версия: {version('djgurda')}"
-    )
-    assert sent(request) == [
+    status = f"{emoji.html('bot')} Бот {{}} в этом чате"
+    first_lines = [(chat_id, text.split("\n")[0]) for chat_id, text in sent(request)]
+    assert first_lines == [
         (42, f"{emoji.html('success')} Бот активен в этом чате"),
         (-7, status.format("приостановлен")),
-        (-7, HELP),
+        (-7, HELP.split("\n")[0]),
         (42, status.format("активен")),
         (42, f"{emoji.html('warning')} VK: обработка ещё не реализована"),
         (42, f"{emoji.html('warning')} Бот приостановлен в этом чате"),
@@ -175,6 +185,10 @@ def test_chat_lifecycle(tmp_path: Path) -> None:
         (42, status.format("активен")),
         (-7, status.format("приостановлен")),
     ]
+    # A paused chat gets only its state; an active one also the version.
+    texts = [text for _, text in sent(request)]
+    assert texts[1] == status.format("приостановлен")
+    assert f"{emoji.html('version')} Версия: {version('djgurda')}" in texts[3]
     methods = [c.args[1] for c in request.await_args_list]
     assert all(
         m.parse_mode == "HTML"
@@ -196,7 +210,7 @@ def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
         info = Info("Title <1>", "Channel", duration=1, width=2, height=3)
         return Media(path, info, cover, thumbnail)
 
-    monkeypatch.setattr(chat, "fetch", fetch)
+    patch_fetch(monkeypatch, fetch)
     request = AsyncMock(side_effect=telegram)
     script = [
         (42, "/start"),
@@ -229,7 +243,7 @@ def test_media_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_forwarded_delivery_is_ignored(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(chat, "fetch", lambda link, target, job: pytest.fail("downloaded"))
+    patch_fetch(monkeypatch, lambda link, target, job: pytest.fail("downloaded"))
     request = AsyncMock(side_effect=telegram)
 
     async def scenario() -> None:
@@ -264,15 +278,15 @@ def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
             time.sleep(0.3)
         return Media(target / "video.mp4", Info("Title", "Channel", 60, 2, 3))
 
-    monkeypatch.setattr(chat, "fetch", fetch)
+    patch_fetch(monkeypatch, fetch)
     request = AsyncMock(side_effect=telegram)
     user = User(id=42, is_bot=False, first_name="Test")
 
-    def query(update_id: int, text: str) -> Update:
-        return Update(
-            update_id=update_id,
-            inline_query=InlineQuery(id=str(update_id), from_user=user, query=text, offset=""),
+    def query(update_id: int, text: str, chat_type: str = "private") -> Update:
+        inline = InlineQuery(
+            id=str(update_id), from_user=user, query=text, offset="", chat_type=chat_type
         )
+        return Update(update_id=update_id, inline_query=inline)
 
     def chosen(update_id: int, text: str) -> Update:
         result = ChosenInlineResult(
@@ -293,9 +307,14 @@ def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
             for update in [
                 query(1, "youtu.be/ok смотри"),  # New link: a placeholder.
                 chosen(2, "youtu.be/ok смотри"),  # Uploaded, then the placeholder is replaced.
-                query(3, "смотри youtu.be/ok"),  # Cached: sent at once.
-                chosen(4, "youtu.be/long"),  # Long videos take the long lane and show progress.
-                chosen(5, "youtu.be/broken"),  # The placeholder shows the failure.
+                query(3, "youtu.be/ok", chat_type="group"),  # Groups have the bot itself.
+            ]:
+                await dispatcher.feed_update(bot, update)
+            storage.set_caption(user.id, True)  # Set from /status in the chat with the bot.
+            for update in [
+                query(4, "смотри youtu.be/ok"),  # Cached: sent at once.
+                chosen(5, "youtu.be/long"),  # Long videos take the long lane and show progress.
+                chosen(6, "youtu.be/broken"),  # The placeholder shows the failure.
             ]:
                 await dispatcher.feed_update(bot, update)
             storage.close()
@@ -308,24 +327,163 @@ def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         "cached",
         chat.INLINE_REDOWNLOAD,  # In case Telegram cannot send the cached file.
     ]
+    settings = answers[0].button  # The way to the caption setting in the chat with the bot.
+    assert settings is not None and settings.start_parameter == chat.START_SETTINGS
+    assert settings.text == "Подпись: выкл — настроить"
+    refused = answers[1]
+    assert refused.button is not None and "личной переписке" in refused.button.text
+    # The sender is shown by Telegram as "via bot", so the caption has only the source.
+    source = '<tg-spoiler>🔗 <a href="https://youtu.be/ok">Источник</a></tg-spoiler>'
+    cached = answers[2].results[0]
+    assert isinstance(cached, InlineQueryResultCachedVideo) and cached.caption == source
     uploads = [m for m in methods if isinstance(m, SendVideo)]
     assert [upload.chat_id for upload in uploads] == [-100, -100]
     edits = [m for m in methods if isinstance(m, EditMessageMedia)]
-    assert [edit.inline_message_id for edit in edits] == ["inline-2", "inline-4"]
+    assert [edit.inline_message_id for edit in edits] == ["inline-2", "inline-5"]
     edit = edits[0]
     assert isinstance(edit.media, InputMediaVideo)
     assert (edit.media.media, edit.media.cover) == ("file-1", "cover-1")
     texts = [(m.inline_message_id, m.text) for m in methods if isinstance(m, EditMessageText)]
     # Telegram rejects custom emoji in inline messages unless the bot has a Fragment username.
     assert texts == [
-        ("inline-4", "⏳ YouTube/video: скачивание 50%"),
-        ("inline-5", "❌ YouTube/video: видео недоступно"),
+        ("inline-5", "⏳ YouTube/video: скачивание 50%"),
+        ("inline-6", "❌ YouTube/video: видео недоступно"),
     ]
     assert edit.media.caption is None
+    assert isinstance(edits[1].media, InputMediaVideo)
+    assert edits[1].media.caption is not None and "youtu.be/long" in edits[1].media.caption
     (report,) = [m for m in methods if isinstance(m, SendMessage)]
     assert report.chat_id == -100  # Failures are visible without server logs.
     assert report.text.startswith("❌ YouTube/video (inline): видео недоступно\n")
     assert "MediaError: видео недоступно" in report.text
+
+
+def test_status_panel(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    patch_fetch(
+        monkeypatch, lambda link, target, job: Media(target / "v.mp4", Info("", "", 1, 2, 3))
+    )
+    request = AsyncMock(side_effect=telegram)
+    sender = User(id=7, is_bot=False, first_name="Анна", username="anna_<b>")
+
+    def press(update_id: int, data: str, chat_id: int = -7) -> Update:
+        chat_type = "group" if chat_id < 0 else "private"
+        panel = Message(
+            message_id=97, date=datetime.now(UTC), chat=Chat(id=chat_id, type=chat_type)
+        )
+        callback = CallbackQuery(
+            id=str(update_id), from_user=sender, chat_instance="c", message=panel, data=data
+        )
+        return Update(update_id=update_id, callback_query=callback)
+
+    def link(update_id: int, chat_id: int, url: str) -> Update:
+        update = message(update_id, chat_id, url)
+        assert update.message is not None
+        return Update(
+            update_id=update_id, message=update.message.model_copy(update={"from_user": sender})
+        )
+
+    async def scenario() -> None:
+        async with Bot(token="123456789:offline-test-token") as bot:
+            bot.session.make_request = request  # type: ignore[method-assign]
+            storage = Storage(tmp_path / "db.sqlite3")
+            dispatcher = create_dispatcher([100], storage, tmp_path, local_api=True)
+            for update in [
+                message(1, -7, "/status"),  # Paused: only the state and a way to start.
+                press(2, chat.CHAT_START),
+                link(3, -7, "youtu.be/plain"),  # Captions are off by default.
+                press(4, chat.CAPTION_ON),
+                press(5, chat.CAPTION_ON),  # A repeated press changes nothing.
+                link(6, -7, "youtu.be/ok"),
+                press(7, chat.CHAT_STOP),
+                message(8, 42, "/start settings"),  # The inline mode settings button.
+                press(9, chat.CAPTION_ON, chat_id=42),
+                link(10, 42, "youtu.be/own"),
+            ]:
+                await dispatcher.feed_update(bot, update)
+            storage.close()
+
+    asyncio.run(scenario())
+    methods = [c.args[1] for c in request.await_args_list]
+
+    def buttons(markup: Any) -> list[str]:
+        assert isinstance(markup, InlineKeyboardMarkup)
+        return [row[0].callback_data or "" for row in markup.inline_keyboard]
+
+    panels = [m for m in methods if isinstance(m, SendMessage) and m.reply_markup]
+    assert [buttons(panel.reply_markup) for panel in panels] == [
+        [chat.CHAT_START],
+        [chat.CAPTION_ON, chat.CHAT_STOP],  # /start settings opens the panel of an active chat.
+    ]
+    edits = [m for m in methods if isinstance(m, EditMessageText)]
+    assert [buttons(edit.reply_markup) for edit in edits] == [
+        [chat.CAPTION_ON, chat.CHAT_STOP],
+        [chat.CAPTION_OFF, chat.CHAT_STOP],
+        [chat.CHAT_START],
+        [chat.CAPTION_OFF, chat.CHAT_STOP],
+    ]
+    plain, captioned, own = [m for m in methods if isinstance(m, SendVideo)]
+    assert plain.caption is None
+    # A plain nickname, never a mention: a mention would notify the sender on every video.
+    assert captioned.caption == (
+        '<tg-spoiler>🔗 <a href="https://youtu.be/ok">Источник</a>\n👤 anna_&lt;b&gt;</tg-spoiler>'
+    )
+    assert captioned.parse_mode == "HTML"
+    # In a private chat the sender is the reader.
+    assert own.caption == '<tg-spoiler>🔗 <a href="https://youtu.be/own">Источник</a></tg-spoiler>'
+
+
+def test_outdated_status_buttons_are_refused(tmp_path: Path) -> None:
+    ids = iter(range(200, 300))
+
+    async def bot_api(bot: Bot, method: TelegramMethod[Any], timeout: int | None = None) -> Any:
+        result = await telegram(bot, method, timeout)
+        if isinstance(method, SendMessage):  # Each panel is a separate message.
+            return result.model_copy(update={"message_id": next(ids)})
+        return result
+
+    request = AsyncMock(side_effect=bot_api)
+    user = User(id=7, is_bot=False, first_name="Test")
+
+    def press(update_id: int, message_id: int, data: str = chat.CHAT_STOP) -> Update:
+        panel = Message(
+            message_id=message_id, date=datetime.now(UTC), chat=Chat(id=-7, type="group")
+        )
+        callback = CallbackQuery(
+            id=str(update_id), from_user=user, chat_instance="c", message=panel, data=data
+        )
+        return Update(update_id=update_id, callback_query=callback)
+
+    async def scenario() -> None:
+        async with Bot(token="123456789:offline-test-token") as bot:
+            bot.session.make_request = request  # type: ignore[method-assign]
+            storage = Storage(tmp_path / "db.sqlite3")
+            dispatcher = create_dispatcher([100], storage, tmp_path, local_api=True)
+            for update in [
+                message(1, -7, "/start"),  # Message 200.
+                message(2, -7, "/status"),  # Panel 201.
+                message(3, -7, "/status"),  # Panel 202 replaces it.
+                press(4, 201),  # Shows a state that may be outdated: ignored.
+            ]:
+                await dispatcher.feed_update(bot, update)
+            assert storage.active_chats() == {-7}
+            await dispatcher.feed_update(bot, press(5, 202))
+            assert storage.active_chats() == set()
+            # The latest panel survives a restart; the older one stays ignored.
+            storage.close()
+            storage = Storage(tmp_path / "db.sqlite3")
+            dispatcher = create_dispatcher([100], storage, tmp_path, local_api=True)
+            await dispatcher.feed_update(bot, press(6, 201, chat.CHAT_START))
+            assert storage.active_chats() == set()
+            await dispatcher.feed_update(bot, press(7, 202, chat.CHAT_START))
+            assert storage.active_chats() == {-7}
+            storage.close()
+
+    asyncio.run(scenario())
+    methods = [c.args[1] for c in request.await_args_list]
+    retired = [m.message_id for m in methods if isinstance(m, EditMessageReplyMarkup)]
+    assert retired == [201]  # Replaced by the next /status.
+    answers = [m for m in methods if isinstance(m, AnswerCallbackQuery)]
+    assert [(m.text, m.show_alert) for m in answers] == [(None, None)] * 4  # Quietly.
 
 
 def test_inline_recovers_from_broken_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -342,7 +500,7 @@ def test_inline_recovers_from_broken_cache(tmp_path: Path, monkeypatch: pytest.M
             raise TelegramBadRequest(method=method, message="Bad Request: wrong file identifier")
         return await telegram(bot, method, timeout)
 
-    monkeypatch.setattr(chat, "fetch", fetch)
+    patch_fetch(monkeypatch, fetch)
     request = AsyncMock(side_effect=bot_api)
     user = User(id=42, is_bot=False, first_name="Test")
     link = classify("youtu.be/ok")
@@ -357,7 +515,9 @@ def test_inline_recovers_from_broken_cache(tmp_path: Path, monkeypatch: pytest.M
             dispatcher = create_dispatcher(
                 [100], storage, tmp_path, local_api=True, inline_chat_id=-100
             )
-            inline = InlineQuery(id="1", from_user=user, query="youtu.be/ok", offset="")
+            inline = InlineQuery(
+                id="1", from_user=user, query="youtu.be/ok", offset="", chat_type="sender"
+            )
             await dispatcher.feed_update(bot, Update(update_id=1, inline_query=inline))
             assert storage.cached(key) is None  # Telegram rejected it: forgotten.
             storage.cache(key, "stale", None, Info("Title", "", 60, 2, 3))
@@ -412,7 +572,7 @@ def test_cache_is_forgotten_only_for_file_errors(
             raise TelegramBadRequest(method=method, message=error)
         return await telegram(bot, method, timeout)
 
-    monkeypatch.setattr(chat, "fetch", fetch)
+    patch_fetch(monkeypatch, fetch)
     link = classify("youtu.be/ok")
     assert link and link.key
     storage = Storage(tmp_path / "db.sqlite3")
@@ -433,7 +593,7 @@ def test_deliveries_resume_after_restart(tmp_path: Path, monkeypatch: pytest.Mon
         downloads.append(link.url)
         return Media(target / "v.mp4", Info("", "", 1, 2, 3))
 
-    monkeypatch.setattr(chat, "fetch", fetch)
+    patch_fetch(monkeypatch, fetch)
     request = AsyncMock(side_effect=telegram)
     original = Message(message_id=5, date=datetime.now(UTC), chat=Chat(id=42, type="private"))
     # The first link was delivered before the restart; the second was downloading.
@@ -442,6 +602,8 @@ def test_deliveries_resume_after_restart(tmp_path: Path, monkeypatch: pytest.Mon
         "urls": ["youtu.be/second"],
         "failed": False,
         "status": 77,
+        "caption": True,
+        "sender": "author",  # Captions were on; the original with the sender is gone.
     }
 
     async def scenario() -> None:
@@ -474,8 +636,9 @@ def test_deliveries_resume_after_restart(tmp_path: Path, monkeypatch: pytest.Mon
     methods = [c.args[1] for c in request.await_args_list]
     deleted = [(m.chat_id, m.message_id) for m in methods if isinstance(m, DeleteMessage)]
     assert deleted == [(42, 77), (42, 5)]  # The stale status, then the delivered original.
-    videos = [m.chat_id for m in methods if isinstance(m, SendVideo)]
-    assert videos == [42, -100]
+    videos = [m for m in methods if isinstance(m, SendVideo)]
+    assert [video.chat_id for video in videos] == [42, -100]
+    assert "👤 author" in (videos[0].caption or "")
     (edit,) = [m for m in methods if isinstance(m, EditMessageMedia)]
     assert edit.inline_message_id == "inline-1"
     (failure,) = [m for m in methods if isinstance(m, EditMessageText)]
@@ -494,7 +657,7 @@ def test_long_media_has_its_own_lane(tmp_path: Path, monkeypatch: pytest.MonkeyP
             release.wait(5)
         return Media(target / "video.mp4", Info("", "", 1, 2, 3))
 
-    monkeypatch.setattr(chat, "fetch", fetch)
+    patch_fetch(monkeypatch, fetch)
     request = AsyncMock(side_effect=telegram)
 
     async def scenario() -> None:
@@ -536,7 +699,7 @@ def test_same_link_is_downloaded_once(tmp_path: Path, monkeypatch: pytest.Monkey
         release.wait(5)
         return Media(target / "video.mp4", Info("", "", 1, 2, 3))
 
-    monkeypatch.setattr(chat, "fetch", fetch)
+    patch_fetch(monkeypatch, fetch)
     request = AsyncMock(side_effect=telegram)
 
     async def scenario() -> None:
@@ -560,6 +723,142 @@ def test_same_link_is_downloaded_once(tmp_path: Path, monkeypatch: pytest.Monkey
     assert [(video.chat_id, video.video) for video in videos][1:] == [(-7, "file-1")]
 
 
+def test_duplicate_queue_is_bounded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def fetch(link: Link, target: Path, job: Job) -> Media:
+        entered.set()
+        await release.wait()
+        return Media(target / "v.mp4", Info("", "", 1, 2, 3))
+
+    monkeypatch.setattr(chat, "fetch", fetch)
+    request = AsyncMock(side_effect=telegram)
+
+    async def scenario() -> None:
+        storage = Storage(tmp_path / "db.sqlite3")
+        storage.set_active(42, True)
+        async with Bot(token="123456789:offline-test-token") as bot:
+            bot.session.make_request = request  # type: ignore[method-assign]
+            dispatcher = create_dispatcher([100], storage, tmp_path, local_api=True)
+            tasks = [
+                asyncio.create_task(dispatcher.feed_update(bot, message(1, 42, "youtu.be/same")))
+            ]
+            await entered.wait()
+            tasks.extend(
+                asyncio.create_task(dispatcher.feed_update(bot, message(i, 42, "youtu.be/same")))
+                for i in range(2, chat.QUEUE_LIMIT + 4)
+            )
+            await asyncio.sleep(0.05)
+            assert len(storage.unfinished()) == chat.QUEUE_LIMIT
+            assert sum(task.done() for task in tasks) == 3
+            # A cached link takes no queue place, so a full queue does not refuse it.
+            cached = classify("youtu.be/cached")
+            assert cached is not None and cached.key is not None
+            storage.cache(cached.key, "file-cached", None, Info("", "", 1, 2, 3))
+            await dispatcher.feed_update(bot, message(99, 42, "youtu.be/cached"))
+            release.set()
+            await asyncio.gather(*tasks)
+        assert storage.unfinished() == []
+        storage.close()
+
+    asyncio.run(scenario())
+    assert sum("очередь загрузок заполнена" in text for _, text in sent(request)) == 3
+    videos = [c.args[1] for c in request.await_args_list if isinstance(c.args[1], SendVideo)]
+    assert "file-cached" in [video.video for video in videos]
+
+
+@pytest.mark.parametrize(
+    ("resuming", "notification_fails"), [(False, False), (True, False), (True, True)]
+)
+def test_shutdown_preserves_delivery_for_restart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, resuming: bool, notification_fails: bool
+) -> None:
+    entered = asyncio.Event()
+    cancelled = asyncio.Event()
+    release = asyncio.Event()
+
+    async def fetch(link: Link, target: Path, job: Job) -> Media:
+        entered.set()
+        try:
+            await release.wait()
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        return Media(target / "v.mp4", Info("", "", 1, 2, 3))
+
+    monkeypatch.setattr(chat, "fetch", fetch)
+
+    async def bot_api(bot: Bot, method: TelegramMethod[Any], timeout: int | None = None) -> Any:
+        if notification_fails and isinstance(method, SendMessage) and "Бот выключен" in method.text:
+            raise TelegramNetworkError(method=method, message="Shutdown notification failed")
+        return await telegram(bot, method, timeout)
+
+    request = AsyncMock(side_effect=bot_api)
+
+    async def shutdown(dispatcher: Any, bot: Bot) -> None:
+        if notification_fails:
+            with pytest.raises(TelegramNetworkError, match="Shutdown notification failed"):
+                await dispatcher.emit_shutdown(bot=bot)
+        else:
+            await dispatcher.emit_shutdown(bot=bot)
+
+    async def scenario() -> None:
+        storage = Storage(tmp_path / "db.sqlite3")
+        storage.set_active(42, True)
+        update = message(1, 42, "youtu.be/restart")
+        assert update.message is not None
+        if resuming:
+            storage.begin(
+                "chat:42:1",
+                json.dumps(
+                    {
+                        "message": update.message.model_dump(
+                            mode="json", include=chat.MESSAGE_FIELDS
+                        ),
+                        "urls": ["https://youtu.be/restart"],
+                        "failed": False,
+                        "status": None,
+                    }
+                ),
+            )
+        async with Bot(token="123456789:offline-test-token") as bot:
+            bot.session.make_request = request  # type: ignore[method-assign]
+            dispatcher = create_dispatcher([100], storage, tmp_path, local_api=True)
+            if resuming:
+                await dispatcher.emit_startup(bot=bot)
+                task = None
+            else:
+                task = asyncio.create_task(dispatcher.feed_update(bot, update))
+            await entered.wait()
+            await shutdown(dispatcher, bot)
+            assert cancelled.is_set()
+            if task:
+                assert task.cancelled()
+            assert len(storage.unfinished()) == 1
+            assert not list(tmp_path.glob("download-*"))
+            release.set()
+            dispatcher = create_dispatcher([100], storage, tmp_path, local_api=True)
+            await dispatcher.emit_startup(bot=bot)
+            for _ in range(100):
+                if not storage.unfinished():
+                    break
+                await asyncio.sleep(0.01)
+            assert storage.unfinished() == []
+            await shutdown(dispatcher, bot)
+        storage.close()
+
+    asyncio.run(scenario())
+    assert sum(isinstance(c.args[1], SendVideo) for c in request.await_args_list) == int(
+        not resuming
+    )
+    if resuming:
+        assert any(
+            isinstance(c.args[1], SendMessage) and chat.INTERRUPTED in c.args[1].text
+            for c in request.await_args_list
+        )
+
+
 def test_slow_download_shows_progress(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(chat, "PROGRESS_INTERVAL", 0.05)
 
@@ -569,7 +868,7 @@ def test_slow_download_shows_progress(tmp_path: Path, monkeypatch: pytest.Monkey
             time.sleep(0.3)
         return Media(target / "video.mp4", Info("", "", 1, 2, 3))
 
-    monkeypatch.setattr(chat, "fetch", fetch)
+    patch_fetch(monkeypatch, fetch)
     request = AsyncMock(side_effect=telegram)
 
     async def scenario() -> None:
@@ -600,9 +899,8 @@ def test_upload_failure_keeps_original_and_continues(
     caplog: pytest.LogCaptureFixture,
     notification_fails: bool,
 ) -> None:
-    monkeypatch.setattr(
-        chat,
-        "fetch",
+    patch_fetch(
+        monkeypatch,
         lambda link, target, job: Media(target / "video.mp4", Info("", "", 1, 2, 3)),
     )
     uploads = 0
@@ -637,7 +935,7 @@ def test_unexpected_download_failure_is_visible(
     def fetch(link: Link, target: Path, job: Job) -> Media:
         raise OSError("Disk full")
 
-    monkeypatch.setattr(chat, "fetch", fetch)
+    patch_fetch(monkeypatch, fetch)
     request = AsyncMock(side_effect=telegram)
     run_script(request, tmp_path, [(42, "/start"), (42, "youtu.be/fail")])
     assert sent(request)[-1] == (
@@ -668,7 +966,7 @@ def test_audio_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
         path = target / "track.mp3"
         return Media(path, Info("Song", "Artist", duration=1, width=None, height=None))
 
-    monkeypatch.setattr(chat, "fetch", fetch)
+    patch_fetch(monkeypatch, fetch)
     request = AsyncMock(side_effect=telegram)
     track = "https://music.yandex.ru/album/1/track/2"
     run_script(request, tmp_path, [(42, "/start"), (42, f"Слушай <это> {track}"), (42, track)])
