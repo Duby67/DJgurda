@@ -25,6 +25,12 @@ YouTube download peaks at ~330 MiB, of which deno (YouTube's JavaScript challeng
 budget deno is OOM-killed and yt-dlp continues with fewer formats. Measure before changing
 budgets.
 
+Downloads run in at most two worker processes, one per lane. Cancellation and timeouts stop
+the worker process group, including ffmpeg and deno, before temporary files are removed.
+The bot checks directory usage every 200 ms and keeps 16 MiB of disk space in reserve;
+aggregate usage can briefly exceed its limit between checks. Include the additional Python
+workers when measuring peak memory against the production budget.
+
 ## Image and Compose
 
 Each service has its own directory: `deploy/bot/` and `deploy/bot-api/`.

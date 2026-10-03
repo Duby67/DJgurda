@@ -21,9 +21,10 @@ from aiogram.exceptions import (
     TelegramRetryAfter,
     TelegramServerError,
 )
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandObject
 from aiogram.methods import SendAudio, SendVideo
 from aiogram.types import (
+    CallbackQuery,
     ChosenInlineResult,
     FSInputFile,
     InlineKeyboardButton,
@@ -42,6 +43,7 @@ from aiogram.utils.chat_action import ChatActionSender
 
 from djgurda import emoji
 from djgurda.diagnostics import diagnostic, redact
+from djgurda.downloads import fetch
 from djgurda.links import extract_links
 from djgurda.media import (
     CLOUD_MAX_BYTES,
@@ -64,10 +66,10 @@ HELP = "\n".join(
         "",
         "/start — включить бота в чате",
         "/stop — приостановить бота в чате",
-        "/status — состояние бота и версия",
+        "/status — состояние, подпись со ссылкой и отправителем, версия",
         "/help — эта справка",
         "",
-        "В любом чате, даже без бота: @имя_бота ссылка (только видео).",
+        "В личной переписке, даже без бота: @имя_бота ссылка (только видео).",
     ]
 )
 QUEUE_LIMIT = 5  # Short links waiting or downloading; more are refused instead of piling up.
@@ -77,6 +79,14 @@ LONG_UPLOAD_TIMEOUT = 20 * 60  # 2000 MB at about 14 Mbit/s.
 PROGRESS_INTERVAL = 10  # Seconds between status edits; quick links finish without one.
 INLINE_DOWNLOAD = "download"  # Result id of the placeholder replaced after the download.
 INLINE_REDOWNLOAD = "redownload"  # The same, ignoring a cached file_id Telegram cannot send.
+# Inline mode serves personal chats; groups and channels have the bot itself.
+INLINE_CHAT_TYPES = {"private", "sender"}
+# Status panel buttons; each names the target state.
+CHAT_START = "chat:start"
+CHAT_STOP = "chat:stop"
+CAPTION_ON = "caption:on"
+CAPTION_OFF = "caption:off"
+START_SETTINGS = "settings"  # /start payload of the inline mode button.
 MESSAGE_LIMIT = 4096
 ATTEMPTS = 2  # Starts of one delivery, restarts included; guards against a crash loop.
 INTERRUPTED = "загрузка прерывалась перезапуском бота, попробуйте снова"
@@ -120,6 +130,23 @@ def delivery_reason(error: Exception) -> str:
     return "не удалось обработать ссылку из-за внутренней ошибки бота"
 
 
+def sender_name(message: Message) -> str:
+    """Who posted the link, as plain text: a mention would notify them on every delivery."""
+    if chat := message.sender_chat:  # Anonymous admins and posts on behalf of a channel.
+        return chat.username or chat.title or str(chat.id)
+    if user := message.from_user:
+        return user.username or user.full_name
+    raise ValueError(f"Message {message.message_id} has no sender")
+
+
+def caption_html(link: Link, sender: str | None) -> str:
+    """The source and, in a chat, the sender, hidden under a spoiler to keep the chat quiet."""
+    lines = [f'🔗 <a href="{escape(link.url)}">Источник</a>']
+    if sender is not None:
+        lines.append(f"👤 {escape(sender)}")
+    return "<tg-spoiler>" + "\n".join(lines) + "</tg-spoiler>"
+
+
 def file_rejected(error: Exception) -> bool:
     """Whether Telegram refused the file itself, so its cached file_id must be forgotten.
 
@@ -139,10 +166,6 @@ def parse_query(query: str) -> Link | None:
         if link and link.downloadable and not link.audio:
             return link
     return None
-
-
-def fetch(link: Link, target: Path, job: Job) -> Media:
-    return link.source.fetch(link.url, target, job)
 
 
 async def report_progress(
@@ -205,6 +228,7 @@ def create_router(
     # refused while another is in progress, so it never takes a place in the short queue.
     downloads = asyncio.Semaphore(1)
     pending = 0
+    waiting = 0  # Requests waiting for the same media; they share the short queue limit.
     long_busy = False
     running: dict[str, asyncio.Event] = {}  # Media keys being delivered.
     resumed: set[asyncio.Task[None]] = set()  # Keeps the resume task alive.
@@ -213,28 +237,96 @@ def create_router(
     async def is_active(message: Message) -> bool:
         return message.chat.id in active
 
+    def set_active(chat_id: int, enabled: bool) -> None:
+        storage.set_active(chat_id, enabled)
+        (active.add if enabled else active.discard)(chat_id)
+
+    def status_panel(chat_id: int) -> tuple[str, InlineKeyboardMarkup]:
+        """Chat state with buttons for every setting; a paused chat only offers to resume."""
+
+        def button(text: str, action: str) -> list[InlineKeyboardButton]:
+            return [InlineKeyboardButton(text=text, callback_data=action)]
+
+        if chat_id not in active:
+            text = f"{emoji.html('bot')} Бот приостановлен в этом чате"
+            return text, InlineKeyboardMarkup(
+                inline_keyboard=[button("Запустить бота", CHAT_START)]
+            )
+        caption = storage.caption(chat_id)
+        text = (
+            f"{emoji.html('bot')} Бот активен в этом чате\n"
+            f"{emoji.html('version')} Версия: {version('djgurda')}\n"
+            f"Подпись под медиа {'включена' if caption else 'выключена'}: ссылка на источник "
+            "и отправитель под спойлером. В переписке с ботом она действует и на inline-режим."
+        )
+        keyboard = [
+            button("Выключить подпись", CAPTION_OFF)
+            if caption
+            else button("Включить подпись", CAPTION_ON),
+            button("Приостановить бота", CHAT_STOP),
+        ]
+        return text, InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+    async def show_status(message: Message) -> None:
+        chat_id = message.chat.id
+        text, markup = status_panel(chat_id)
+        sent = await message.answer(text, parse_mode="HTML", reply_markup=markup)
+        previous = storage.panel(chat_id)
+        storage.set_panel(chat_id, sent.message_id)
+        if previous is not None and previous != sent.message_id:
+            await retire_panel(message.bot, chat_id, previous)
+
+    async def retire_panel(bot: Bot | None, chat_id: int, message_id: int) -> None:
+        """Remove the buttons of an outdated panel, so nobody presses them by mistake."""
+        if bot is None:
+            raise ValueError("A status panel needs a bot to edit it")
+        try:
+            await bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id)
+        except TelegramAPIError as error:  # Deleted or too old to edit: refused on press anyway.
+            logger.warning("Cannot remove outdated status buttons: %s", redact(str(error)))
+
     @router.message(Command("start"))
-    async def start(message: Message) -> None:
-        storage.set_active(message.chat.id, True)
-        active.add(message.chat.id)
+    async def start(message: Message, command: CommandObject) -> None:
+        set_active(message.chat.id, True)
+        if command.args == START_SETTINGS:  # Opened from the inline mode settings button.
+            await show_status(message)
+            return
         await message.answer(f"{emoji.html('success')} Бот активен в этом чате", parse_mode="HTML")
 
     @router.message(Command("stop"), is_active)
     async def stop(message: Message) -> None:
-        storage.set_active(message.chat.id, False)
-        active.discard(message.chat.id)
+        set_active(message.chat.id, False)
         await message.answer(
             f"{emoji.html('warning')} Бот приостановлен в этом чате", parse_mode="HTML"
         )
 
     @router.message(Command("status"))
     async def status(message: Message) -> None:
-        state = "активен" if message.chat.id in active else "приостановлен"
-        await message.answer(
-            f"{emoji.html('bot')} Бот {state} в этом чате\n"
-            f"{emoji.html('version')} Версия: {version('djgurda')}",
-            parse_mode="HTML",
-        )
+        await show_status(message)
+
+    @router.callback_query(F.data.in_({CHAT_START, CHAT_STOP, CAPTION_ON, CAPTION_OFF}))
+    async def status_action(callback: CallbackQuery) -> None:
+        """Any member may press; the action names the target state, so a repeat is harmless."""
+        message = callback.message
+        if message is None:
+            raise ValueError("Status buttons are sent only in chat messages")
+        chat_id = message.chat.id
+        if storage.panel(chat_id) != message.message_id:  # An older panel shows a stale state.
+            await callback.answer()  # Ignored; the answer only stops the button's spinner.
+            return
+        if callback.data in (CAPTION_ON, CAPTION_OFF) and chat_id not in active:
+            await callback.answer("Бот приостановлен в этом чате", show_alert=True)
+            return
+        before = status_panel(chat_id)
+        if callback.data in (CHAT_START, CHAT_STOP):
+            set_active(chat_id, callback.data == CHAT_START)
+        else:
+            storage.set_caption(chat_id, callback.data == CAPTION_ON)
+        text, markup = status_panel(chat_id)
+        # Telegram rejects an edit to the same content; an old message cannot be edited.
+        if (text, markup) != before and isinstance(message, Message):
+            await message.edit_text(text, parse_mode="HTML", reply_markup=markup)
+        await callback.answer()
 
     @router.message(Command("help"))
     async def help_(message: Message) -> None:
@@ -249,11 +341,14 @@ def create_router(
         cover: str | FSInputFile | None = None,
         thumbnail: FSInputFile | None = None,
         timeout: int = UPLOAD_TIMEOUT,
+        caption: str | None = None,
     ) -> Message:
         method: SendAudio | SendVideo
         if link.audio:
             method = message.answer_audio(
                 file,
+                caption=caption,
+                parse_mode="HTML",
                 title=info.title,
                 performer=info.uploader,
                 duration=info.duration,
@@ -262,6 +357,8 @@ def create_router(
         else:
             method = message.answer_video(
                 file,
+                caption=caption,
+                parse_mode="HTML",
                 cover=cover,
                 thumbnail=thumbnail,
                 start_timestamp=link.start,
@@ -285,7 +382,7 @@ def create_router(
         A long video leaves the short queue for its own lane, refused while it is busy.
         """
         nonlocal pending, long_busy
-        if pending >= QUEUE_LIMIT:
+        if pending + waiting >= QUEUE_LIMIT:
             raise MediaError("очередь загрузок заполнена, попробуйте позже")
         pending += 1
         acquired = False
@@ -310,7 +407,7 @@ def create_router(
             acquired = True
             job.stage = "получение данных о видео"
             with TemporaryDirectory(dir=work_dir, prefix=DOWNLOAD_PREFIX) as target:
-                media = await asyncio.to_thread(fetch, link, Path(target), job)
+                media = await fetch(link, Path(target), job)
                 yield media, job
         finally:
             if progress:
@@ -325,13 +422,24 @@ def create_router(
 
     @asynccontextmanager
     async def single_download(link: Link) -> AsyncIterator[None]:
-        """Deliver the same media one at a time, so later requests reuse the cached file_id."""
+        """Deliver the same media one at a time, so later requests reuse the cached file_id.
+
+        Only a request that must wait takes a queue place; a free cached link is sent at once.
+        """
+        nonlocal waiting
         key = link.key
         if key is None:
             yield
             return
-        while event := running.get(key):
-            await event.wait()
+        if key in running:
+            if pending + waiting >= QUEUE_LIMIT:
+                raise MediaError("очередь загрузок заполнена, попробуйте позже")
+            waiting += 1
+            try:
+                while event := running.get(key):
+                    await event.wait()
+            finally:
+                waiting -= 1
         running[key] = done = asyncio.Event()
         try:
             yield
@@ -340,14 +448,18 @@ def create_router(
             done.set()
 
     async def deliver(
-        message: Message, bot: Bot, link: Link, remember: Callable[[int | None], None]
+        message: Message,
+        bot: Bot,
+        link: Link,
+        remember: Callable[[int | None], None],
+        caption: str | None,
     ) -> None:
         async with single_download(link):
             hit = storage.cached(link.key) if link.key else None
             if link.key and hit:
                 file_id, cover_id, info = hit
                 try:
-                    await send(message, bot, link, info, file_id, cover_id)
+                    await send(message, bot, link, info, file_id, cover_id, caption=caption)
                     return
                 except TelegramBadRequest as error:
                     if not file_rejected(error):
@@ -376,6 +488,7 @@ def create_router(
                         FSInputFile(media.cover) if media.cover else None,
                         FSInputFile(media.thumbnail) if media.thumbnail else None,
                         LONG_UPLOAD_TIMEOUT if job.long else UPLOAD_TIMEOUT,
+                        caption,
                     )
             file = sent.audio or sent.video
             if link.key and file:  # Repeated links are resent by file_id without downloading.
@@ -393,13 +506,25 @@ def create_router(
             return  # Sent through our inline mode: already processed.
         urls = [url for url in extract_links(message) if classify(url)]
         if urls:
-            await process_message(message, bot, urls, failed=False)
+            caption = storage.caption(message.chat.id)
+            # In a private chat the sender is the reader, so the caption has only the source.
+            private = message.chat.type == "private"
+            sender = sender_name(message) if caption and not private else None
+            await process_message(message, bot, urls, False, caption, sender)
 
-    async def process_message(message: Message, bot: Bot, urls: list[str], failed: bool) -> None:
+    async def process_message(
+        message: Message,
+        bot: Bot,
+        urls: list[str],
+        failed: bool,
+        caption: bool,
+        sender: str | None,
+    ) -> None:
         """Deliver the links one by one; the original goes once all of them are delivered.
 
         The journal keeps the links still to deliver, so a restart neither loses nor repeats
         one; it is kept on cancellation, so a shutdown leaves it for the next start.
+        The journal keeps the caption sender until the end, as the original may be gone by then.
         """
         delivery_id = f"chat:{message.chat.id}:{message.message_id}"
         state = {
@@ -407,6 +532,8 @@ def create_router(
             "urls": urls,
             "failed": failed,
             "status": None,
+            "caption": caption,
+            "sender": sender,
         }
         attempts = storage.begin(delivery_id, json.dumps(state))
 
@@ -429,7 +556,8 @@ def create_router(
                 failed = True
             else:
                 try:
-                    await deliver(message, bot, link, remember)
+                    text = caption_html(link, sender) if caption else None
+                    await deliver(message, bot, link, remember, text)
                 except MediaError as error:
                     await report_failure(message, bot, link, error, str(error))
                     failed = True
@@ -503,15 +631,21 @@ def create_router(
         results: list[InlineQueryResultUnion] = []
         if hit:
             file_id, _, info = hit
+            # The sender is visible as "via bot"; the private chat with the bot sets captions.
+            caption = caption_html(link, None) if storage.caption(query.from_user.id) else None
             results.append(
                 InlineQueryResultCachedVideo(
-                    id="cached", video_file_id=file_id, title=info.title or link.label
+                    id="cached",
+                    video_file_id=file_id,
+                    title=info.title or link.label,
+                    caption=caption,
+                    parse_mode="HTML",
                 )
             )
         if inline_chat_id is not None:  # New files need a chat to upload to before the edit.
             results.append(placeholder(link, fresh=hit is not None))
         button = (
-            None
+            settings_button(query)
             if results
             else InlineQueryResultsButton(
                 text="Загрузка новых ссылок не настроена", start_parameter="inline"
@@ -519,11 +653,24 @@ def create_router(
         )
         await query.answer(results, cache_time=0, is_personal=True, button=button)
 
+    def settings_button(query: InlineQuery) -> InlineQueryResultsButton:
+        """The way from inline mode to its caption setting in the chat with the bot."""
+        state = "вкл" if storage.caption(query.from_user.id) else "выкл"
+        return InlineQueryResultsButton(
+            text=f"Подпись: {state} — настроить", start_parameter=START_SETTINGS
+        )
+
     @router.inline_query()
     async def inline_query(query: InlineQuery) -> None:
+        if query.chat_type not in INLINE_CHAT_TYPES:
+            button = InlineQueryResultsButton(
+                text="Inline-режим работает только в личной переписке", start_parameter="inline"
+            )
+            await query.answer([], cache_time=0, is_personal=True, button=button)
+            return
         link = parse_query(query.query)
         if link is None:
-            await query.answer([], cache_time=0, is_personal=True)
+            await query.answer([], cache_time=0, is_personal=True, button=settings_button(query))
             return
         hit = storage.cached(link.key) if link.key else None
         try:
@@ -547,7 +694,8 @@ def create_router(
             logger.error("Inline result cannot be processed: no link, message or upload chat")
             return
         redownload = chosen.result_id == INLINE_REDOWNLOAD
-        await deliver_inline(bot, link, inline_chat_id, message_id, redownload)
+        caption = storage.caption(chosen.from_user.id)
+        await deliver_inline(bot, link, inline_chat_id, message_id, redownload, caption)
 
     @router.startup()
     async def resume(bot: Bot) -> None:
@@ -557,6 +705,13 @@ def create_router(
             task = asyncio.create_task(resume_all(bot, unfinished))
             resumed.add(task)
             task.add_done_callback(resumed.discard)
+
+    @router.shutdown()
+    async def stop_resuming() -> None:
+        tasks = list(resumed)
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     async def resume_all(bot: Bot, unfinished: list[tuple[str, str]]) -> None:
         for delivery_id, text in unfinished:
@@ -572,7 +727,11 @@ def create_router(
             if link is None or inline_chat_id is None:
                 raise ValueError(f"Inline delivery needs a link and INLINE_CHAT_ID: {link}")
             message_id = delivery_id.removeprefix("inline:")
-            await deliver_inline(bot, link, inline_chat_id, message_id, state["redownload"])
+            # Journals written before captions existed have no flag: they were captionless.
+            caption = state.get("caption", False)
+            await deliver_inline(
+                bot, link, inline_chat_id, message_id, state["redownload"], caption
+            )
             return
         message = Message.model_validate(state["message"]).as_(bot)
         if state["status"] is not None:  # The status of the interrupted download.
@@ -580,10 +739,18 @@ def create_router(
                 await bot.delete_message(message.chat.id, state["status"])
             except TelegramAPIError as error:
                 logger.warning("Cannot delete progress: %s", redact(str(error)))
-        await process_message(message, bot, state["urls"], state["failed"])
+        # Journals written before captions existed have neither key: they were captionless.
+        await process_message(
+            message,
+            bot,
+            state["urls"],
+            state["failed"],
+            state.get("caption", False),
+            state.get("sender"),
+        )
 
     async def deliver_inline(
-        bot: Bot, link: Link, chat_id: int, message_id: str, redownload: bool
+        bot: Bot, link: Link, chat_id: int, message_id: str, redownload: bool, caption: bool
     ) -> None:
         """Replace the placeholder with the video or an error; a restart resumes it.
 
@@ -591,7 +758,8 @@ def create_router(
         """
         delivery_id = f"inline:{message_id}"
         attempts = storage.begin(
-            delivery_id, json.dumps({"url": link.url, "redownload": redownload})
+            delivery_id,
+            json.dumps({"url": link.url, "redownload": redownload, "caption": caption}),
         )
         show = partial(bot.edit_message_text, inline_message_id=message_id)
         watch = partial(report_progress, link, show=show)
@@ -605,6 +773,8 @@ def create_router(
             file_id, cover_id, info = await upload_inline(bot, link, chat_id, watch, stale)
             media = InputMediaVideo(
                 media=file_id,
+                caption=caption_html(link, None) if caption else None,
+                parse_mode="HTML",
                 cover=cover_id,
                 start_timestamp=link.start,
                 duration=info.duration,
