@@ -16,9 +16,11 @@ import pytest
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.methods import (
+    AnswerCallbackQuery,
     AnswerInlineQuery,
     DeleteMessage,
     EditMessageMedia,
+    EditMessageReplyMarkup,
     EditMessageText,
     SendAudio,
     SendChatAction,
@@ -148,7 +150,7 @@ async def telegram(bot: Bot, method: TelegramMethod[Any], timeout: int | None = 
 
 
 def test_chat_lifecycle(tmp_path: Path) -> None:
-    request = AsyncMock(return_value=True)
+    request = AsyncMock(side_effect=telegram)
     link = "смотри vk.com/wall-1_2"
     script = [
         (42, link),
@@ -169,14 +171,12 @@ def test_chat_lifecycle(tmp_path: Path) -> None:
 
     run_script(request, tmp_path, script)
 
-    status = (
-        f"{emoji.html('bot')} Бот {{}} в этом чате\n"
-        f"{emoji.html('version')} Версия: {version('djgurda')}"
-    )
-    assert sent(request) == [
+    status = f"{emoji.html('bot')} Бот {{}} в этом чате"
+    first_lines = [(chat_id, text.split("\n")[0]) for chat_id, text in sent(request)]
+    assert first_lines == [
         (42, f"{emoji.html('success')} Бот активен в этом чате"),
         (-7, status.format("приостановлен")),
-        (-7, HELP),
+        (-7, HELP.split("\n")[0]),
         (42, status.format("активен")),
         (42, f"{emoji.html('warning')} VK: обработка ещё не реализована"),
         (42, f"{emoji.html('warning')} Бот приостановлен в этом чате"),
@@ -185,6 +185,10 @@ def test_chat_lifecycle(tmp_path: Path) -> None:
         (42, status.format("активен")),
         (-7, status.format("приостановлен")),
     ]
+    # A paused chat gets only its state; an active one also the version.
+    texts = [text for _, text in sent(request)]
+    assert texts[1] == status.format("приостановлен")
+    assert f"{emoji.html('version')} Версия: {version('djgurda')}" in texts[3]
     methods = [c.args[1] for c in request.await_args_list]
     assert all(
         m.parse_mode == "HTML"
@@ -306,7 +310,7 @@ def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
                 query(3, "youtu.be/ok", chat_type="group"),  # Groups have the bot itself.
             ]:
                 await dispatcher.feed_update(bot, update)
-            storage.set_caption(user.id, True)  # Set by /caption in the chat with the bot.
+            storage.set_caption(user.id, True)  # Set from /status in the chat with the bot.
             for update in [
                 query(4, "смотри youtu.be/ok"),  # Cached: sent at once.
                 chosen(5, "youtu.be/long"),  # Long videos take the long lane and show progress.
@@ -323,6 +327,9 @@ def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         "cached",
         chat.INLINE_REDOWNLOAD,  # In case Telegram cannot send the cached file.
     ]
+    settings = answers[0].button  # The way to the caption setting in the chat with the bot.
+    assert settings is not None and settings.start_parameter == chat.START_SETTINGS
+    assert settings.text == "Подпись: выкл — настроить"
     refused = answers[1]
     assert refused.button is not None and "личной переписке" in refused.button.text
     # The sender is shown by Telegram as "via bot", so the caption has only the source.
@@ -351,22 +358,25 @@ def test_inline_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert "MediaError: видео недоступно" in report.text
 
 
-def test_caption_setting(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_status_panel(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     patch_fetch(
         monkeypatch, lambda link, target, job: Media(target / "v.mp4", Info("", "", 1, 2, 3))
     )
     request = AsyncMock(side_effect=telegram)
     sender = User(id=7, is_bot=False, first_name="Анна", username="anna_<b>")
 
-    def press(update_id: int, data: str) -> Update:
-        menu = Message(message_id=97, date=datetime.now(UTC), chat=Chat(id=-7, type="group"))
+    def press(update_id: int, data: str, chat_id: int = -7) -> Update:
+        chat_type = "group" if chat_id < 0 else "private"
+        panel = Message(
+            message_id=97, date=datetime.now(UTC), chat=Chat(id=chat_id, type=chat_type)
+        )
         callback = CallbackQuery(
-            id=str(update_id), from_user=sender, chat_instance="c", message=menu, data=data
+            id=str(update_id), from_user=sender, chat_instance="c", message=panel, data=data
         )
         return Update(update_id=update_id, callback_query=callback)
 
-    def link(update_id: int, url: str) -> Update:
-        update = message(update_id, -7, url)
+    def link(update_id: int, chat_id: int, url: str) -> Update:
+        update = message(update_id, chat_id, url)
         assert update.message is not None
         return Update(
             update_id=update_id, message=update.message.model_copy(update={"from_user": sender})
@@ -378,33 +388,102 @@ def test_caption_setting(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
             storage = Storage(tmp_path / "db.sqlite3")
             dispatcher = create_dispatcher([100], storage, tmp_path, local_api=True)
             for update in [
-                message(1, -7, "/start"),
-                link(2, "youtu.be/plain"),  # Captions are off by default.
-                message(3, -7, "/caption"),
+                message(1, -7, "/status"),  # Paused: only the state and a way to start.
+                press(2, chat.CHAT_START),
+                link(3, -7, "youtu.be/plain"),  # Captions are off by default.
                 press(4, chat.CAPTION_ON),
                 press(5, chat.CAPTION_ON),  # A repeated press changes nothing.
-                link(6, "youtu.be/ok"),
+                link(6, -7, "youtu.be/ok"),
+                press(7, chat.CHAT_STOP),
+                message(8, 42, "/start settings"),  # The inline mode settings button.
+                press(9, chat.CAPTION_ON, chat_id=42),
+                link(10, 42, "youtu.be/own"),
             ]:
                 await dispatcher.feed_update(bot, update)
             storage.close()
 
     asyncio.run(scenario())
     methods = [c.args[1] for c in request.await_args_list]
-    menu = next(m for m in methods if isinstance(m, SendMessage) and "Подпись" in m.text)
-    assert "выключена" in menu.text
-    assert isinstance(menu.reply_markup, InlineKeyboardMarkup)
-    assert menu.reply_markup.inline_keyboard[0][0].callback_data == chat.CAPTION_ON
-    (edit,) = [m for m in methods if isinstance(m, EditMessageText)]
-    assert "включена" in (edit.text or "")
-    assert edit.reply_markup is not None
-    assert edit.reply_markup.inline_keyboard[0][0].callback_data == chat.CAPTION_OFF
-    plain, captioned = [m for m in methods if isinstance(m, SendVideo)]
+
+    def buttons(markup: Any) -> list[str]:
+        assert isinstance(markup, InlineKeyboardMarkup)
+        return [row[0].callback_data or "" for row in markup.inline_keyboard]
+
+    panels = [m for m in methods if isinstance(m, SendMessage) and m.reply_markup]
+    assert [buttons(panel.reply_markup) for panel in panels] == [
+        [chat.CHAT_START],
+        [chat.CAPTION_ON, chat.CHAT_STOP],  # /start settings opens the panel of an active chat.
+    ]
+    edits = [m for m in methods if isinstance(m, EditMessageText)]
+    assert [buttons(edit.reply_markup) for edit in edits] == [
+        [chat.CAPTION_ON, chat.CHAT_STOP],
+        [chat.CAPTION_OFF, chat.CHAT_STOP],
+        [chat.CHAT_START],
+        [chat.CAPTION_OFF, chat.CHAT_STOP],
+    ]
+    plain, captioned, own = [m for m in methods if isinstance(m, SendVideo)]
     assert plain.caption is None
     # A plain nickname, never a mention: a mention would notify the sender on every video.
     assert captioned.caption == (
         '<tg-spoiler>🔗 <a href="https://youtu.be/ok">Источник</a>\n👤 anna_&lt;b&gt;</tg-spoiler>'
     )
     assert captioned.parse_mode == "HTML"
+    # In a private chat the sender is the reader.
+    assert own.caption == '<tg-spoiler>🔗 <a href="https://youtu.be/own">Источник</a></tg-spoiler>'
+
+
+def test_outdated_status_buttons_are_refused(tmp_path: Path) -> None:
+    ids = iter(range(200, 300))
+
+    async def bot_api(bot: Bot, method: TelegramMethod[Any], timeout: int | None = None) -> Any:
+        result = await telegram(bot, method, timeout)
+        if isinstance(method, SendMessage):  # Each panel is a separate message.
+            return result.model_copy(update={"message_id": next(ids)})
+        return result
+
+    request = AsyncMock(side_effect=bot_api)
+    user = User(id=7, is_bot=False, first_name="Test")
+
+    def press(update_id: int, message_id: int, data: str = chat.CHAT_STOP) -> Update:
+        panel = Message(
+            message_id=message_id, date=datetime.now(UTC), chat=Chat(id=-7, type="group")
+        )
+        callback = CallbackQuery(
+            id=str(update_id), from_user=user, chat_instance="c", message=panel, data=data
+        )
+        return Update(update_id=update_id, callback_query=callback)
+
+    async def scenario() -> None:
+        async with Bot(token="123456789:offline-test-token") as bot:
+            bot.session.make_request = request  # type: ignore[method-assign]
+            storage = Storage(tmp_path / "db.sqlite3")
+            dispatcher = create_dispatcher([100], storage, tmp_path, local_api=True)
+            for update in [
+                message(1, -7, "/start"),  # Message 200.
+                message(2, -7, "/status"),  # Panel 201.
+                message(3, -7, "/status"),  # Panel 202 replaces it.
+                press(4, 201),  # Shows a state that may be outdated: ignored.
+            ]:
+                await dispatcher.feed_update(bot, update)
+            assert storage.active_chats() == {-7}
+            await dispatcher.feed_update(bot, press(5, 202))
+            assert storage.active_chats() == set()
+            # The latest panel survives a restart; the older one stays ignored.
+            storage.close()
+            storage = Storage(tmp_path / "db.sqlite3")
+            dispatcher = create_dispatcher([100], storage, tmp_path, local_api=True)
+            await dispatcher.feed_update(bot, press(6, 201, chat.CHAT_START))
+            assert storage.active_chats() == set()
+            await dispatcher.feed_update(bot, press(7, 202, chat.CHAT_START))
+            assert storage.active_chats() == {-7}
+            storage.close()
+
+    asyncio.run(scenario())
+    methods = [c.args[1] for c in request.await_args_list]
+    retired = [m.message_id for m in methods if isinstance(m, EditMessageReplyMarkup)]
+    assert retired == [201]  # Replaced by the next /status.
+    answers = [m for m in methods if isinstance(m, AnswerCallbackQuery)]
+    assert [(m.text, m.show_alert) for m in answers] == [(None, None)] * 4  # Quietly.
 
 
 def test_inline_recovers_from_broken_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -523,6 +602,7 @@ def test_deliveries_resume_after_restart(tmp_path: Path, monkeypatch: pytest.Mon
         "urls": ["youtu.be/second"],
         "failed": False,
         "status": 77,
+        "caption": True,
         "sender": "author",  # Captions were on; the original with the sender is gone.
     }
 

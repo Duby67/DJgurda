@@ -21,7 +21,7 @@ from aiogram.exceptions import (
     TelegramRetryAfter,
     TelegramServerError,
 )
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandObject
 from aiogram.methods import SendAudio, SendVideo
 from aiogram.types import (
     CallbackQuery,
@@ -66,8 +66,7 @@ HELP = "\n".join(
         "",
         "/start — включить бота в чате",
         "/stop — приостановить бота в чате",
-        "/status — состояние бота и версия",
-        "/caption — подпись со ссылкой на источник и отправителем",
+        "/status — состояние, подпись со ссылкой и отправителем, версия",
         "/help — эта справка",
         "",
         "В личной переписке, даже без бота: @имя_бота ссылка (только видео).",
@@ -82,8 +81,12 @@ INLINE_DOWNLOAD = "download"  # Result id of the placeholder replaced after the 
 INLINE_REDOWNLOAD = "redownload"  # The same, ignoring a cached file_id Telegram cannot send.
 # Inline mode serves personal chats; groups and channels have the bot itself.
 INLINE_CHAT_TYPES = {"private", "sender"}
+# Status panel buttons; each names the target state.
+CHAT_START = "chat:start"
+CHAT_STOP = "chat:stop"
 CAPTION_ON = "caption:on"
 CAPTION_OFF = "caption:off"
+START_SETTINGS = "settings"  # /start payload of the inline mode button.
 MESSAGE_LIMIT = 4096
 ATTEMPTS = 2  # Starts of one delivery, restarts included; guards against a crash loop.
 INTERRUPTED = "загрузка прерывалась перезапуском бота, попробуйте снова"
@@ -234,60 +237,96 @@ def create_router(
     async def is_active(message: Message) -> bool:
         return message.chat.id in active
 
+    def set_active(chat_id: int, enabled: bool) -> None:
+        storage.set_active(chat_id, enabled)
+        (active.add if enabled else active.discard)(chat_id)
+
+    def status_panel(chat_id: int) -> tuple[str, InlineKeyboardMarkup]:
+        """Chat state with buttons for every setting; a paused chat only offers to resume."""
+
+        def button(text: str, action: str) -> list[InlineKeyboardButton]:
+            return [InlineKeyboardButton(text=text, callback_data=action)]
+
+        if chat_id not in active:
+            text = f"{emoji.html('bot')} Бот приостановлен в этом чате"
+            return text, InlineKeyboardMarkup(
+                inline_keyboard=[button("Запустить бота", CHAT_START)]
+            )
+        caption = storage.caption(chat_id)
+        text = (
+            f"{emoji.html('bot')} Бот активен в этом чате\n"
+            f"{emoji.html('version')} Версия: {version('djgurda')}\n"
+            f"Подпись под медиа {'включена' if caption else 'выключена'}: ссылка на источник "
+            "и отправитель под спойлером. В переписке с ботом она действует и на inline-режим."
+        )
+        keyboard = [
+            button("Выключить подпись", CAPTION_OFF)
+            if caption
+            else button("Включить подпись", CAPTION_ON),
+            button("Приостановить бота", CHAT_STOP),
+        ]
+        return text, InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+    async def show_status(message: Message) -> None:
+        chat_id = message.chat.id
+        text, markup = status_panel(chat_id)
+        sent = await message.answer(text, parse_mode="HTML", reply_markup=markup)
+        previous = storage.panel(chat_id)
+        storage.set_panel(chat_id, sent.message_id)
+        if previous is not None and previous != sent.message_id:
+            await retire_panel(message.bot, chat_id, previous)
+
+    async def retire_panel(bot: Bot | None, chat_id: int, message_id: int) -> None:
+        """Remove the buttons of an outdated panel, so nobody presses them by mistake."""
+        if bot is None:
+            raise ValueError("A status panel needs a bot to edit it")
+        try:
+            await bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id)
+        except TelegramAPIError as error:  # Deleted or too old to edit: refused on press anyway.
+            logger.warning("Cannot remove outdated status buttons: %s", redact(str(error)))
+
     @router.message(Command("start"))
-    async def start(message: Message) -> None:
-        storage.set_active(message.chat.id, True)
-        active.add(message.chat.id)
+    async def start(message: Message, command: CommandObject) -> None:
+        set_active(message.chat.id, True)
+        if command.args == START_SETTINGS:  # Opened from the inline mode settings button.
+            await show_status(message)
+            return
         await message.answer(f"{emoji.html('success')} Бот активен в этом чате", parse_mode="HTML")
 
     @router.message(Command("stop"), is_active)
     async def stop(message: Message) -> None:
-        storage.set_active(message.chat.id, False)
-        active.discard(message.chat.id)
+        set_active(message.chat.id, False)
         await message.answer(
             f"{emoji.html('warning')} Бот приостановлен в этом чате", parse_mode="HTML"
         )
 
     @router.message(Command("status"))
     async def status(message: Message) -> None:
-        state = "активен" if message.chat.id in active else "приостановлен"
-        await message.answer(
-            f"{emoji.html('bot')} Бот {state} в этом чате\n"
-            f"{emoji.html('version')} Версия: {version('djgurda')}",
-            parse_mode="HTML",
-        )
+        await show_status(message)
 
-    def caption_settings(chat_id: int) -> tuple[str, InlineKeyboardMarkup]:
-        enabled = storage.caption(chat_id)
-        text = (
-            f"{emoji.html('bot')} Подпись под медиа {'включена' if enabled else 'выключена'}.\n"
-            "Под спойлером: ссылка на источник и отправитель. "
-            "В личной переписке с ботом настройка действует и на inline-режим."
-        )
-        button = InlineKeyboardButton(
-            text="Выключить" if enabled else "Включить",
-            callback_data=CAPTION_OFF if enabled else CAPTION_ON,
-        )
-        return text, InlineKeyboardMarkup(inline_keyboard=[[button]])
-
-    @router.message(Command("caption"), is_active)
-    async def caption_command(message: Message) -> None:
-        text, markup = caption_settings(message.chat.id)
-        await message.answer(text, parse_mode="HTML", reply_markup=markup)
-
-    @router.callback_query(F.data.in_({CAPTION_ON, CAPTION_OFF}))
-    async def caption_toggle(callback: CallbackQuery) -> None:
-        if callback.message is None or callback.message.chat.id not in active:
+    @router.callback_query(F.data.in_({CHAT_START, CHAT_STOP, CAPTION_ON, CAPTION_OFF}))
+    async def status_action(callback: CallbackQuery) -> None:
+        """Any member may press; the action names the target state, so a repeat is harmless."""
+        message = callback.message
+        if message is None:
+            raise ValueError("Status buttons are sent only in chat messages")
+        chat_id = message.chat.id
+        if storage.panel(chat_id) != message.message_id:  # An older panel shows a stale state.
+            await callback.answer()  # Ignored; the answer only stops the button's spinner.
+            return
+        if callback.data in (CAPTION_ON, CAPTION_OFF) and chat_id not in active:
             await callback.answer("Бот приостановлен в этом чате", show_alert=True)
             return
-        chat_id = callback.message.chat.id
-        enabled = callback.data == CAPTION_ON
-        if storage.caption(chat_id) != enabled:  # A repeated press must not edit to the same text.
-            storage.set_caption(chat_id, enabled)
-            if isinstance(callback.message, Message):
-                text, markup = caption_settings(chat_id)
-                await callback.message.edit_text(text, parse_mode="HTML", reply_markup=markup)
-        await callback.answer(f"Подпись {'включена' if enabled else 'выключена'}")
+        before = status_panel(chat_id)
+        if callback.data in (CHAT_START, CHAT_STOP):
+            set_active(chat_id, callback.data == CHAT_START)
+        else:
+            storage.set_caption(chat_id, callback.data == CAPTION_ON)
+        text, markup = status_panel(chat_id)
+        # Telegram rejects an edit to the same content; an old message cannot be edited.
+        if (text, markup) != before and isinstance(message, Message):
+            await message.edit_text(text, parse_mode="HTML", reply_markup=markup)
+        await callback.answer()
 
     @router.message(Command("help"))
     async def help_(message: Message) -> None:
@@ -467,18 +506,25 @@ def create_router(
             return  # Sent through our inline mode: already processed.
         urls = [url for url in extract_links(message) if classify(url)]
         if urls:
-            sender = sender_name(message) if storage.caption(message.chat.id) else None
-            await process_message(message, bot, urls, failed=False, sender=sender)
+            caption = storage.caption(message.chat.id)
+            # In a private chat the sender is the reader, so the caption has only the source.
+            private = message.chat.type == "private"
+            sender = sender_name(message) if caption and not private else None
+            await process_message(message, bot, urls, False, caption, sender)
 
     async def process_message(
-        message: Message, bot: Bot, urls: list[str], failed: bool, sender: str | None
+        message: Message,
+        bot: Bot,
+        urls: list[str],
+        failed: bool,
+        caption: bool,
+        sender: str | None,
     ) -> None:
         """Deliver the links one by one; the original goes once all of them are delivered.
 
         The journal keeps the links still to deliver, so a restart neither loses nor repeats
         one; it is kept on cancellation, so a shutdown leaves it for the next start.
-        `sender` is set only when the chat has captions on; the journal keeps it until the end,
-        because the original message is gone by then.
+        The journal keeps the caption sender until the end, as the original may be gone by then.
         """
         delivery_id = f"chat:{message.chat.id}:{message.message_id}"
         state = {
@@ -486,6 +532,7 @@ def create_router(
             "urls": urls,
             "failed": failed,
             "status": None,
+            "caption": caption,
             "sender": sender,
         }
         attempts = storage.begin(delivery_id, json.dumps(state))
@@ -509,8 +556,8 @@ def create_router(
                 failed = True
             else:
                 try:
-                    caption = caption_html(link, sender) if sender is not None else None
-                    await deliver(message, bot, link, remember, caption)
+                    text = caption_html(link, sender) if caption else None
+                    await deliver(message, bot, link, remember, text)
                 except MediaError as error:
                     await report_failure(message, bot, link, error, str(error))
                     failed = True
@@ -598,13 +645,20 @@ def create_router(
         if inline_chat_id is not None:  # New files need a chat to upload to before the edit.
             results.append(placeholder(link, fresh=hit is not None))
         button = (
-            None
+            settings_button(query)
             if results
             else InlineQueryResultsButton(
                 text="Загрузка новых ссылок не настроена", start_parameter="inline"
             )
         )
         await query.answer(results, cache_time=0, is_personal=True, button=button)
+
+    def settings_button(query: InlineQuery) -> InlineQueryResultsButton:
+        """The way from inline mode to its caption setting in the chat with the bot."""
+        state = "вкл" if storage.caption(query.from_user.id) else "выкл"
+        return InlineQueryResultsButton(
+            text=f"Подпись: {state} — настроить", start_parameter=START_SETTINGS
+        )
 
     @router.inline_query()
     async def inline_query(query: InlineQuery) -> None:
@@ -616,7 +670,7 @@ def create_router(
             return
         link = parse_query(query.query)
         if link is None:
-            await query.answer([], cache_time=0, is_personal=True)
+            await query.answer([], cache_time=0, is_personal=True, button=settings_button(query))
             return
         hit = storage.cached(link.key) if link.key else None
         try:
@@ -685,8 +739,15 @@ def create_router(
                 await bot.delete_message(message.chat.id, state["status"])
             except TelegramAPIError as error:
                 logger.warning("Cannot delete progress: %s", redact(str(error)))
-        # Journals written before captions existed have no sender: they were captionless.
-        await process_message(message, bot, state["urls"], state["failed"], state.get("sender"))
+        # Journals written before captions existed have neither key: they were captionless.
+        await process_message(
+            message,
+            bot,
+            state["urls"],
+            state["failed"],
+            state.get("caption", False),
+            state.get("sender"),
+        )
 
     async def deliver_inline(
         bot: Bot, link: Link, chat_id: int, message_id: str, redownload: bool, caption: bool
